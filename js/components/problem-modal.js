@@ -19,6 +19,7 @@ import {
   buildLeetcodeUrl,
 } from "../services/leetcode.js";
 import { debounce } from "../utils.js";
+import { refreshPage } from "../controllers/page-controller.js";
 
 const MODAL_ID = "problem-modal";
 
@@ -319,6 +320,7 @@ export function openProblemModal(problemId = null) {
     }
     closeModal();
     host.innerHTML = "";
+    refreshPage();
   });
 
   deleteBtn?.addEventListener("click", () => {
@@ -327,6 +329,7 @@ export function openProblemModal(problemId = null) {
       deleteProblem(data.id);
       closeModal();
       host.innerHTML = "";
+      refreshPage();
     }
   });
 

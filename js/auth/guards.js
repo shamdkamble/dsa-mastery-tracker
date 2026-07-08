@@ -18,10 +18,20 @@ export function isPublicRoute(path) {
   return PUBLIC_ROUTES.has(path);
 }
 
+let lastSyncedUserId = null;
+
+export function resetAuthSyncState() {
+  lastSyncedUserId = null;
+}
+
 export function syncAuthState(user) {
   if (!user) return;
 
   switchUserContext(user);
+
+  const userId = user.id || user.email || null;
+  const userChanged = userId !== lastSyncedUserId;
+  lastSyncedUserId = userId;
 
   setState({
     user: {
@@ -32,7 +42,10 @@ export function syncAuthState(user) {
       status: user.status,
     },
   });
-  dispatch("auth:change", { user });
+
+  if (userChanged) {
+    dispatch("auth:change", { user });
+  }
 }
 
 export function setAuthShellMode(path) {
@@ -73,7 +86,10 @@ export async function enforceRouteAccess(path = getCurrentPath()) {
     return true;
   }
 
-  const user = await resolveAuthSession();
+  let user = getSessionUser();
+  if (!user && isAuthenticated()) {
+    user = await resolveAuthSession();
+  }
   if (!user) {
     navigate("login");
     return false;

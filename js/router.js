@@ -42,11 +42,16 @@ export function setAuthGuard(fn) {
   authGuard = fn;
 }
 
+let lastRenderedPath = "";
+let lastRenderedHtml = "";
+
 async function renderRouteContent(path, container, { animate = true } = {}) {
   const config = getRouteConfig(path);
 
   if (!config) {
     container.innerHTML = `<div class="content-inner"><p>Page not found</p></div>`;
+    lastRenderedPath = path;
+    lastRenderedHtml = container.innerHTML;
     return null;
   }
 
@@ -54,6 +59,16 @@ async function renderRouteContent(path, container, { animate = true } = {}) {
     ? await config.render()
     : `<div class="content-inner"><p>Empty page</p></div>`;
 
+  if (
+    path === lastRenderedPath
+    && content === lastRenderedHtml
+    && container.innerHTML === content
+  ) {
+    return config;
+  }
+
+  lastRenderedPath = path;
+  lastRenderedHtml = content;
   container.innerHTML = content;
 
   if (animate) {

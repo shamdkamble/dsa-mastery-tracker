@@ -7,6 +7,7 @@ import { getToken, setSession, clearSession } from "../auth/session.js";
 import { switchUserContext } from "../storage/db.js";
 import { setState } from "../state.js";
 import { dispatch } from "../utils.js";
+import { resetAuthSyncState } from "../auth/guards.js";
 
 export class AuthApiError extends Error {
   constructor(message, { status, code, details } = {}) {
@@ -142,6 +143,7 @@ export async function rejectUser(userId) {
 
 export function logout() {
   clearSession();
+  resetAuthSyncState();
   switchUserContext(null);
   setState({
     user: {

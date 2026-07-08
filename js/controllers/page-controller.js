@@ -47,26 +47,33 @@ export function bindMissionHandlers(root) {
     const doneBtn = e.target.closest("[data-action='toggle-mission']");
     if (doneBtn) {
       toggleMissionDone(doneBtn.dataset.id);
+      refreshPage();
       return;
     }
 
     const solveBtn = e.target.closest("[data-action='mark-solved']");
     if (solveBtn) {
       markProblemSolved(solveBtn.dataset.id);
+      refreshPage();
       return;
     }
 
     const startBtn = e.target.closest("[data-action='start-next']");
     if (startBtn) {
       const next = root.querySelector(".mission-card:not(.is-done) [data-action='toggle-mission']");
-      if (next) toggleMissionDone(next.dataset.id);
-      else showToast(Toast({ title: "All done!", text: "You've completed today's mission.", variant: "success" }));
+      if (next) {
+        toggleMissionDone(next.dataset.id);
+        refreshPage();
+      } else {
+        showToast(Toast({ title: "All done!", text: "You've completed today's mission.", variant: "success" }));
+      }
     }
 
     const addMissionBtn = e.target.closest("[data-action='add-to-mission']");
     if (addMissionBtn) {
       addToMission(addMissionBtn.dataset.id, addMissionBtn.dataset.type || "new");
       showToast(Toast({ title: "Added to mission", variant: "success" }));
+      refreshPage();
     }
   });
 }
@@ -148,6 +155,7 @@ export function bindSettingsHandlers(root) {
     });
     syncUserState();
     showToast(Toast({ title: "Profile saved", variant: "success" }));
+    refreshPage();
   }, 500);
 
   profileForm?.addEventListener("change", saveProfile);

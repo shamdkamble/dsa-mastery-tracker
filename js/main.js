@@ -9,7 +9,7 @@ import { initAuthForms } from "./auth/forms.js";
 import { initSidebar } from "./components/sidebar.js";
 import { initNavbar } from "./components/navbar.js";
 import { getState, setState } from "./state.js";
-import { $, debounce } from "./utils.js";
+import { $ } from "./utils.js";
 import { bindPageHandlers } from "./controllers/page-controller.js";
 import { initDB, getUser } from "./storage/db.js";
 import { getInitials } from "./storage/helpers.js";
@@ -110,26 +110,14 @@ const DATA_DRIVEN_ROUTES = new Set([
 
 function initDataRefresh() {
   const content = $("#content");
-  let refreshInFlight = false;
 
-  const refreshCurrentPage = debounce(async () => {
-    if (refreshInFlight) return;
-    refreshInFlight = true;
-    try {
-      const path = getCurrentPath();
-      if (DATA_DRIVEN_ROUTES.has(path)) {
-        await refreshRouteContent(path, content);
-      }
-    } finally {
-      refreshInFlight = false;
-    }
-  }, 200);
-
-  document.addEventListener("data:change", refreshCurrentPage);
-
-  document.addEventListener("auth:change", () => {
+  document.addEventListener("auth:change", (e) => {
+    if (!e.detail?.user) return;
     syncUserFromDB();
-    refreshCurrentPage();
+    const path = getCurrentPath();
+    if (DATA_DRIVEN_ROUTES.has(path)) {
+      refreshRouteContent(path, content);
+    }
   });
 }
 
