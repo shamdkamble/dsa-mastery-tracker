@@ -6,7 +6,7 @@ import { icon } from "./icons.js";
 import { getState, setState, subscribe } from "../state.js";
 import { navigate } from "../router.js";
 import { toggleTheme } from "../theme.js";
-import { $, $$, on } from "../utils.js";
+import { $, $$, on, debounce } from "../utils.js";
 import { getProblems } from "../storage/db.js";
 import { computeTodaysMission } from "../storage/computed.js";
 import { isAdmin } from "../auth/session.js";
@@ -186,11 +186,13 @@ export function initSidebar(container) {
     updateActiveLinks(container, detail.path);
   });
 
-  document.addEventListener("data:change", () => {
+  const refreshSidebar = debounce(() => {
     container.innerHTML = renderSidebar(getState());
     syncAppClasses(app, getState());
     updateActiveLinks(container, getState().currentRoute);
-  });
+  }, 120);
+
+  document.addEventListener("data:change", refreshSidebar);
 
   document.addEventListener("auth:change", () => {
     container.innerHTML = renderSidebar(getState());

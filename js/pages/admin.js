@@ -1,7 +1,7 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
-import { Badge, Button, EmptyState, Alert, SkeletonTable } from "../components/ui/index.js";
-import { initDropdowns } from "../components/ui/interactions.js";
+import { Badge, Button, EmptyState, Alert, SkeletonTable, Toast } from "../components/ui/index.js";
+import { initDropdowns, showToast } from "../components/ui/interactions.js";
 import {
   getAllUsers,
   adminUserAction,
@@ -370,9 +370,10 @@ export default {
       bindRowEditors();
     }
 
-    async function loadUsers() {
-      alertEl.innerHTML = "";
-      listEl.innerHTML = SkeletonTable({ rows: 6, cols: 7 });
+    async function refreshUsers({ showLoading = false } = {}) {
+      if (showLoading) {
+        listEl.innerHTML = SkeletonTable({ rows: 6, cols: 7 });
+      }
 
       try {
         allUsers = await getAllUsers();
@@ -381,12 +382,17 @@ export default {
       } catch (err) {
         const message = err instanceof AuthApiError ? err.message : "Failed to load users.";
         listEl.innerHTML = "";
-        alertEl.innerHTML = Alert({ variant: "danger", title: "Error", text: message });
+        alertEl.innerHTML = Alert({ variant: "danger", title: "Error", text: message, dismissible: true });
       }
     }
 
-    function showToast(variant, title, text) {
-      alertEl.innerHTML = Alert({ variant, title, text });
+    async function loadUsers() {
+      alertEl.innerHTML = "";
+      await refreshUsers({ showLoading: true });
+    }
+
+    function notify(variant, title, text) {
+      showToast(Toast({ variant, title, text }));
     }
 
     async function handleAction(userId, action) {
@@ -411,11 +417,11 @@ export default {
           delete: ["warning", "Deleted", "User removed."],
         };
         const [variant, title, text] = labels[action] || ["success", "Done", "Action completed."];
-        showToast(variant, title, text);
-        await loadUsers();
+        notify(variant, title, text);
+        await refreshUsers();
       } catch (err) {
         const message = err instanceof AuthApiError ? err.message : "Action failed.";
-        showToast("danger", "Error", message);
+        notify("danger", "Error", message);
         row?.classList.remove("is-processing");
       }
     }
@@ -432,11 +438,11 @@ export default {
           accessLevel,
           expiresAt: expiresAtRaw || null,
         });
-        showToast("success", "Saved", "Access level and expiry updated.");
-        await loadUsers();
+        notify("success", "Saved", "Access level and expiry updated.");
+        await refreshUsers();
       } catch (err) {
         const message = err instanceof AuthApiError ? err.message : "Save failed.";
-        showToast("danger", "Error", message);
+        notify("danger", "Error", message);
         row?.classList.remove("is-processing");
       }
     }

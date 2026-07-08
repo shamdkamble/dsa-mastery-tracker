@@ -55,10 +55,12 @@ function load() {
   return cache;
 }
 
-function persist() {
+function persist({ silent = false } = {}) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
-    dispatch("data:change", { db: cache });
+    if (!silent) {
+      dispatch("data:change", { db: cache });
+    }
   } catch (e) {
     console.warn("Failed to persist DB", e);
   }
@@ -73,8 +75,8 @@ export function getDB() {
   return load();
 }
 
-function touch() {
-  persist();
+function touch(options) {
+  persist(options);
 }
 
 /* ── User & Settings ── */
@@ -94,17 +96,17 @@ export function getSettings() {
   return { ...load().settings };
 }
 
-export function updateSettings(updates) {
+export function updateSettings(updates, options) {
   const db = load();
   db.settings = { ...db.settings, ...updates };
-  touch();
+  touch(options);
   return db.settings;
 }
 
-export function updateNotificationSetting(key, value) {
+export function updateNotificationSetting(key, value, options) {
   const db = load();
   db.settings.notifications[key] = value;
-  touch();
+  touch(options);
 }
 
 /* ── Activities ── */
@@ -120,7 +122,6 @@ export function logActivity({ action, problemId = null, problemTitle = "", topic
     timestamp: new Date().toISOString(),
   });
   if (db.activities.length > 200) db.activities = db.activities.slice(0, 200);
-  touch();
 }
 
 export function getActivities() {
@@ -337,7 +338,7 @@ export function addSearchRecent(query) {
   if (!q) return;
   const db = load();
   db.searchRecent = [q, ...db.searchRecent.filter((r) => r !== q)].slice(0, 8);
-  touch();
+  touch({ silent: true });
 }
 
 export function getSearchRecent() {

@@ -35,14 +35,19 @@ export function Alert({
   `;
 }
 
-export function Toast({ title, text = "", variant = "info" }) {
+export function Toast({ title, text = "", variant = "info", dismissible = true }) {
   return `
-    <div class="toast toast--${variant}" role="status">
+    <div class="toast toast--${variant}" role="status" data-toast-title="${title}">
       <span class="toast__icon" aria-hidden="true">${icon(ALERT_ICONS[variant] || "info")}</span>
       <div class="toast__content">
         <div class="toast__title">${title}</div>
         ${text ? `<div class="toast__text">${text}</div>` : ""}
       </div>
+      ${dismissible ? `
+        <button class="toast__close" type="button" data-toast-close aria-label="Dismiss notification">
+          ${icon("close")}
+        </button>
+      ` : ""}
     </div>
   `;
 }

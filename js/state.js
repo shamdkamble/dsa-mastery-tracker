@@ -11,7 +11,7 @@ const defaultState = {
   sidebarOpen: false,
   currentRoute: "dashboard",
   searchQuery: "",
-  notifications: 3,
+  notifications: 0,
   user: {
     name: "Alex Chen",
     initials: "AC",

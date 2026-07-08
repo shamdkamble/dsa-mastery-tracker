@@ -22,8 +22,10 @@ import { getTheme, setTheme, toggleTheme } from "../theme.js";
 import { setState } from "../state.js";
 import { getUser } from "../storage/db.js";
 import { getInitials } from "../storage/helpers.js";
+import { debounce } from "../utils.js";
 
 let contentContainer = null;
+let pageHandlersRoot = null;
 
 export function setContentContainer(el) {
   contentContainer = el;
@@ -38,6 +40,9 @@ export function refreshPage() {
 /* ── Mission handlers ── */
 
 export function bindMissionHandlers(root) {
+  if (root.dataset.missionHandlersBound) return;
+  root.dataset.missionHandlersBound = "true";
+
   root.addEventListener("click", (e) => {
     const doneBtn = e.target.closest("[data-action='toggle-mission']");
     if (doneBtn) {
@@ -69,6 +74,9 @@ export function bindMissionHandlers(root) {
 /* ── Problem filters ── */
 
 export function bindFilterHandlers(root) {
+  if (root.dataset.filterHandlersBound) return;
+  root.dataset.filterHandlersBound = "true";
+
   root.addEventListener("click", (e) => {
     const chip = e.target.closest("[data-filter]");
     if (!chip) return;
@@ -92,6 +100,9 @@ export function bindFilterHandlers(root) {
 /* ── Search page ── */
 
 export function bindSearchHandlers(root) {
+  if (root.dataset.searchHandlersBound) return;
+  root.dataset.searchHandlersBound = "true";
+
   const input = $("#search-page-input", root);
   const resultsEl = $("#search-results", root);
 
@@ -123,8 +134,12 @@ export function bindSearchHandlers(root) {
 /* ── Settings handlers ── */
 
 export function bindSettingsHandlers(root) {
+  if (root.dataset.settingsHandlersBound) return;
+  root.dataset.settingsHandlersBound = "true";
+
   const profileForm = $("#settings-profile-form", root);
-  profileForm?.addEventListener("change", () => {
+  const saveProfile = debounce(() => {
+    if (!profileForm) return;
     const fd = new FormData(profileForm);
     updateUser({
       name: fd.get("name"),
@@ -133,7 +148,9 @@ export function bindSettingsHandlers(root) {
     });
     syncUserState();
     showToast(Toast({ title: "Profile saved", variant: "success" }));
-  });
+  }, 500);
+
+  profileForm?.addEventListener("change", saveProfile);
 
   root.addEventListener("change", (e) => {
     const toggle = e.target.closest("[data-setting]");
@@ -141,12 +158,12 @@ export function bindSettingsHandlers(root) {
     const key = toggle.dataset.setting;
 
     if (key === "compactSidebar") {
-      updateSettings({ compactSidebar: toggle.checked });
+      updateSettings({ compactSidebar: toggle.checked }, { silent: true });
       setState({ sidebarCollapsed: toggle.checked });
     } else if (key === "darkMode") {
       setTheme(toggle.checked ? "dark" : "light");
     } else if (key.startsWith("notif.")) {
-      updateNotificationSetting(key.replace("notif.", ""), toggle.checked);
+      updateNotificationSetting(key.replace("notif.", ""), toggle.checked, { silent: true });
     }
   });
 
@@ -202,6 +219,9 @@ function syncUserState() {
 /* ── Calendar month nav ── */
 
 export function bindCalendarHandlers(root) {
+  if (root.dataset.calendarHandlersBound) return;
+  root.dataset.calendarHandlersBound = "true";
+
   root.addEventListener("click", (e) => {
     const prev = e.target.closest("[data-cal-prev]");
     const next = e.target.closest("[data-cal-next]");
@@ -231,6 +251,9 @@ export function bindCalendarHandlers(root) {
 /* ── Master binder ── */
 
 export function bindPageHandlers(root) {
+  if (pageHandlersRoot === root) return;
+  pageHandlersRoot = root;
+
   bindMissionHandlers(root);
   bindFilterHandlers(root);
   bindSearchHandlers(root);

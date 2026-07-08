@@ -5,6 +5,9 @@
 import { $, $$ } from "../../utils.js";
 
 let modalListenersBound = false;
+let toastListenersBound = false;
+const MAX_VISIBLE_TOASTS = 2;
+const DEFAULT_TOAST_MS = 2800;
 
 export function initTabs(container = document) {
   $$("[data-tabs]", container).forEach((tabsEl) => {
@@ -83,10 +86,7 @@ export function initModals(container = document) {
   $$("[data-modal-trigger]", container).forEach((trigger) => {
     if (trigger.dataset.modalBound) return;
     trigger.dataset.modalBound = "true";
-
-    trigger.addEventListener("click", () => {
-      openModal(trigger.dataset.modalTrigger);
-    });
+    trigger.addEventListener("click", () => openModal(trigger.dataset.modalTrigger));
   });
 }
 
@@ -140,17 +140,61 @@ function getToastContainer() {
   return container;
 }
 
-export function showToast(html, duration = 4000) {
+function dismissToast(toast) {
+  if (!toast || toast.dataset.exiting === "true") return;
+  toast.dataset.exiting = "true";
+  toast.classList.add("is-exiting");
+  setTimeout(() => toast.remove(), 300);
+}
+
+function bindToastDismiss() {
+  if (toastListenersBound) return;
+  toastListenersBound = true;
+
+  document.addEventListener("click", (e) => {
+    const closeBtn = e.target.closest("[data-toast-close]");
+    if (closeBtn) {
+      dismissToast(closeBtn.closest(".toast"));
+    }
+  });
+}
+
+/**
+ * Show a single, deduplicated toast notification.
+ * Replaces an existing toast with the same title instead of stacking duplicates.
+ */
+export function showToast(html, duration = DEFAULT_TOAST_MS) {
+  bindToastDismiss();
+
   const container = getToastContainer();
   const wrapper = document.createElement("div");
   wrapper.innerHTML = html.trim();
   const toast = wrapper.firstElementChild;
+  if (!toast) return;
+
+  const title = toast.dataset.toastTitle
+    || toast.querySelector(".toast__title")?.textContent?.trim()
+    || "";
+
+  if (title) {
+    [...container.children].forEach((existing) => {
+      const existingTitle = existing.dataset.toastTitle
+        || existing.querySelector(".toast__title")?.textContent?.trim();
+      if (existingTitle === title) {
+        dismissToast(existing);
+      }
+    });
+  }
+
+  while (container.children.length >= MAX_VISIBLE_TOASTS) {
+    dismissToast(container.firstElementChild);
+  }
+
   container.appendChild(toast);
 
-  setTimeout(() => {
-    toast.classList.add("is-exiting");
-    setTimeout(() => toast.remove(), 300);
-  }, duration);
+  if (duration > 0) {
+    setTimeout(() => dismissToast(toast), duration);
+  }
 }
 
 export function initInteractions(container = document) {

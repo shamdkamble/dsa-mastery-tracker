@@ -9,7 +9,8 @@ import { initAuthForms } from "./auth/forms.js";
 import { initSidebar } from "./components/sidebar.js";
 import { initNavbar } from "./components/navbar.js";
 import { getState, setState } from "./state.js";
-import { $ } from "./utils.js";
+import { $, debounce } from "./utils.js";
+import { bindPageHandlers } from "./controllers/page-controller.js";
 import { initDB, getUser } from "./storage/db.js";
 import { getInitials } from "./storage/helpers.js";
 import { getSessionUser } from "./auth/session.js";
@@ -96,13 +97,27 @@ function initSidebarOverlay() {
   });
 }
 
+const DATA_DRIVEN_ROUTES = new Set([
+  "dashboard",
+  "mission",
+  "problems",
+  "analytics",
+  "calendar",
+  "settings",
+]);
+
 function initDataRefresh() {
   const content = $("#content");
 
-  document.addEventListener("data:change", () => {
+  const refreshCurrentPage = debounce(() => {
     syncUserFromDB();
-    renderRoute(getCurrentPath(), content);
-  });
+    const path = getCurrentPath();
+    if (DATA_DRIVEN_ROUTES.has(path)) {
+      renderRoute(path, content);
+    }
+  }, 120);
+
+  document.addEventListener("data:change", refreshCurrentPage);
 }
 
 async function init() {
@@ -113,6 +128,7 @@ async function init() {
 
   const content = $("#content");
   setContentContainer(content);
+  bindPageHandlers(content);
 
   setAuthGuard(enforceRouteAccess);
 
