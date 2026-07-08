@@ -4,13 +4,17 @@
 
 import "./env.js";
 
-const DEFAULT_GEMINI_MODEL = "gemini-1.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
-/** Valid Gemini models — only these are used (invalid env values map to default) */
+/**
+ * Valid Gemini models for v1beta generateContent (verified via ListModels).
+ * Invalid env values map to DEFAULT_GEMINI_MODEL.
+ */
 export const FALLBACK_MODELS = [
-  "gemini-1.5-flash",
-  "gemini-2.0-flash-exp",
-  "gemini-3.1-flash",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash",
+  "gemini-3-flash-preview",
 ];
 
 const ALLOWED_MODELS = new Set(FALLBACK_MODELS);
@@ -364,7 +368,10 @@ export async function generateWithModelFallback({
     throw errorFromResponse(result.status, result.data);
   }
 
-  throw lastError || new TeachApiError("All Gemini models exhausted.", { status: 502, code: "MODEL_NOT_FOUND" });
+  throw lastError || new TeachApiError(
+    "All Gemini models are unavailable right now. Try again in a few minutes or fill in manually.",
+    { status: 502, code: "MODEL_NOT_FOUND" },
+  );
 }
 
 async function callGemini(model, apiKey, userPrompt, options, signal, systemPrompt = null) {
