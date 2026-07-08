@@ -1,5 +1,5 @@
 /**
- * Authentication — admin hardcoded, users in JSON store
+ * Authentication — admin hardcoded, users in MongoDB Atlas
  */
 
 import crypto from "crypto";

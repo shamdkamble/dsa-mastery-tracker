@@ -1,18 +1,35 @@
 /**
- * User database — CRUD over persistent JSON store
+ * User database — MongoDB Atlas CRUD
  */
 
 import crypto from "crypto";
-import { readUsersStore, writeUsersStore } from "./user-store.js";
+import { connectDB } from "./db/mongodb.js";
+import { User } from "./models/User.js";
+import { ACCESS_LEVELS, USER_STATUSES } from "./user-constants.js";
 
-export const USER_STATUSES = ["pending", "approved", "rejected", "suspended"];
-export const ACCESS_LEVELS = ["standard", "premium", "trial"];
+export { ACCESS_LEVELS, USER_STATUSES };
+
+function toIso(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
 
 function normalizeUser(user) {
+  if (!user) return null;
+  const doc = user.toObject ? user.toObject() : user;
   return {
-    ...user,
-    accessLevel: user.accessLevel || "standard",
-    expiresAt: user.expiresAt ?? null,
+    id: doc.id,
+    name: doc.name,
+    email: doc.email,
+    passwordHash: doc.passwordHash,
+    role: doc.role || "user",
+    status: doc.status || "pending",
+    accessLevel: doc.accessLevel || "standard",
+    expiresAt: toIso(doc.expiresAt),
+    createdAt: toIso(doc.createdAt),
+    updatedAt: toIso(doc.updatedAt),
   };
 }
 
@@ -21,30 +38,34 @@ export function generateUserId() {
 }
 
 export async function getAllUsers() {
-  const store = await readUsersStore();
-  return store.users.map(normalizeUser);
+  await connectDB();
+  const users = await User.find().sort({ createdAt: -1 }).lean();
+  return users.map(normalizeUser);
 }
 
 export async function findUserByEmail(email) {
   const normalized = email.trim().toLowerCase();
-  const users = await getAllUsers();
-  return users.find((u) => u.email.toLowerCase() === normalized) || null;
+  await connectDB();
+  const user = await User.findOne({ email: normalized }).lean();
+  return user ? normalizeUser(user) : null;
 }
 
 export async function findUserById(id) {
-  const users = await getAllUsers();
-  return users.find((u) => u.id === id) || null;
+  await connectDB();
+  const user = await User.findOne({ id }).lean();
+  return user ? normalizeUser(user) : null;
 }
 
 export async function createUser({ id, name, email, passwordHash }) {
-  const store = await readUsersStore();
+  await connectDB();
 
   const normalizedEmail = email.trim().toLowerCase();
-  if (store.users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
+  const existing = await User.findOne({ email: normalizedEmail }).lean();
+  if (existing) {
     throw new Error("EMAIL_EXISTS");
   }
 
-  const user = {
+  const user = await User.create({
     id,
     name: name.trim(),
     email: normalizedEmail,
@@ -53,34 +74,33 @@ export async function createUser({ id, name, email, passwordHash }) {
     status: "pending",
     accessLevel: "standard",
     expiresAt: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+  });
 
-  store.users.push(user);
-  await writeUsersStore(store);
-  return user;
+  return normalizeUser(user);
 }
 
 export async function updateUser(id, patch) {
-  const store = await readUsersStore();
-  const index = store.users.findIndex((u) => u.id === id);
+  await connectDB();
 
-  if (index === -1) {
+  const updates = { updatedAt: new Date() };
+  if (patch.status !== undefined) updates.status = patch.status;
+  if (patch.accessLevel !== undefined) updates.accessLevel = patch.accessLevel;
+  if (patch.expiresAt !== undefined) {
+    updates.expiresAt = patch.expiresAt ? new Date(patch.expiresAt) : null;
+  }
+  if (patch.name !== undefined) updates.name = patch.name.trim();
+
+  const user = await User.findOneAndUpdate(
+    { id },
+    { $set: updates },
+    { new: true },
+  ).lean();
+
+  if (!user) {
     throw new Error("USER_NOT_FOUND");
   }
 
-  const current = store.users[index];
-  const next = { ...current, updatedAt: new Date().toISOString() };
-
-  if (patch.status !== undefined) next.status = patch.status;
-  if (patch.accessLevel !== undefined) next.accessLevel = patch.accessLevel;
-  if (patch.expiresAt !== undefined) next.expiresAt = patch.expiresAt;
-  if (patch.name !== undefined) next.name = patch.name.trim();
-
-  store.users[index] = next;
-  await writeUsersStore(store);
-  return normalizeUser(next);
+  return normalizeUser(user);
 }
 
 export async function updateUserStatus(id, status) {
@@ -88,25 +108,25 @@ export async function updateUserStatus(id, status) {
 }
 
 export async function deleteUser(id) {
-  const store = await readUsersStore();
-  const index = store.users.findIndex((u) => u.id === id);
+  await connectDB();
+  const removed = await User.findOneAndDelete({ id }).lean();
 
-  if (index === -1) {
+  if (!removed) {
     throw new Error("USER_NOT_FOUND");
   }
 
-  const [removed] = store.users.splice(index, 1);
-  await writeUsersStore(store);
-  return removed;
+  return normalizeUser(removed);
 }
 
 export async function getPendingUsers() {
-  const users = await getAllUsers();
-  return users.filter((u) => u.status === "pending");
+  await connectDB();
+  const users = await User.find({ status: "pending" }).sort({ createdAt: -1 }).lean();
+  return users.map(normalizeUser);
 }
 
 export function toPublicUser(user) {
   const normalized = normalizeUser(user);
+  if (!normalized) return null;
   return {
     id: normalized.id,
     name: normalized.name,
@@ -122,6 +142,7 @@ export function toPublicUser(user) {
 
 export function isUserAccessValid(user) {
   const normalized = normalizeUser(user);
+  if (!normalized) return false;
   if (normalized.status !== "approved") return false;
   if (!normalized.expiresAt) return true;
   return new Date(normalized.expiresAt).getTime() > Date.now();

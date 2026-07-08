@@ -23,7 +23,7 @@ import {
   extractBearer,
 } from "./auth.js";
 import { canAccessTeachTopic } from "./roadmap-access.js";
-import { getUserStoreLabel, isUserStorePersistent } from "./user-store.js";
+import { connectDB, getMongoStatus, isMongoConnected } from "./db/mongodb.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -33,6 +33,21 @@ const IS_VERCEL = Boolean(process.env.VERCEL);
 const app = express();
 
 app.use(express.json({ limit: "32kb" }));
+
+app.use("/api", async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error("[mongodb] Connection failed:", err.message);
+    res.status(503).json({
+      error: {
+        message: "Database unavailable. Check MONGODB_URI configuration.",
+        code: "DB_UNAVAILABLE",
+      },
+    });
+  }
+});
 
 function handleAuthError(res, err) {
   if (err instanceof AuthError) {
@@ -185,8 +200,9 @@ app.get("/api/health", (_req, res) => {
     keyStatus,
     provider: "gemini",
     model: resolveModel(),
-    userStore: getUserStoreLabel(),
-    userStorePersistent: isUserStorePersistent(),
+    userStore: "mongodb-atlas",
+    userStorePersistent: isMongoConnected(),
+    mongodb: getMongoStatus(),
   });
 });
 
@@ -204,7 +220,7 @@ const isMainModule = process.argv[1]
   && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 
 if (!IS_VERCEL && isMainModule) {
-  const server = app.listen(PORT, () => {
+  const server = app.listen(PORT, async () => {
     let keyLabel = "GEMINI_API_KEY not set";
     try {
       const key = resolveApiKey();
@@ -219,6 +235,12 @@ if (!IS_VERCEL && isMainModule) {
     console.log(`  API proxy:  POST http://localhost:${PORT}/api/teach`);
     console.log(`  Provider:   Gemini (${resolveModel()})`);
     console.log(`  Gemini API: ${keyLabel}`);
+    try {
+      await connectDB();
+      console.log(`  MongoDB:    connected (${getMongoStatus()})`);
+    } catch (err) {
+      console.log(`  MongoDB:    ${err.message}`);
+    }
     console.log("  Press Ctrl+C to stop");
     console.log("");
   });

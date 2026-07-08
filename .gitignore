@@ -32,5 +32,5 @@ coverage/
 # Optional local config overrides
 js/config.local.js
 
-# User database (local runtime data)
+# Legacy user JSON (migrated to MongoDB on first connect)
 data/users.json
