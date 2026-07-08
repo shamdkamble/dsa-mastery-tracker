@@ -33,6 +33,7 @@ function defaultDB() {
     meta: {
       longestStreak: 0,
       calendarMonth: { year: new Date().getFullYear(), month: new Date().getMonth() },
+      readNotificationIds: [],
     },
   };
 }
@@ -364,6 +365,38 @@ export function updateLongestStreak(streak) {
     touch();
   }
   return db.meta.longestStreak;
+}
+
+/* ── In-app notifications (read state) ── */
+
+export function getReadNotificationIds() {
+  return [...(load().meta.readNotificationIds || [])];
+}
+
+export function markNotificationRead(id) {
+  if (!id || id === "empty-feed") return;
+  const db = load();
+  if (!Array.isArray(db.meta.readNotificationIds)) {
+    db.meta.readNotificationIds = [];
+  }
+  if (!db.meta.readNotificationIds.includes(id)) {
+    db.meta.readNotificationIds.push(id);
+    if (db.meta.readNotificationIds.length > 200) {
+      db.meta.readNotificationIds = db.meta.readNotificationIds.slice(-200);
+    }
+    touch({ silent: true });
+    dispatch("notifications:change");
+  }
+}
+
+export function markAllNotificationsRead(ids) {
+  const db = load();
+  if (!Array.isArray(db.meta.readNotificationIds)) {
+    db.meta.readNotificationIds = [];
+  }
+  db.meta.readNotificationIds = [...new Set([...db.meta.readNotificationIds, ...ids])];
+  touch({ silent: true });
+  dispatch("notifications:change");
 }
 
 /* ── Import / Export / Clear ── */

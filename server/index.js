@@ -23,7 +23,7 @@ import {
   extractBearer,
 } from "./auth.js";
 import { canAccessTeachTopic } from "./roadmap-access.js";
-import { getUserStoreLabel } from "./user-store.js";
+import { getUserStoreLabel, isUserStorePersistent } from "./user-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -186,7 +186,7 @@ app.get("/api/health", (_req, res) => {
     provider: "gemini",
     model: resolveModel(),
     userStore: getUserStoreLabel(),
-    userStorePersistent: getUserStoreLabel() !== "ephemeral-tmp",
+    userStorePersistent: isUserStorePersistent(),
   });
 });
 

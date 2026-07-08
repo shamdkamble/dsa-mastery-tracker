@@ -1,11 +1,13 @@
 /**
- * Persistent user store — local JSON file in dev, Vercel Blob in production.
+ * Persistent user store
+ * Priority: Redis/KV → Vercel Blob → local file → /tmp (ephemeral)
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { head, put } from "@vercel/blob";
+import { Redis } from "@upstash/redis";
+import { head, put, list } from "@vercel/blob";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -13,17 +15,37 @@ const LOCAL_DATA_DIR = path.join(ROOT, "data");
 const LOCAL_USERS_PATH = path.join(LOCAL_DATA_DIR, "users.json");
 const SEED_PATH = path.join(ROOT, "data", "users.seed.json");
 const BLOB_PATHNAME = "dsa-mastery/users.json";
+const REDIS_KEY = "dsa-mastery:users";
 
 const IS_VERCEL = Boolean(process.env.VERCEL);
-const USE_BLOB = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+
+let redisClient = null;
 
 function emptyStore() {
   return { users: [] };
 }
 
 function parseStore(raw) {
-  const data = JSON.parse(raw);
-  return { users: Array.isArray(data.users) ? data.users : [] };
+  const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+  return { users: Array.isArray(data?.users) ? data.users : [] };
+}
+
+function getRedis() {
+  if (redisClient) return redisClient;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL
+    || process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN
+    || process.env.KV_REST_API_TOKEN;
+
+  if (!url || !token) return null;
+
+  redisClient = new Redis({ url, token });
+  return redisClient;
+}
+
+function hasBlob() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
 function ensureLocalStore() {
@@ -49,20 +71,37 @@ function writeLocalStore(data) {
   writeFileSync(LOCAL_USERS_PATH, JSON.stringify(data, null, 2), "utf8");
 }
 
+async function readRedisStore() {
+  const redis = getRedis();
+  const data = await redis.get(REDIS_KEY);
+  if (!data) return emptyStore();
+  return parseStore(data);
+}
+
+async function writeRedisStore(data) {
+  const redis = getRedis();
+  await redis.set(REDIS_KEY, data);
+}
+
 async function readBlobStore() {
+  let blobUrl = null;
+
   try {
     const blob = await head(BLOB_PATHNAME);
-    const response = await fetch(blob.url);
-    if (!response.ok) {
-      throw new Error(`Blob fetch failed (${response.status}).`);
-    }
-    return parseStore(await response.text());
-  } catch (err) {
-    if (err?.name === "BlobNotFoundError" || err?.message?.includes("does not exist")) {
-      return emptyStore();
-    }
-    throw err;
+    blobUrl = blob.url;
+  } catch {
+    const { blobs } = await list({ prefix: "dsa-mastery/", limit: 10 });
+    const match = blobs.find((b) => b.pathname === BLOB_PATHNAME || b.url?.includes("users.json"));
+    blobUrl = match?.url || null;
   }
+
+  if (!blobUrl) return emptyStore();
+
+  const response = await fetch(blobUrl);
+  if (!response.ok) {
+    throw new Error(`Blob fetch failed (${response.status}).`);
+  }
+  return parseStore(await response.text());
 }
 
 async function writeBlobStore(data) {
@@ -75,25 +114,31 @@ async function writeBlobStore(data) {
 }
 
 /**
- * @returns {"blob" | "file" | "tmp"}
+ * @returns {"redis" | "blob" | "file" | "tmp"}
  */
 export function resolveUserStoreBackend() {
-  if (USE_BLOB) return "blob";
+  if (getRedis()) return "redis";
+  if (hasBlob()) return "blob";
   if (!IS_VERCEL) return "file";
   return "tmp";
 }
 
 export function getUserStoreLabel() {
   const backend = resolveUserStoreBackend();
+  if (backend === "redis") return "redis";
   if (backend === "blob") return "vercel-blob";
   if (backend === "file") return "local-file";
   return "ephemeral-tmp";
 }
 
-if (IS_VERCEL && !USE_BLOB) {
-  console.warn(
-    "[user-store] BLOB_READ_WRITE_TOKEN is not set. User data will be lost on redeploy.",
-    "Add Vercel Blob storage and connect it to this project.",
+export function isUserStorePersistent() {
+  return resolveUserStoreBackend() !== "tmp";
+}
+
+if (IS_VERCEL && !isUserStorePersistent()) {
+  console.error(
+    "[user-store] No persistent storage configured. User accounts will be lost on redeploy.",
+    "Add Vercel KV/Redis (recommended) or Blob storage in the Vercel dashboard → Storage.",
   );
 }
 
@@ -103,19 +148,12 @@ if (IS_VERCEL && !USE_BLOB) {
 export async function readUsersStore() {
   const backend = resolveUserStoreBackend();
 
-  if (backend === "blob") {
-    return readBlobStore();
-  }
+  if (backend === "redis") return readRedisStore();
+  if (backend === "blob") return readBlobStore();
+  if (backend === "file") return readLocalStore();
 
-  if (backend === "file") {
-    return readLocalStore();
-  }
-
-  // Legacy ephemeral fallback (should not be used in production)
   const tmpPath = "/tmp/users.json";
-  if (!existsSync(tmpPath)) {
-    return emptyStore();
-  }
+  if (!existsSync(tmpPath)) return emptyStore();
   return parseStore(readFileSync(tmpPath, "utf8"));
 }
 
@@ -125,6 +163,11 @@ export async function readUsersStore() {
  */
 export async function writeUsersStore(data) {
   const backend = resolveUserStoreBackend();
+
+  if (backend === "redis") {
+    await writeRedisStore(data);
+    return;
+  }
 
   if (backend === "blob") {
     await writeBlobStore(data);
@@ -137,8 +180,6 @@ export async function writeUsersStore(data) {
   }
 
   const tmpDir = "/tmp";
-  if (!existsSync(tmpDir)) {
-    mkdirSync(tmpDir, { recursive: true });
-  }
+  if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
   writeFileSync("/tmp/users.json", JSON.stringify(data, null, 2), "utf8");
 }

@@ -7,6 +7,8 @@ import { getState, setState, subscribe } from "../state.js";
 import { toggleTheme } from "../theme.js";
 import { navigate } from "../router.js";
 import { addSearchRecent } from "../storage/db.js";
+import { markNotificationRead, markAllNotificationsRead } from "../storage/db.js";
+import { getNotifications, getUnreadNotificationCount } from "../services/notifications.js";
 import { $, debounce } from "../utils.js";
 
 const ROUTE_TITLES = {
@@ -24,9 +26,62 @@ const ROUTE_TITLES = {
   admin: "Admin Panel",
 };
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderNotificationItem(item) {
+  return `
+    <button
+      type="button"
+      class="navbar-notif__item${item.read ? " is-read" : ""}"
+      data-notif-id="${escapeHtml(item.id)}"
+      data-notif-href="${item.href ? escapeHtml(item.href) : ""}"
+    >
+      <span class="navbar-notif__item-dot" aria-hidden="true"></span>
+      <span class="navbar-notif__item-body">
+        <span class="navbar-notif__item-title">${escapeHtml(item.title)}</span>
+        <span class="navbar-notif__item-text">${escapeHtml(item.text)}</span>
+      </span>
+      <span class="navbar-notif__item-time">${escapeHtml(item.time)}</span>
+    </button>
+  `;
+}
+
+function renderNotificationPanel() {
+  const items = getNotifications();
+  const unread = items.filter((n) => !n.read).length;
+
+  return `
+    <div class="navbar-notif__panel" id="navbar-notif-panel" role="region" aria-label="Notifications" hidden>
+      <div class="navbar-notif__head">
+        <div>
+          <h3 class="navbar-notif__title">Notifications</h3>
+          <p class="navbar-notif__subtitle">${unread ? `${unread} unread` : "All caught up"}</p>
+        </div>
+        ${unread > 0 ? `
+          <button type="button" class="btn btn--ghost btn--sm" id="navbar-notif-mark-all">
+            Mark all read
+          </button>
+        ` : ""}
+      </div>
+      <div class="navbar-notif__list">
+        ${items.map(renderNotificationItem).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderNavbar(state) {
   const { currentRoute, searchQuery, notifications, user } = state;
   const pageTitle = ROUTE_TITLES[currentRoute] || "Dashboard";
+  const badge = notifications > 0
+    ? `<span class="navbar__notification-badge" aria-hidden="true">${notifications > 9 ? "9+" : notifications}</span>`
+    : "";
 
   return `
     <div class="navbar__left">
@@ -67,10 +122,21 @@ function renderNavbar(state) {
         <span class="icon-theme-dark" aria-hidden="true">${icon("moon")}</span>
       </button>
 
-      <button class="navbar__action navbar__action--notifications" type="button" aria-label="Notifications (${notifications} unread)" title="Notifications">
-        ${icon("bell")}
-        ${notifications > 0 ? '<span class="navbar__notification-dot" aria-hidden="true"></span>' : ""}
-      </button>
+      <div class="navbar__notif-wrap">
+        <button
+          class="navbar__action navbar__action--notifications"
+          type="button"
+          id="navbar-notif-btn"
+          aria-label="Notifications (${notifications} unread)"
+          aria-expanded="false"
+          aria-controls="navbar-notif-panel"
+          title="Notifications"
+        >
+          ${icon("bell")}
+          ${badge}
+        </button>
+        ${renderNotificationPanel()}
+      </div>
 
       <button class="navbar__action" type="button" aria-label="Help" title="Help">
         ${icon("help")}
@@ -83,6 +149,89 @@ function renderNavbar(state) {
       </button>
     </div>
   `;
+}
+
+function closeNotificationPanel(container) {
+  const btn = $("#navbar-notif-btn", container);
+  const panel = $("#navbar-notif-panel", container);
+  panel?.setAttribute("hidden", "");
+  btn?.setAttribute("aria-expanded", "false");
+  container.classList.remove("navbar--notif-open");
+}
+
+function openNotificationPanel(container) {
+  const btn = $("#navbar-notif-btn", container);
+  const panel = $("#navbar-notif-panel", container);
+  panel?.removeAttribute("hidden");
+  btn?.setAttribute("aria-expanded", "true");
+  container.classList.add("navbar--notif-open");
+  refreshNotificationUI(container);
+}
+
+function refreshNotificationUI(container) {
+  const count = getUnreadNotificationCount();
+  setState({ notifications: count });
+
+  const btn = $("#navbar-notif-btn", container);
+  const wrap = $(".navbar__notif-wrap", container);
+  if (!btn || !wrap) return;
+
+  btn.setAttribute("aria-label", `Notifications (${count} unread)`);
+
+  let badge = $(".navbar__notification-badge", btn);
+  if (count > 0) {
+    if (!badge) {
+      btn.insertAdjacentHTML(
+        "beforeend",
+        `<span class="navbar__notification-badge" aria-hidden="true">${count > 9 ? "9+" : count}</span>`,
+      );
+    } else {
+      badge.textContent = count > 9 ? "9+" : String(count);
+    }
+  } else {
+    badge?.remove();
+  }
+
+  const panel = $("#navbar-notif-panel", container);
+  if (panel) {
+    const isOpen = !panel.hasAttribute("hidden");
+    panel.outerHTML = renderNotificationPanel();
+    if (isOpen) {
+      const newPanel = $("#navbar-notif-panel", container);
+      newPanel?.removeAttribute("hidden");
+      bindNotificationPanelEvents(container);
+    }
+  }
+}
+
+function bindNotificationPanelEvents(container) {
+  const wrap = $(".navbar__notif-wrap", container);
+  if (!wrap || wrap.dataset.notifBound) return;
+  wrap.dataset.notifBound = "true";
+
+  wrap.addEventListener("click", (e) => {
+    const markAll = e.target.closest("#navbar-notif-mark-all");
+    if (markAll) {
+      const ids = getNotifications().filter((n) => !n.read).map((n) => n.id);
+      markAllNotificationsRead(ids);
+      refreshNotificationUI(container);
+      return;
+    }
+
+    const item = e.target.closest("[data-notif-id]");
+    if (!item) return;
+
+    const id = item.dataset.notifId;
+    const href = item.dataset.notifHref;
+    markNotificationRead(id);
+    refreshNotificationUI(container);
+
+    if (href) {
+      closeNotificationPanel(container);
+      const path = href.replace(/^#\/?/, "");
+      navigate(path);
+    }
+  });
 }
 
 function bindEvents(container) {
@@ -116,6 +265,35 @@ function bindEvents(container) {
   const themeBtn = $("#navbar-theme-toggle", container);
   themeBtn?.addEventListener("click", () => toggleTheme());
 
+  const notifBtn = $("#navbar-notif-btn", container);
+  notifBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const panel = $("#navbar-notif-panel", container);
+    const isOpen = panel && !panel.hasAttribute("hidden");
+    if (isOpen) {
+      closeNotificationPanel(container);
+    } else {
+      openNotificationPanel(container);
+    }
+  });
+
+  bindNotificationPanelEvents(container);
+
+  if (!document.body.dataset.notifDismissBound) {
+    document.body.dataset.notifDismissBound = "true";
+    document.addEventListener("click", (e) => {
+      const navbar = $(".navbar");
+      if (!navbar?.classList.contains("navbar--notif-open")) return;
+      if (e.target.closest(".navbar__notif-wrap")) return;
+      closeNotificationPanel(navbar);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      const navbar = $(".navbar");
+      if (navbar) closeNotificationPanel(navbar);
+    });
+  }
+
   if (!document.body.dataset.shortcutBound) {
     document.body.dataset.shortcutBound = "true";
     document.addEventListener("keydown", handleGlobalShortcut);
@@ -141,7 +319,13 @@ function updateBreadcrumb(container, currentRoute) {
   }
 }
 
+export function refreshNavbarNotifications() {
+  const container = $(".navbar");
+  if (container) refreshNotificationUI(container);
+}
+
 export function initNavbar(container) {
+  setState({ notifications: getUnreadNotificationCount() });
   container.innerHTML = renderNavbar(getState());
   bindEvents(container);
 
@@ -150,4 +334,10 @@ export function initNavbar(container) {
       updateBreadcrumb(container, state.currentRoute);
     }
   });
+
+  const refresh = debounce(() => refreshNotificationUI(container), 80);
+  document.addEventListener("data:change", refresh);
+  document.addEventListener("auth:change", refresh);
+  document.addEventListener("notifications:change", refresh);
+  document.addEventListener("route:change", refresh);
 }
