@@ -1285,6 +1285,17 @@
   color: var(--color-text-tertiary);
 }
 
+.problem-complexity__manual {
+  margin-top: var(--space-3);
+}
+
+.problem-complexity.is-manual .problem-complexity__manual {
+  padding: var(--space-3);
+  background-color: var(--color-bg-primary);
+  border: var(--border-width) solid var(--color-danger-muted, var(--color-border-subtle));
+  border-radius: var(--radius-md);
+}
+
 .problem-complexity__result {
   margin-top: var(--space-3);
   padding: var(--space-3);

@@ -136,8 +136,26 @@ function renderSolutionSection(p = {}) {
           <div id="complexity-result-host">
             ${renderComplexityResult(p.timeComplexity, p.spaceComplexity)}
           </div>
-          <input type="hidden" name="timeComplexity" id="time-complexity" value="${escapeAttr(p.timeComplexity || "")}">
-          <input type="hidden" name="spaceComplexity" id="space-complexity" value="${escapeAttr(p.spaceComplexity || "")}">
+          <div class="problem-complexity__manual ds-grid md:grid-cols-2 gap-3">
+            ${Field({
+              label: "Time complexity",
+              hint: "e.g. O(n), O(n log n)",
+              children: Input({
+                placeholder: "O(n)",
+                value: p.timeComplexity || "",
+                attrs: 'name="timeComplexity" id="time-complexity" autocomplete="off"',
+              }),
+            })}
+            ${Field({
+              label: "Space complexity",
+              hint: "e.g. O(1), O(n)",
+              children: Input({
+                placeholder: "O(1)",
+                value: p.spaceComplexity || "",
+                attrs: 'name="spaceComplexity" id="space-complexity" autocomplete="off"',
+              }),
+            })}
+          </div>
         </div>
       </div>
     </div>
@@ -382,12 +400,37 @@ function applyComplexityResult(host, { timeComplexity, spaceComplexity, explanat
   const timeInput = host.querySelector("#time-complexity");
   const spaceInput = host.querySelector("#space-complexity");
   const hostEl = host.querySelector("#complexity-result-host");
+  const section = host.querySelector("#complexity-section");
 
   if (timeInput) timeInput.value = timeComplexity;
   if (spaceInput) spaceInput.value = spaceComplexity;
   if (hostEl) {
     hostEl.innerHTML = renderComplexityResult(timeComplexity, spaceComplexity, explanation);
   }
+  section?.classList.remove("is-manual");
+}
+
+function syncComplexityPreview(host) {
+  const time = host.querySelector("#time-complexity")?.value?.trim() || "";
+  const space = host.querySelector("#space-complexity")?.value?.trim() || "";
+  const hostEl = host.querySelector("#complexity-result-host");
+
+  if (!hostEl) return;
+  hostEl.innerHTML = time || space ? renderComplexityResult(time, space) : "";
+}
+
+function focusManualPattern(host) {
+  const select = host.querySelector("#problem-pattern");
+  select?.focus();
+  select?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function focusManualComplexity(host) {
+  const section = host.querySelector("#complexity-section");
+  section?.classList.add("is-manual");
+  const input = host.querySelector("#time-complexity");
+  input?.focus();
+  input?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
 async function handleLeetcodeFetch(host, { force = false } = {}) {
@@ -483,7 +526,9 @@ async function handleDetectPattern(host) {
     });
     showPatternSuggestion(host, result);
   } catch (err) {
-    setAiStatus(host, "#pattern-ai-status", err.message || "Pattern detection failed.", "error");
+    const hint = " Select a pattern from the dropdown.";
+    setAiStatus(host, "#pattern-ai-status", `${err.message || "Pattern detection failed."}${hint}`, "error");
+    focusManualPattern(host);
   } finally {
     btn?.classList.remove("is-loading");
     btn.disabled = false;
@@ -509,7 +554,9 @@ async function handleAnalyzeComplexity(host) {
     applyComplexityResult(host, result);
     setAiStatus(host, "#complexity-ai-status", "Complexity analyzed — will be saved with this problem.", "success");
   } catch (err) {
-    setAiStatus(host, "#complexity-ai-status", err.message || "Analysis failed.", "error");
+    const hint = " Enter time and space complexity below.";
+    setAiStatus(host, "#complexity-ai-status", `${err.message || "Analysis failed."}${hint}`, "error");
+    focusManualComplexity(host);
   } finally {
     btn?.classList.remove("is-loading");
     updateAnalyzeButtonState(host);
@@ -560,6 +607,9 @@ function bindAiHandlers(host) {
 
   const solutionInput = host.querySelector("#problem-solution");
   solutionInput?.addEventListener("input", debounce(() => updateAnalyzeButtonState(host), 200));
+
+  host.querySelector("#time-complexity")?.addEventListener("input", debounce(() => syncComplexityPreview(host), 200));
+  host.querySelector("#space-complexity")?.addEventListener("input", debounce(() => syncComplexityPreview(host), 200));
 
   host.querySelector("#analyze-complexity-btn")?.addEventListener("click", () => handleAnalyzeComplexity(host));
 }

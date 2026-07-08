@@ -33,7 +33,11 @@ function errorFromResponse(status, data) {
 
   const hints = {
     MISSING_API_KEY: " Set GEMINI_API_KEY and restart the server.",
-    RATE_LIMITED: " Wait a moment and try again.",
+    RATE_LIMITED: " Wait a moment and try again, or fill in manually.",
+    PARSE_ERROR: " Fill in the fields manually.",
+    INVALID_PATTERN: " Select a pattern from the dropdown.",
+    INVALID_COMPLEXITY: " Enter time and space complexity manually.",
+    MODEL_NOT_FOUND: " All models are busy — try again later or fill in manually.",
     NETWORK_ERROR: " Run the server with npm start.",
   };
 

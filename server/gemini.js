@@ -6,13 +6,14 @@ import "./env.js";
 
 const DEFAULT_GEMINI_MODEL = "gemini-1.5-flash";
 
-/** Ordered fallback chain — primary first, then alternatives on rate limit / errors */
+/** Valid Gemini models — only these are used (invalid env values map to default) */
 export const FALLBACK_MODELS = [
   "gemini-1.5-flash",
   "gemini-2.0-flash-exp",
   "gemini-3.1-flash",
-  "gemini-1.5-pro",
 ];
+
+const ALLOWED_MODELS = new Set(FALLBACK_MODELS);
 
 const RETRY_BASE_DELAY_MS = 600;
 const RETRY_DELAY_INCREMENT_MS = 400;
@@ -35,7 +36,10 @@ export function normalizeModelName(raw) {
   model = model.replace(/^["']|["']$/g, "");
   model = model.replace(/^models\//i, "");
 
-  if (!model || !/^gemini-[\w.-]+$/i.test(model)) {
+  if (!model || !/^gemini-[\w.-]+$/i.test(model) || !ALLOWED_MODELS.has(model)) {
+    if (model && /^gemini-[\w.-]+$/i.test(model)) {
+      console.warn(`[gemini] unsupported model "${model}" → "${DEFAULT_GEMINI_MODEL}"`);
+    }
     return DEFAULT_GEMINI_MODEL;
   }
 
@@ -284,7 +288,7 @@ function resolveModelsToTry(options = {}) {
 
 /**
  * Try Gemini models in order with a short delay between retries on rate limits / transient errors.
- * @param {{ apiKey: string, userPrompt: string, options?: object, systemPrompt?: string | null, signal: AbortSignal, onSuccess?: (model: string) => void }} params
+ * @param {{ apiKey: string, userPrompt: string, options?: object, systemPrompt?: string | null, signal: AbortSignal, onSuccess?: (model: string) => void, validateResponse?: (content: string) => unknown }} params
  */
 export async function generateWithModelFallback({
   apiKey,
@@ -293,6 +297,7 @@ export async function generateWithModelFallback({
   systemPrompt = null,
   signal,
   onSuccess,
+  validateResponse,
 }) {
   const modelsToTry = resolveModelsToTry(options);
   let lastError = null;
@@ -309,6 +314,33 @@ export async function generateWithModelFallback({
     const result = await callGemini(model, apiKey, userPrompt, options, signal, systemPrompt);
 
     if (result.ok) {
+      if (validateResponse) {
+        try {
+          const parsed = validateResponse(result.content);
+          if (i > 0) {
+            console.log(`[gemini] succeeded with fallback model ${model}`);
+          }
+          onSuccess?.(result.model);
+          return {
+            content: result.content,
+            parsed,
+            usage: result.usage,
+            model: result.model,
+          };
+        } catch (validationErr) {
+          const retryable = validationErr instanceof TeachApiError
+            && ["PARSE_ERROR", "EMPTY_RESPONSE"].includes(validationErr.code);
+
+          if (retryable) {
+            console.warn(`[gemini] model ${model} returned unparseable response — trying next...`);
+            lastError = validationErr;
+            continue;
+          }
+
+          throw validationErr;
+        }
+      }
+
       if (i > 0) {
         console.log(`[gemini] succeeded with fallback model ${model}`);
       }
