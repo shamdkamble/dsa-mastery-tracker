@@ -15,7 +15,7 @@ import {
   clearAllData,
   addSearchRecent,
 } from "../storage/db.js";
-import { navigate, getCurrentPath, renderRoute } from "../router.js";
+import { navigate, getCurrentPath, refreshRouteContent } from "../router.js";
 import { openProblemModal } from "../components/problem-modal.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getTheme, setTheme, toggleTheme } from "../theme.js";
@@ -33,7 +33,7 @@ export function setContentContainer(el) {
 
 export function refreshPage() {
   if (contentContainer) {
-    renderRoute(getCurrentPath(), contentContainer);
+    refreshRouteContent(getCurrentPath(), contentContainer);
   }
 }
 

@@ -180,7 +180,9 @@ function openNotificationPanel(container) {
 
 function refreshNotificationUI(container) {
   const count = getUnreadNotificationCount();
-  setState({ notifications: count });
+  if (getState().notifications !== count) {
+    setState({ notifications: count });
+  }
 
   const btn = $("#navbar-notif-btn", container);
   const wrap = $(".navbar__notif-wrap", container);
@@ -203,15 +205,12 @@ function refreshNotificationUI(container) {
   }
 
   const panel = $("#navbar-notif-panel", container);
-  if (panel) {
-    const isOpen = !panel.hasAttribute("hidden");
-    panel.outerHTML = renderNotificationPanel();
-    if (isOpen) {
-      const newPanel = $("#navbar-notif-panel", container);
-      newPanel?.removeAttribute("hidden");
-      bindNotificationPanelEvents(container);
-    }
-  }
+  if (!panel || panel.hasAttribute("hidden")) return;
+
+  panel.outerHTML = renderNotificationPanel();
+  const newPanel = $("#navbar-notif-panel", container);
+  newPanel?.removeAttribute("hidden");
+  bindNotificationPanelEvents(container);
 }
 
 function bindNotificationPanelEvents(container) {
@@ -352,13 +351,12 @@ export function initNavbar(container) {
     }
   });
 
-  const refresh = debounce(() => refreshNotificationUI(container), 80);
+  const refresh = debounce(() => refreshNotificationUI(container), 200);
   document.addEventListener("data:change", refresh);
   document.addEventListener("notifications:change", refresh);
 
   document.addEventListener("route:change", () => {
     closeNotificationPanel(container);
-    refresh();
   });
 
   document.addEventListener("auth:change", () => {
@@ -368,6 +366,6 @@ export function initNavbar(container) {
     const nameEl = $(".navbar__profile-name", container);
     if (avatar) avatar.textContent = user.initials;
     if (nameEl) nameEl.textContent = user.name;
-    refresh();
+    refreshNotificationUI(container);
   });
 }

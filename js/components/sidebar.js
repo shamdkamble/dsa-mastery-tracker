@@ -186,13 +186,34 @@ export function initSidebar(container) {
     updateActiveLinks(container, detail.path);
   });
 
-  const refreshSidebar = debounce(() => {
-    container.innerHTML = renderSidebar(getState());
-    syncAppClasses(app, getState());
-    updateActiveLinks(container, getState().currentRoute);
-  }, 120);
+  function updateSidebarBadges() {
+    const problemCount = getProblems().length;
+    const missionCount = computeTodaysMission().length;
 
-  document.addEventListener("data:change", refreshSidebar);
+    const missionLink = container.querySelector('[data-route="mission"]');
+    const problemsLink = container.querySelector('[data-route="problems"]');
+
+    [missionLink, problemsLink].forEach((link) => {
+      if (!link) return;
+      let badge = link.querySelector(".sidebar__link-badge");
+      const count = link.dataset.route === "mission" ? missionCount : problemCount;
+      if (count > 0) {
+        if (!badge) {
+          link.insertAdjacentHTML(
+            "beforeend",
+            `<span class="sidebar__link-badge">${count}</span>`,
+          );
+        } else {
+          badge.textContent = String(count);
+        }
+      } else {
+        badge?.remove();
+      }
+    });
+  }
+
+  const refreshSidebarBadges = debounce(updateSidebarBadges, 200);
+  document.addEventListener("data:change", refreshSidebarBadges);
 
   document.addEventListener("auth:change", () => {
     container.innerHTML = renderSidebar(getState());

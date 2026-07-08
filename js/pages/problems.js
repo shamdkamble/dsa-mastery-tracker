@@ -124,6 +124,9 @@ export default {
   onMount(container) {
     bindPageHandlers(container);
 
+    if (container.dataset.problemsRowBound) return;
+    container.dataset.problemsRowBound = "true";
+
     container.addEventListener("click", (e) => {
       const row = e.target.closest("tr[data-problem-row]");
       if (row && !e.target.closest("button")) {

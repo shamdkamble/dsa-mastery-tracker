@@ -42,37 +42,50 @@ export function setAuthGuard(fn) {
   authGuard = fn;
 }
 
-export async function renderRoute(path, container) {
-  if (authGuard) {
-    const allowed = await authGuard(path);
-    if (!allowed) return;
-  }
-
+async function renderRouteContent(path, container, { animate = true } = {}) {
   const config = getRouteConfig(path);
 
   if (!config) {
     container.innerHTML = `<div class="content-inner"><p>Page not found</p></div>`;
-    return;
+    return null;
   }
-
-  setState({ currentRoute: path });
 
   const content = typeof config.render === "function"
     ? await config.render()
     : `<div class="content-inner"><p>Empty page</p></div>`;
 
   container.innerHTML = content;
-  container.classList.remove("animate-fade-in");
-  void container.offsetWidth;
-  container.classList.add("animate-fade-in");
 
-  dispatch("route:change", { path, config });
+  if (animate) {
+    container.classList.remove("animate-fade-in");
+    void container.offsetWidth;
+    container.classList.add("animate-fade-in");
+  }
 
   if (typeof config.onMount === "function") {
     config.onMount(container);
   }
 
+  return config;
+}
+
+export async function renderRoute(path, container) {
+  if (authGuard) {
+    const allowed = await authGuard(path);
+    if (!allowed) return;
+  }
+
+  const config = await renderRouteContent(path, container);
+  if (!config) return;
+
+  setState({ currentRoute: path });
+  dispatch("route:change", { path, config });
   document.title = `${config.title} · DSA Mastery Tracker`;
+}
+
+/** Re-render the current page content without auth checks, route events, or animation. */
+export async function refreshRouteContent(path, container) {
+  await renderRouteContent(path, container, { animate: false });
 }
 
 export function initRouter(container) {

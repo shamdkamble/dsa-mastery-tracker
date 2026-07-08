@@ -459,7 +459,7 @@ export function updateLongestStreak(streak) {
   const db = load();
   if (streak > db.meta.longestStreak) {
     db.meta.longestStreak = streak;
-    touch();
+    touch({ silent: true });
   }
   return db.meta.longestStreak;
 }

@@ -3,7 +3,7 @@
  */
 
 import { initTheme } from "./theme.js";
-import { initRouter, registerRoutes, getCurrentPath, renderRoute, setAuthGuard } from "./router.js";
+import { initRouter, registerRoutes, getCurrentPath, refreshRouteContent, setAuthGuard } from "./router.js";
 import { enforceRouteAccess, resolveAuthSession } from "./auth/guards.js";
 import { initAuthForms } from "./auth/forms.js";
 import { initSidebar } from "./components/sidebar.js";
@@ -101,24 +101,36 @@ const DATA_DRIVEN_ROUTES = new Set([
   "dashboard",
   "mission",
   "problems",
+  "patterns",
   "analytics",
   "calendar",
   "settings",
+  "search",
 ]);
 
 function initDataRefresh() {
   const content = $("#content");
+  let refreshInFlight = false;
 
-  const refreshCurrentPage = debounce(() => {
-    syncUserFromDB();
-    const path = getCurrentPath();
-    if (DATA_DRIVEN_ROUTES.has(path)) {
-      renderRoute(path, content);
+  const refreshCurrentPage = debounce(async () => {
+    if (refreshInFlight) return;
+    refreshInFlight = true;
+    try {
+      const path = getCurrentPath();
+      if (DATA_DRIVEN_ROUTES.has(path)) {
+        await refreshRouteContent(path, content);
+      }
+    } finally {
+      refreshInFlight = false;
     }
-  }, 120);
+  }, 200);
 
   document.addEventListener("data:change", refreshCurrentPage);
-  document.addEventListener("auth:change", refreshCurrentPage);
+
+  document.addEventListener("auth:change", () => {
+    syncUserFromDB();
+    refreshCurrentPage();
+  });
 }
 
 async function init() {
