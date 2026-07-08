@@ -4,8 +4,18 @@
 
 import "./env.js";
 
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
-const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"];
+const DEFAULT_GEMINI_MODEL = "gemini-1.5-flash";
+
+/** Ordered fallback chain — primary first, then alternatives on rate limit / errors */
+export const FALLBACK_MODELS = [
+  "gemini-1.5-flash",
+  "gemini-2.0-flash-exp",
+  "gemini-3.1-flash",
+  "gemini-1.5-pro",
+];
+
+const RETRY_BASE_DELAY_MS = 600;
+const RETRY_DELAY_INCREMENT_MS = 400;
 
 /**
  * Resolve Gemini API base URL (strip accidental /models/... suffix from env)
@@ -229,20 +239,100 @@ function extractContent(data) {
     .trim();
 }
 
-function isRetryableModelError(status, data) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRetryDelayMs(attemptIndex) {
+  return RETRY_BASE_DELAY_MS + attemptIndex * RETRY_DELAY_INCREMENT_MS;
+}
+
+function isRetryableError(status, data) {
+  if (status === 401 || status === 403) return false;
+  if (status === 429 || status === 404 || status >= 500) return true;
+
   const msg = parseApiErrorMessage(data, status).toLowerCase();
 
-  if (status === 404) return true;
-
   if (status === 400) {
-    return msg.includes("model") || msg.includes("not found") || msg.includes("unexpected");
-  }
-
-  if (status === 429) {
-    return msg.includes("quota") || msg.includes("rate");
+    return (
+      msg.includes("model")
+      || msg.includes("not found")
+      || msg.includes("unexpected")
+      || msg.includes("quota")
+      || msg.includes("rate")
+      || msg.includes("resource")
+      || msg.includes("unavailable")
+    );
   }
 
   return false;
+}
+
+function resolveModelsToTry(options = {}) {
+  const rawModel = options.model || process.env.GEMINI_MODEL;
+  const primaryModel = normalizeModelName(rawModel || resolveModel());
+
+  if (rawModel) {
+    const cleaned = rawModel.replace(/^\uFEFF/, "").trim().replace(/^["']|["']$/g, "").replace(/^models\//i, "");
+    if (normalizeModelName(rawModel) !== cleaned) {
+      console.warn(`[gemini] normalized invalid GEMINI_MODEL "${rawModel}" → "${primaryModel}"`);
+    }
+  }
+
+  return [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
+}
+
+/**
+ * Try Gemini models in order with a short delay between retries on rate limits / transient errors.
+ * @param {{ apiKey: string, userPrompt: string, options?: object, systemPrompt?: string | null, signal: AbortSignal, onSuccess?: (model: string) => void }} params
+ */
+export async function generateWithModelFallback({
+  apiKey,
+  userPrompt,
+  options = {},
+  systemPrompt = null,
+  signal,
+  onSuccess,
+}) {
+  const modelsToTry = resolveModelsToTry(options);
+  let lastError = null;
+
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const model = modelsToTry[i];
+
+    if (i > 0) {
+      const delay = getRetryDelayMs(i - 1);
+      console.warn(`[gemini] waiting ${delay}ms before trying ${model}...`);
+      await sleep(delay);
+    }
+
+    const result = await callGemini(model, apiKey, userPrompt, options, signal, systemPrompt);
+
+    if (result.ok) {
+      if (i > 0) {
+        console.log(`[gemini] succeeded with fallback model ${model}`);
+      }
+      onSuccess?.(result.model);
+      return {
+        content: result.content,
+        usage: result.usage,
+        model: result.model,
+      };
+    }
+
+    if (isRetryableError(result.status, result.data)) {
+      console.warn(
+        `[gemini] model ${model} failed (${result.status}): ${parseApiErrorMessage(result.data, result.status)} — trying next...`,
+      );
+      lastError = errorFromResponse(result.status, result.data);
+      continue;
+    }
+
+    console.error(`[gemini] ${result.status} ${model}:`, parseApiErrorMessage(result.data, result.status));
+    throw errorFromResponse(result.status, result.data);
+  }
+
+  throw lastError || new TeachApiError("All Gemini models exhausted.", { status: 502, code: "MODEL_NOT_FOUND" });
 }
 
 async function callGemini(model, apiKey, userPrompt, options, signal, systemPrompt = null) {
@@ -310,36 +400,17 @@ export async function generateContent({ systemPrompt = null, userPrompt, options
   }
 
   const apiKey = resolveApiKey();
-  const rawModel = options.model || process.env.GEMINI_MODEL;
-  const primaryModel = normalizeModelName(rawModel || resolveModel());
-  const modelsToTry = [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 60_000);
 
   try {
-    let lastError = null;
-
-    for (const model of modelsToTry) {
-      const result = await callGemini(model, apiKey, userPrompt, options, controller.signal, systemPrompt);
-
-      if (result.ok) {
-        return {
-          content: result.content,
-          usage: result.usage,
-          model: result.model,
-        };
-      }
-
-      if (isRetryableModelError(result.status, result.data)) {
-        lastError = errorFromResponse(result.status, result.data);
-        continue;
-      }
-
-      throw errorFromResponse(result.status, result.data);
-    }
-
-    throw lastError || new TeachApiError("No available Gemini model found.", { status: 502, code: "MODEL_NOT_FOUND" });
+    return await generateWithModelFallback({
+      apiKey,
+      userPrompt,
+      options,
+      systemPrompt,
+      signal: controller.signal,
+    });
   } catch (err) {
     if (err instanceof TeachApiError) throw err;
     if (err?.name === "AbortError") {
@@ -356,44 +427,17 @@ export async function teachTopic(topic, options = {}) {
 
   const apiKey = resolveApiKey();
   const userPrompt = buildUserPrompt(topic);
-  const rawModel = options.model || process.env.GEMINI_MODEL;
-  const primaryModel = normalizeModelName(rawModel || resolveModel());
-
-  if (rawModel && normalizeModelName(rawModel) !== rawModel.replace(/^\uFEFF/, "").trim().replace(/^["']|["']$/g, "").replace(/^models\//i, "")) {
-    console.warn(`[gemini] normalized invalid GEMINI_MODEL "${rawModel}" → "${primaryModel}"`);
-  }
-
-  const modelsToTry = [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   try {
-    let lastError = null;
-
-    for (const model of modelsToTry) {
-      const result = await callGemini(model, apiKey, userPrompt, options, controller.signal);
-
-      if (result.ok) {
-        console.log(`[gemini] lesson generated with ${model}`);
-        return {
-          content: result.content,
-          usage: result.usage,
-          model: result.model,
-        };
-      }
-
-      if (isRetryableModelError(result.status, result.data)) {
-        console.warn(`[gemini] model ${model} unavailable (${result.status}), trying fallback...`);
-        lastError = errorFromResponse(result.status, result.data);
-        continue;
-      }
-
-      console.error(`[gemini] ${result.status} ${model}:`, parseApiErrorMessage(result.data, result.status));
-      throw errorFromResponse(result.status, result.data);
-    }
-
-    throw lastError || new TeachApiError("No available Gemini model found.", { status: 502, code: "MODEL_NOT_FOUND" });
+    return await generateWithModelFallback({
+      apiKey,
+      userPrompt,
+      options,
+      signal: controller.signal,
+      onSuccess: (model) => console.log(`[gemini] lesson generated with ${model}`),
+    });
   } catch (err) {
     if (err instanceof TeachApiError) throw err;
     if (err?.name === "AbortError") {

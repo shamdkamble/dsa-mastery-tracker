@@ -6,4 +6,4 @@
 export const API_BASE_URL = "";
 
 /** Default Gemini model (server-side; mirrored here for reference only). */
-export const GEMINI_MODEL = "gemini-2.5-flash";
+export const GEMINI_MODEL = "gemini-1.5-flash";
