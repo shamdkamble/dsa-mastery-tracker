@@ -1,22 +1,27 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
-import { Badge, ProgressBar, EmptyState } from "../components/ui/index.js";
+import { Badge, ProgressBar, Alert } from "../components/ui/index.js";
 import { computePatternStats } from "../storage/computed.js";
 import { getProblems } from "../storage/db.js";
 
 function patternCard(p) {
   const iconVariant = p.color !== "accent" ? ` pattern-card__icon--${p.color}` : "";
-  const barVariant = p.mastery >= 75 ? "success" : p.mastery >= 55 ? "warning" : "danger";
+  const barVariant = p.problems === 0
+    ? "default"
+    : p.mastery >= 75 ? "success" : p.mastery >= 55 ? "warning" : "danger";
+  const countLabel = p.problems === 0
+    ? "No problems tracked yet"
+    : `${p.solved} of ${p.problems} problems solved`;
 
   return `
     <div class="pattern-card animate-fade-in-up" data-pattern="${p.name}">
       <div class="pattern-card__icon${iconVariant}" aria-hidden="true">${icon(p.icon)}</div>
       <div class="pattern-card__name">${p.name}</div>
-      <div class="pattern-card__count">${p.solved} of ${p.problems} problems solved</div>
+      <div class="pattern-card__count">${countLabel}</div>
       ${ProgressBar({ value: p.mastery, variant: barVariant, showValue: false })}
       <div class="pattern-card__mastery">
         <span>Mastery</span>
-        <span>${p.mastery}%</span>
+        <span>${p.problems === 0 ? "—" : `${p.mastery}%`}</span>
       </div>
     </div>
   `;
@@ -50,12 +55,15 @@ export default {
           </button>
         </div>
 
-        ${totalProblems === 0 ? EmptyState({
-          title: "No pattern data yet",
-          text: "Add problems and assign patterns to see mastery levels here.",
-          iconName: "patterns",
-          actions: `<button class="btn btn--primary" data-action="add-problem" type="button">Add Problem</button>`,
-        }) : `<div class="patterns-grid stagger-children">${patterns.map(patternCard).join("")}</div>`}
+        ${totalProblems === 0 ? Alert({
+          variant: "info",
+          title: "Start tracking patterns",
+          text: "The catalog below lists every DSA pattern. Add problems and assign a pattern to each one to see mastery progress.",
+          dismissible: false,
+          className: "mb-6",
+        }) : ""}
+
+        <div class="patterns-grid stagger-children">${patterns.map(patternCard).join("")}</div>
       `,
     });
   },
