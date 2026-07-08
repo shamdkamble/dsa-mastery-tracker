@@ -18,8 +18,8 @@ export function registerRoutes(routeMap) {
 }
 
 function normalizePath(hash) {
-  const path = (hash || "#/dashboard").replace(/^#\/?/, "").split("?")[0];
-  return path || "dashboard";
+  const path = (hash || "#/login").replace(/^#\/?/, "").split("?")[0];
+  return path || "login";
 }
 
 function getRouteConfig(path) {

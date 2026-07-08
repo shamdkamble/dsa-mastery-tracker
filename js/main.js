@@ -5,6 +5,7 @@
 import { initTheme } from "./theme.js";
 import { initRouter, registerRoutes, getCurrentPath, renderRoute, setAuthGuard } from "./router.js";
 import { enforceRouteAccess, resolveAuthSession } from "./auth/guards.js";
+import { initAuthForms } from "./auth/forms.js";
 import { initSidebar } from "./components/sidebar.js";
 import { initNavbar } from "./components/navbar.js";
 import { getState, setState } from "./state.js";
@@ -107,6 +108,7 @@ function initDataRefresh() {
 async function init() {
   initDB();
   initTheme();
+  initAuthForms();
   initAppShell();
 
   const content = $("#content");

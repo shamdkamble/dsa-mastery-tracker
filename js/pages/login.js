@@ -1,8 +1,5 @@
 import { icon } from "../components/icons.js";
-import { Button, Field, Input, Alert } from "../components/ui/index.js";
-import { login, AuthApiError } from "../services/auth.js";
-import { navigate } from "../router.js";
-import { syncAuthState } from "../auth/guards.js";
+import { Button, Field, Input } from "../components/ui/index.js";
 
 export default {
   title: "Sign In",
@@ -44,6 +41,7 @@ export default {
             ${Button({
               label: "Sign in",
               variant: "primary",
+              type: "submit",
               className: "auth-form__submit",
               attrs: 'id="login-submit"',
             })}
@@ -58,49 +56,5 @@ export default {
         <div class="auth-page__glow" aria-hidden="true"></div>
       </div>
     `;
-  },
-  onMount(container) {
-    const form = container.querySelector("#login-form");
-    const alertEl = container.querySelector("#login-alert");
-    const submitBtn = container.querySelector("#login-submit");
-
-    form?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      alertEl.innerHTML = "";
-
-      const identifier = container.querySelector("#login-identifier")?.value?.trim();
-      const password = container.querySelector("#login-password")?.value;
-
-      if (!identifier || !password) {
-        alertEl.innerHTML = Alert({
-          variant: "danger",
-          title: "Missing fields",
-          text: "Please enter your email/username and password.",
-        });
-        return;
-      }
-
-      submitBtn?.classList.add("is-loading");
-      submitBtn?.setAttribute("disabled", "true");
-
-      try {
-        const result = await login({ identifier, password });
-        syncAuthState(result.user);
-        navigate(result.user.role === "admin" ? "admin" : "dashboard");
-      } catch (err) {
-        const message = err instanceof AuthApiError
-          ? err.message
-          : "Sign in failed. Please try again.";
-
-        const variant = err instanceof AuthApiError && err.code === "PENDING_APPROVAL"
-          ? "warning"
-          : "danger";
-
-        alertEl.innerHTML = Alert({ variant, title: "Couldn't sign in", text: message });
-      } finally {
-        submitBtn?.classList.remove("is-loading");
-        submitBtn?.removeAttribute("disabled");
-      }
-    });
   },
 };
