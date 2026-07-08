@@ -45,7 +45,7 @@ export function setAuthGuard(fn) {
 let lastRenderedPath = "";
 let lastRenderedHtml = "";
 
-async function renderRouteContent(path, container, { animate = true } = {}) {
+async function renderRouteContent(path, container) {
   const config = getRouteConfig(path);
 
   if (!config) {
@@ -71,12 +71,6 @@ async function renderRouteContent(path, container, { animate = true } = {}) {
   lastRenderedHtml = content;
   container.innerHTML = content;
 
-  if (animate) {
-    container.classList.remove("animate-fade-in");
-    void container.offsetWidth;
-    container.classList.add("animate-fade-in");
-  }
-
   if (typeof config.onMount === "function") {
     config.onMount(container);
   }
@@ -98,9 +92,9 @@ export async function renderRoute(path, container) {
   document.title = `${config.title} · DSA Mastery Tracker`;
 }
 
-/** Re-render the current page content without auth checks, route events, or animation. */
+/** Re-render the current page content without auth checks or route events. */
 export async function refreshRouteContent(path, container) {
-  await renderRouteContent(path, container, { animate: false });
+  await renderRouteContent(path, container);
 }
 
 export function initRouter(container) {

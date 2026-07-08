@@ -34,7 +34,14 @@
 .content-inner {
   max-width: var(--content-max-width);
   margin: 0 auto;
-  animation: fade-in-up var(--duration-slow) var(--ease-out) both;
+}
+
+/* Authenticated app pages paint instantly — no enter-animation flicker on route change */
+.app--authenticated .content-inner,
+.app--authenticated .content .animate-fade-in-up,
+.app--authenticated .content .animate-scale-in,
+.app--authenticated .content .stagger-children > * {
+  animation: none !important;
 }
 
 .page-header {
