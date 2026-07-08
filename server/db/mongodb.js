@@ -31,12 +31,14 @@ export function getMongoUri() {
     throw new Error(`MONGODB_URI must start with mongodb:// or mongodb+srv:// (got: ${uri.slice(0, 20)}...)`);
   }
 
+  // Fix double slashes after host (common when pasting into Vercel)
+  uri = uri.replace(/(mongodb(?:\+srv)?:\/\/[^/]+)\/+/g, "$1/");
+
   // Ensure a database name is present in the path
   const pathMatch = uri.match(/^mongodb(?:\+srv)?:\/\/[^/]+\/([^?]*)/);
-  const dbInPath = pathMatch?.[1];
-  if (!dbInPath || dbInPath.length === 0) {
-    const separator = uri.includes("?") ? "?" : "";
-    if (separator) {
+  const dbInPath = (pathMatch?.[1] || "").replace(/^\/+/, "");
+  if (!dbInPath) {
+    if (uri.includes("?")) {
       uri = uri.replace("?", `/${DEFAULT_DB_NAME}?`);
     } else {
       uri = `${uri.replace(/\/$/, "")}/${DEFAULT_DB_NAME}`;
