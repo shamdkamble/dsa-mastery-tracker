@@ -10,6 +10,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { teachTopic, TeachApiError, resolveApiKey, resolveModel } from "./gemini.js";
 import { detectProblemPattern, analyzeSolutionComplexity } from "./problem-ai.js";
+import { fetchLeetcodeProblem, LeetcodeApiError, parseLeetcodeSlug } from "./leetcode.js";
 import {
   AuthError,
   registerUser,
@@ -101,7 +102,7 @@ app.get("/api/health", async (_req, res) => {
 });
 
 app.use("/api", async (req, res, next) => {
-  if (req.path === "/health") {
+  if (req.path === "/health" || req.path.startsWith("/leetcode/")) {
     next();
     return;
   }
@@ -111,6 +112,33 @@ app.use("/api", async (req, res, next) => {
     next();
   } catch (err) {
     sendDbError(res, err);
+  }
+});
+
+app.get("/api/leetcode/problem", async (req, res) => {
+  try {
+    const slug = parseLeetcodeSlug(req.query.slug || req.query.url || "");
+    if (!slug) {
+      res.status(400).json({
+        error: {
+          message: "Invalid LeetCode URL or slug.",
+          code: "INVALID_INPUT",
+        },
+      });
+      return;
+    }
+
+    const result = await fetchLeetcodeProblem(slug);
+    res.json(result);
+  } catch (err) {
+    if (err instanceof LeetcodeApiError) {
+      res.status(err.status).json({ error: { message: err.message, code: err.code } });
+      return;
+    }
+    console.error("[/api/leetcode/problem]", err);
+    res.status(500).json({
+      error: { message: "LeetCode lookup failed.", code: "SERVER_ERROR" },
+    });
   }
 });
 

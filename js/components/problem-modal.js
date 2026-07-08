@@ -17,6 +17,7 @@ import {
   parseLeetcodeSlug,
   parseLeetcodeUrlOffline,
   buildLeetcodeUrl,
+  slugToTitle,
 } from "../services/leetcode.js";
 import { detectPattern, analyzeComplexity } from "../api/problemAiApi.js";
 import { debounce } from "../utils.js";
@@ -389,7 +390,7 @@ function applyComplexityResult(host, { timeComplexity, spaceComplexity, explanat
   }
 }
 
-async function handleLeetcodeFetch(host) {
+async function handleLeetcodeFetch(host, { force = false } = {}) {
   const urlInput = host.querySelector("#leetcode-url");
   const fetchBtn = host.querySelector("#leetcode-fetch-btn");
   const value = urlInput?.value?.trim();
@@ -405,6 +406,15 @@ async function handleLeetcodeFetch(host) {
     return;
   }
 
+  if (!force && host._lastFetchedSlug === slug && host._lastLcMeta?.title) {
+    applyMetadata(host, host._lastLcMeta);
+    setStatus(host, `Already loaded "${host._lastLcMeta.title}".`, "success");
+    return;
+  }
+
+  if (host._fetchInProgress) return;
+  host._fetchInProgress = true;
+
   fetchBtn?.classList.add("is-loading");
   fetchBtn.disabled = true;
   fetchBtn.querySelector("span").textContent = "Fetching…";
@@ -412,13 +422,30 @@ async function handleLeetcodeFetch(host) {
 
   try {
     const meta = await fetchLeetcodeProblem(slug);
+    host._lastFetchedSlug = slug;
+    host._lastLcMeta = meta;
     applyMetadata(host, meta);
-    setStatus(host, `Loaded "${meta.title}" — fields auto-filled.`, "success");
+
+    if (meta.partial) {
+      setStatus(host, meta.warning || `Loaded "${meta.title}" from URL — fill remaining fields or retry.`, "error");
+    } else if (meta.cached) {
+      setStatus(host, `Loaded "${meta.title}" (cached).`, "success");
+    } else {
+      setStatus(host, `Loaded "${meta.title}" — fields auto-filled.`, "success");
+    }
   } catch (err) {
-    const offline = parseLeetcodeUrlOffline(value);
-    if (offline) applyMetadata(host, { ...offline, topicTags: [] });
-    setStatus(host, err.message || "Could not fetch problem.", "error");
+    const offline = parseLeetcodeUrlOffline(value) || {
+      title: slugToTitle(slug),
+      leetcodeUrl: buildLeetcodeUrl(slug),
+      leetcodeSlug: slug,
+      topicTags: [],
+    };
+    host._lastFetchedSlug = slug;
+    host._lastLcMeta = offline;
+    applyMetadata(host, offline);
+    setStatus(host, `${err.message || "Could not fetch problem."} Title filled from URL — retry Fetch or edit manually.`, "error");
   } finally {
+    host._fetchInProgress = false;
     fetchBtn?.classList.remove("is-loading");
     fetchBtn.disabled = false;
     const label = fetchBtn?.querySelector("span");
@@ -493,16 +520,16 @@ function bindLeetcodeHandlers(host) {
   const urlInput = host.querySelector("#leetcode-url");
   const fetchBtn = host.querySelector("#leetcode-fetch-btn");
 
-  fetchBtn?.addEventListener("click", () => handleLeetcodeFetch(host));
+  fetchBtn?.addEventListener("click", () => handleLeetcodeFetch(host, { force: true }));
 
   const debouncedFetch = debounce(() => {
     const slug = parseLeetcodeSlug(urlInput?.value);
-    if (slug && urlInput?.value.includes("leetcode.com")) {
+    if (slug && urlInput?.value.includes("leetcode.com/problems/")) {
       handleLeetcodeFetch(host);
     }
-  }, 800);
+  }, 1500);
 
-  urlInput?.addEventListener("paste", () => setTimeout(debouncedFetch, 100));
+  urlInput?.addEventListener("paste", () => setTimeout(debouncedFetch, 200));
   urlInput?.addEventListener("blur", () => {
     const offline = parseLeetcodeUrlOffline(urlInput.value);
     if (offline) {

@@ -1,31 +1,15 @@
 /**
  * LeetCode URL parsing & metadata fetch
- * Uses alfa-leetcode-api (proxies LeetCode GraphQL) — requires network when auto-filling
+ * Fetches via server proxy (/api/leetcode/problem) with client-side cache
  */
 
-import { PATTERN_CATALOG } from "../storage/patterns-catalog.js";
+import { API_BASE_URL } from "../config.js";
 
-const API_BASE = "https://alfa-leetcode-api.onrender.com";
+const CACHE_PREFIX = "lc-meta:";
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-const TAG_PATTERN_MAP = {
-  "hash-table": "Hash Map",
-  "dynamic-programming": "Dynamic Programming",
-  "binary-search": "Binary Search",
-  "depth-first-search": "BFS / DFS",
-  "breadth-first-search": "BFS / DFS",
-  "tree": "BFS / DFS",
-  "graph": "Graph Algorithms",
-  "union-find": "Union Find",
-  "trie": "Trie",
-  "heap-priority-queue": "Heap / Priority Queue",
-  "stack": "Stack",
-  "monotonic-stack": "Monotonic Stack",
-  "two-pointers": "Two Pointers",
-  "sliding-window": "Sliding Window",
-  "backtracking": "Backtracking",
-};
-
-const DIFFICULTY_TIME = { Easy: 20, Medium: 35, Hard: 50 };
+/** @type {Map<string, Promise<object>>} */
+const inflight = new Map();
 
 /**
  * Extract title slug from LeetCode URL or raw slug input
@@ -52,78 +36,77 @@ export function buildLeetcodeUrl(slug) {
   return `https://leetcode.com/problems/${slug}/`;
 }
 
-function matchPatternFromTags(tags = []) {
-  for (const tag of tags) {
-    const mapped = TAG_PATTERN_MAP[tag.slug];
-    if (mapped) return mapped;
-  }
-
-  for (const tag of tags) {
-    const name = tag.name?.toLowerCase();
-    const found = PATTERN_CATALOG.find((p) => p.name.toLowerCase() === name);
-    if (found) return found.name;
-  }
-
-  return "";
+export function slugToTitle(slug) {
+  if (!slug) return "";
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
-function mapTopicFromTags(tags = []) {
-  if (!tags.length) return "";
-  return tags.slice(0, 2).map((t) => t.name).join(" · ");
+function resolveBaseUrl() {
+  return API_BASE_URL?.replace(/\/$/, "") ?? "";
 }
 
-function normalizeDifficulty(difficulty) {
-  const d = difficulty?.trim();
-  if (/^easy$/i.test(d)) return "Easy";
-  if (/^medium$/i.test(d)) return "Medium";
-  if (/^hard$/i.test(d)) return "Hard";
-  return "Medium";
-}
-
-/**
- * Fetch problem metadata from LeetCode (via alfa-leetcode-api)
- */
-export async function fetchLeetcodeProblem(slugOrUrl) {
-  const slug = parseLeetcodeSlug(slugOrUrl);
-  if (!slug) {
-    throw new Error("Invalid LeetCode URL or slug. Example: https://leetcode.com/problems/two-sum/");
+function readCache(slug) {
+  try {
+    const raw = sessionStorage.getItem(`${CACHE_PREFIX}${slug}`);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    if (!entry?.data || Date.now() > entry.expiresAt) {
+      sessionStorage.removeItem(`${CACHE_PREFIX}${slug}`);
+      return null;
+    }
+    return entry.data;
+  } catch {
+    return null;
   }
+}
+
+function writeCache(slug, data) {
+  try {
+    sessionStorage.setItem(`${CACHE_PREFIX}${slug}`, JSON.stringify({
+      data,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    }));
+  } catch {
+    // Storage full or unavailable — ignore
+  }
+}
+
+async function fetchFromServer(slug) {
+  const cached = readCache(slug);
+  if (cached) return cached;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  const timeout = setTimeout(() => controller.abort(), 25000);
 
   try {
-    const res = await fetch(`${API_BASE}/select?titleSlug=${encodeURIComponent(slug)}`, {
-      signal: controller.signal,
-      headers: { Accept: "application/json" },
-    });
+    const res = await fetch(
+      `${resolveBaseUrl()}/api/leetcode/problem?slug=${encodeURIComponent(slug)}`,
+      {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      },
+    );
+
+    const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      throw new Error(`LeetCode lookup failed (${res.status}). Check the URL and try again.`);
+      const message = data?.error?.message
+        || `LeetCode lookup failed (${res.status}). Check the URL and try again.`;
+      throw new Error(message);
     }
 
-    const data = await res.json();
-    const tags = data.topicTags || [];
-    const difficulty = normalizeDifficulty(data.difficulty);
-
-    return {
-      title: data.questionTitle || "",
-      leetcodeUrl: data.link || buildLeetcodeUrl(slug),
-      leetcodeSlug: data.titleSlug || slug,
-      leetcodeId: data.questionFrontendId || data.questionId || "",
-      difficulty,
-      topic: mapTopicFromTags(tags),
-      pattern: matchPatternFromTags(tags),
-      topicTags: tags.map((t) => t.name),
-      estimatedMinutes: DIFFICULTY_TIME[difficulty] || 30,
-      isPaidOnly: Boolean(data.isPaidOnly),
-    };
+    writeCache(slug, data);
+    return data;
   } catch (err) {
-    if (err.name === "AbortError") {
-      throw new Error("Request timed out. The LeetCode API may be slow — try again.");
+    if (err?.name === "AbortError") {
+      throw new Error("Request timed out. Try again in a moment.");
     }
-    if (err.message?.includes("Failed to fetch") || err.message?.includes("NetworkError")) {
-      throw new Error("Network error. Connect to the internet to auto-fill from LeetCode.");
+    if (err?.message?.includes("Failed to fetch") || err?.message?.includes("NetworkError")) {
+      throw new Error("Cannot reach the server. Run npm start (Node server), not a static-only server.");
     }
     throw err;
   } finally {
@@ -132,16 +115,38 @@ export async function fetchLeetcodeProblem(slugOrUrl) {
 }
 
 /**
+ * Fetch problem metadata from LeetCode (via server proxy)
+ */
+export async function fetchLeetcodeProblem(slugOrUrl) {
+  const slug = parseLeetcodeSlug(slugOrUrl);
+  if (!slug) {
+    throw new Error("Invalid LeetCode URL or slug. Example: https://leetcode.com/problems/two-sum/");
+  }
+
+  if (inflight.has(slug)) {
+    return inflight.get(slug);
+  }
+
+  const promise = fetchFromServer(slug).finally(() => inflight.delete(slug));
+  inflight.set(slug, promise);
+  return promise;
+}
+
+/**
  * Minimal metadata from URL only (offline fallback)
  */
 export function parseLeetcodeUrlOffline(input) {
   const slug = parseLeetcodeSlug(input);
   if (!slug) return null;
+
   return {
+    title: slugToTitle(slug),
     leetcodeUrl: buildLeetcodeUrl(slug),
     leetcodeSlug: slug,
     leetcodeId: "",
     topicTags: [],
+    difficulty: "Medium",
+    estimatedMinutes: 35,
   };
 }
 
