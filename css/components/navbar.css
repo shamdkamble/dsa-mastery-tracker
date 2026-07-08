@@ -1,0 +1,201 @@
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--navbar-height);
+  padding: 0 var(--space-6);
+  background-color: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: blur(8px);
+}
+
+.navbar__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.navbar__menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-spring);
+}
+
+.navbar__menu-btn:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.navbar__menu-btn:active {
+  transform: scale(0.92);
+}
+
+.navbar__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+.navbar__breadcrumb-current {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.navbar__center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.navbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.navbar__action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-spring);
+}
+
+.navbar__action:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.navbar__action:active {
+  transform: scale(0.92);
+}
+
+.navbar__action svg {
+  width: 18px;
+  height: 18px;
+}
+
+.navbar__notification-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  background-color: var(--color-danger);
+  border: 2px solid var(--color-bg-primary);
+  border-radius: var(--radius-full);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.navbar__profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-1);
+  border-radius: var(--radius-md);
+  margin-left: var(--space-1);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.navbar__profile:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.navbar__profile-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  font-size: 11px;
+  font-weight: var(--font-semibold);
+}
+
+.navbar__profile-name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.navbar__profile-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--color-text-tertiary);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.navbar__profile:hover .navbar__profile-chevron {
+  transform: translateY(1px);
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 0 var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .navbar__menu-btn {
+    display: flex;
+  }
+
+  .navbar__breadcrumb {
+    display: none;
+  }
+
+  .navbar__center {
+    flex: 1;
+    justify-content: stretch;
+  }
+
+  .search-input-wrapper {
+    max-width: none;
+  }
+
+  .search-shortcut {
+    display: none;
+  }
+
+  .navbar__profile-name {
+    display: none;
+  }
+
+  .navbar__profile-chevron {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar__right .navbar__action:not(.navbar__action--notifications) {
+    display: none;
+  }
+}

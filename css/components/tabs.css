@@ -1,0 +1,113 @@
+.tabs {
+  display: flex;
+  flex-direction: column;
+}
+
+.tabs__list {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  border: var(--border-width) solid var(--color-border-subtle);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs__list::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs__list--underline {
+  padding: 0;
+  background: none;
+  border: none;
+  border-bottom: var(--border-width) solid var(--color-border);
+  border-radius: 0;
+  gap: 0;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: var(--transition-colors), var(--transition-transform);
+}
+
+.tab:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-hover);
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.tab.is-active {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+.tabs__list--underline .tab {
+  border-radius: 0;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  box-shadow: none;
+  position: relative;
+}
+
+.tabs__list--underline .tab.is-active {
+  color: var(--color-accent);
+  background: none;
+}
+
+.tabs__list--underline .tab.is-active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: var(--space-2);
+  right: var(--space-2);
+  height: 2px;
+  background-color: var(--color-accent);
+  border-radius: var(--radius-full) var(--radius-full) 0 0;
+}
+
+.tab__badge {
+  padding: 1px var(--space-2);
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-full);
+  transition: var(--transition-colors);
+}
+
+.tab.is-active .tab__badge {
+  background-color: var(--color-accent-muted);
+  color: var(--color-accent);
+}
+
+.tabs__panel {
+  display: none;
+  padding-top: var(--space-5);
+  animation: fade-in-up var(--duration-normal) var(--ease-out) both;
+}
+
+.tabs__panel.is-active {
+  display: block;
+}
+
+.tab svg {
+  width: 16px;
+  height: 16px;
+}

@@ -1,0 +1,349 @@
+/* ═══════════════════════════════════════════
+   AI Teach Modal
+   ═══════════════════════════════════════════ */
+
+.modal--teach {
+  max-width: 52rem;
+  max-height: calc(100dvh - var(--space-6));
+}
+
+.teach-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+  background: linear-gradient(135deg, var(--color-accent-subtle) 0%, var(--color-bg-elevated) 55%);
+  flex-shrink: 0;
+}
+
+.teach-modal__header-main {
+  min-width: 0;
+}
+
+.teach-modal__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  margin-bottom: var(--space-2);
+}
+
+.teach-modal__eyebrow svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.teach-modal__title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+}
+
+.teach-modal__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.teach-modal__body {
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  background-color: var(--color-bg-secondary);
+}
+
+/* Loading state */
+.teach-loading__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-6) var(--space-4) var(--space-5);
+}
+
+.teach-loading__ring {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--color-accent-subtle), var(--color-bg-tertiary));
+  border: var(--border-width) solid var(--color-accent-muted);
+  margin-bottom: var(--space-4);
+}
+
+.teach-loading__spinner {
+  display: flex;
+  color: var(--color-accent);
+  animation: spin 1.2s linear infinite;
+}
+
+.teach-loading__spinner svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.teach-loading__title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+}
+
+.teach-loading__sub {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-2);
+  max-width: 36ch;
+  line-height: var(--leading-relaxed);
+}
+
+.teach-loading__steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.teach-loading__step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-tertiary);
+  background-color: var(--color-bg-elevated);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  transition: color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              background-color var(--duration-fast) var(--ease-out);
+}
+
+.teach-loading__step.is-active {
+  color: var(--color-accent);
+  border-color: var(--color-accent-muted);
+  background-color: var(--color-accent-subtle);
+}
+
+.teach-loading__step.is-done {
+  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+}
+
+.teach-loading__step-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: var(--radius-full);
+  background-color: currentColor;
+}
+
+.teach-loading__skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.teach-skeleton {
+  padding: var(--space-4);
+  background-color: var(--color-bg-elevated);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  animation: pulse-soft 1.8s var(--ease-in-out) infinite;
+}
+
+.teach-skeleton__line {
+  height: 0.625rem;
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2);
+}
+
+.teach-skeleton__line:last-child {
+  margin-bottom: 0;
+}
+
+.teach-skeleton__line--short { width: 28%; }
+.teach-skeleton__line--medium { width: 72%; }
+
+/* Lesson sections */
+.teach-lesson {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.teach-section {
+  background-color: var(--color-bg-elevated);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.teach-section__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+  background-color: var(--color-bg-secondary);
+}
+
+.teach-section__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  color: var(--color-accent);
+  background-color: var(--color-accent-subtle);
+  border-radius: var(--radius-md);
+}
+
+.teach-section__icon svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.teach-section__num {
+  display: block;
+  font-size: 0.625rem;
+  font-weight: var(--font-bold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  margin-bottom: var(--space-1);
+}
+
+.teach-section__title {
+  font-size: var(--text-md);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+}
+
+.teach-section__body {
+  padding: var(--space-5);
+}
+
+.teach-prose__p {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+  margin-bottom: var(--space-3);
+}
+
+.teach-prose__p:last-child {
+  margin-bottom: 0;
+}
+
+.teach-inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-primary);
+}
+
+.teach-code-block {
+  margin: var(--space-3) 0;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-color: var(--color-bg-tertiary);
+}
+
+.teach-code-block__bar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-bg-secondary);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+
+.teach-code-block__lang {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.teach-code-block__pre {
+  margin: 0;
+  padding: var(--space-4);
+  overflow-x: auto;
+}
+
+.teach-code-block__pre code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-primary);
+  white-space: pre;
+}
+
+/* Error state */
+.teach-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-10) var(--space-4);
+}
+
+.teach-error__icon {
+  display: flex;
+  color: var(--color-danger);
+  margin-bottom: var(--space-3);
+}
+
+.teach-error__icon svg {
+  width: 2rem;
+  height: 2rem;
+}
+
+.teach-error__title {
+  font-size: var(--text-md);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+}
+
+.teach-error__text {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-2);
+  max-width: 40ch;
+  line-height: var(--leading-relaxed);
+}
+
+@media (max-width: 640px) {
+  .teach-modal__header,
+  .teach-modal__body {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .teach-loading__steps {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .teach-section__body {
+    padding: var(--space-4);
+  }
+}

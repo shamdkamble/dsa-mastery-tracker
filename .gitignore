@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cursor / agent terminals (local only)
+terminals/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Optional local config overrides
+js/config.local.js

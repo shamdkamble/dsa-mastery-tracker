@@ -1,0 +1,293 @@
+/**
+ * Server-side Gemini client (API key stays on the server)
+ */
+
+import "./env.js";
+
+const GEMINI_BASE_URL = (process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+const DEFAULT_TIMEOUT_MS = 120_000;
+
+export const TEACHING_SYSTEM_PROMPT = `You are an expert computer science tutor in the DSA Mastery Tracker app. Your student is preparing for FAANG-level technical interviews.
+
+You MUST structure every lesson using EXACTLY these four markdown section headings (include the numbers):
+
+## 1. History & Problem it Solved
+## 2. Real Life Analogy
+## 3. Technical Explanation & Complexity
+## 4. C++ Code Examples
+
+Rules:
+- Write clear, engaging prose under each section — no skipping sections.
+- Section 1: historical context, why this concept exists, what problem it solves.
+- Section 2: one concrete, memorable real-world analogy.
+- Section 3: technical depth, how it works, time/space complexity where relevant, edge cases. Focus on C++ implementation details.
+- Section 4: clean, interview-ready C++ code in fenced \`\`\`cpp blocks with brief comments.
+- Prefer C++ STL (vector, unordered_map, string, algorithm) for examples.
+- Connect to LeetCode/interview patterns when relevant.
+- Tone: encouraging, precise, practical. No filler.`;
+
+export class TeachApiError extends Error {
+  constructor(message, { status = 500, code = "SERVER_ERROR", details } = {}) {
+    super(message);
+    this.name = "TeachApiError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+/**
+ * Normalize and validate the Gemini API key from environment / .env
+ */
+export function resolveApiKey() {
+  const raw = process.env.GEMINI_API_KEY;
+  if (!raw) {
+    throw new TeachApiError(
+      "Missing GEMINI_API_KEY. Add it to .env or set the environment variable, then restart the server.",
+      { status: 500, code: "MISSING_API_KEY" },
+    );
+  }
+
+  const key = raw.replace(/^\uFEFF/, "").trim();
+
+  if (!key) {
+    throw new TeachApiError(
+      "GEMINI_API_KEY is empty. Check your .env file and restart the server.",
+      { status: 500, code: "MISSING_API_KEY" },
+    );
+  }
+
+  return key;
+}
+
+function topicName(topic) {
+  return topic.name?.trim() || topic.title?.trim() || "";
+}
+
+function buildUserPrompt(topic) {
+  if (typeof topic === "string") {
+    return [
+      `Create a structured lesson for: **${topic.trim()}**`,
+      "",
+      "Follow the four required sections from your system instructions.",
+    ].join("\n");
+  }
+
+  if (topic && typeof topic === "object") {
+    const name = topicName(topic) || "this topic";
+    const phase = topic.phase ? `Phase ${topic.phase}` : "";
+    const difficulty = topic.difficulty ? `Difficulty: ${topic.difficulty}` : "";
+    const track = topic.track ? `Track: ${topic.track.toUpperCase()}` : "";
+    const meta = [phase, difficulty, track].filter(Boolean).join(" · ");
+
+    return [
+      `Create a structured lesson for: **${name}**`,
+      meta && `Context: ${meta}`,
+      topic.description?.trim() && `Notes: ${topic.description.trim()}`,
+      "",
+      "Follow the four required sections from your system instructions.",
+      "Make the lesson appropriately challenging for the stated difficulty.",
+    ].filter(Boolean).join("\n");
+  }
+
+  throw new TeachApiError("topic must be a string or object.", { status: 400, code: "INVALID_INPUT" });
+}
+
+function validateTopic(topic) {
+  if (topic == null) {
+    throw new TeachApiError("topic is required.", { status: 400, code: "INVALID_INPUT" });
+  }
+  if (typeof topic === "string" && !topic.trim()) {
+    throw new TeachApiError("topic must be a non-empty string.", { status: 400, code: "INVALID_INPUT" });
+  }
+  if (typeof topic === "object") {
+    const name = topicName(topic);
+    if (!name && !topic.description?.trim()) {
+      throw new TeachApiError("topic object needs a name or description.", { status: 400, code: "INVALID_INPUT" });
+    }
+  }
+}
+
+async function parseJsonSafe(res) {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: { message: text } };
+  }
+}
+
+function parseApiErrorMessage(data, status) {
+  if (!data) return `Gemini API request failed (${status}).`;
+
+  if (typeof data.error === "string" && data.error.trim()) {
+    return data.error.trim();
+  }
+
+  if (data.error?.message) {
+    return data.error.message;
+  }
+
+  if (typeof data.message === "string" && data.message.trim()) {
+    return data.message.trim();
+  }
+
+  return `Gemini API request failed (${status}).`;
+}
+
+function errorFromResponse(status, data) {
+  const apiMessage = parseApiErrorMessage(data, status);
+  const apiCode = data?.error?.code || data?.error?.status;
+
+  let code = "API_ERROR";
+  if (status === 401 || status === 403) code = "UNAUTHORIZED";
+  else if (status === 429) code = "RATE_LIMITED";
+  else if (status === 404) code = "MODEL_NOT_FOUND";
+  else if (status >= 500) code = "SERVER_ERROR";
+
+  return new TeachApiError(apiMessage, { status, code, details: data });
+}
+
+function buildGenerateUrl(model) {
+  return `${GEMINI_BASE_URL}/models/${model}:generateContent`;
+}
+
+function buildRequestBody(userPrompt, options = {}) {
+  return {
+    systemInstruction: {
+      parts: [{ text: TEACHING_SYSTEM_PROMPT }],
+    },
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: userPrompt }],
+      },
+    ],
+    generationConfig: {
+      temperature: options.temperature ?? 0.6,
+      maxOutputTokens: options.maxTokens ?? 4096,
+      topP: 0.95,
+    },
+  };
+}
+
+function extractContent(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return "";
+
+  return parts
+    .map((part) => (typeof part.text === "string" ? part.text : ""))
+    .join("")
+    .trim();
+}
+
+function isRetryableModelError(status, data) {
+  if (status === 404) return true;
+  if (status === 429) {
+    const msg = parseApiErrorMessage(data, status).toLowerCase();
+    return msg.includes("quota") || msg.includes("rate");
+  }
+  return false;
+}
+
+async function callGemini(model, apiKey, userPrompt, options, signal) {
+  const url = buildGenerateUrl(model);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify(buildRequestBody(userPrompt, options)),
+    signal,
+  });
+
+  const data = await parseJsonSafe(res);
+
+  if (!res.ok) {
+    return { ok: false, status: res.status, data, model };
+  }
+
+  const content = extractContent(data);
+  const blockReason = data?.candidates?.[0]?.finishReason;
+
+  if (blockReason === "SAFETY") {
+    throw new TeachApiError("Gemini blocked the response due to safety filters. Try a different topic.", {
+      status: 502,
+      code: "SAFETY_BLOCK",
+      details: data,
+    });
+  }
+
+  if (!content) {
+    throw new TeachApiError("Gemini returned an empty response.", {
+      status: 502,
+      code: "EMPTY_RESPONSE",
+      details: data,
+    });
+  }
+
+  return {
+    ok: true,
+    content,
+    usage: data.usageMetadata,
+    model,
+    id: data?.candidates?.[0]?.finishReason,
+  };
+}
+
+/**
+ * @param {string | object} topic
+ * @param {Object} [options]
+ */
+export async function teachTopic(topic, options = {}) {
+  validateTopic(topic);
+
+  const apiKey = resolveApiKey();
+  const userPrompt = buildUserPrompt(topic);
+  const primaryModel = options.model || GEMINI_MODEL;
+  const modelsToTry = [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+
+  try {
+    let lastError = null;
+
+    for (const model of modelsToTry) {
+      const result = await callGemini(model, apiKey, userPrompt, options, controller.signal);
+
+      if (result.ok) {
+        console.log(`[gemini] lesson generated with ${model}`);
+        return {
+          content: result.content,
+          usage: result.usage,
+          model: result.model,
+        };
+      }
+
+      if (isRetryableModelError(result.status, result.data)) {
+        console.warn(`[gemini] model ${model} unavailable (${result.status}), trying fallback...`);
+        lastError = errorFromResponse(result.status, result.data);
+        continue;
+      }
+
+      console.error(`[gemini] ${result.status} ${model}:`, parseApiErrorMessage(result.data, result.status));
+      throw errorFromResponse(result.status, result.data);
+    }
+
+    throw lastError || new TeachApiError("No available Gemini model found.", { status: 502, code: "MODEL_NOT_FOUND" });
+  } catch (err) {
+    if (err instanceof TeachApiError) throw err;
+    if (err?.name === "AbortError") {
+      throw new TeachApiError("Request timed out.", { status: 504, code: "TIMEOUT" });
+    }
+    throw new TeachApiError(err?.message || "Unexpected error calling Gemini.", { status: 500, code: "UNKNOWN" });
+  } finally {
+    clearTimeout(timeout);
+  }
+}

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DSA Mastery Tracker — Track your data structures and algorithms progress offline.">
+  <title>DSA Mastery Tracker</title>
+  <link rel="stylesheet" href="css/main.css">
+  <script>
+    (function () {
+      try {
+        var theme = sessionStorage.getItem('dsa-theme');
+        if (theme === 'dark' || theme === 'light') {
+          document.documentElement.setAttribute('data-theme', theme);
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div id="app" class="app">
+    <aside id="sidebar" class="sidebar" aria-label="Main navigation"></aside>
+    <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
+
+    <div class="main-wrapper">
+      <header id="navbar" class="navbar" role="banner"></header>
+      <main id="content" class="content" role="main" aria-live="polite"></main>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

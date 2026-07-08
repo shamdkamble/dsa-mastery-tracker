@@ -1,0 +1,30 @@
+@import url("variables.css");
+@import url("reset.css");
+@import url("animations.css");
+@import url("utilities.css");
+@import url("layout.css");
+@import url("themes.css");
+
+/* Components */
+@import url("components/buttons.css");
+@import url("components/cards.css");
+@import url("components/badges.css");
+@import url("components/progress.css");
+@import url("components/modals.css");
+@import url("components/teach-modal.css");
+@import url("components/tabs.css");
+@import url("components/empty-states.css");
+@import url("components/skeletons.css");
+@import url("components/alerts.css");
+@import url("components/avatars.css");
+@import url("components/chips.css");
+@import url("components/dividers.css");
+@import url("components/tooltips.css");
+@import url("components/dropdowns.css");
+@import url("components/tables.css");
+@import url("components/forms.css");
+@import url("components/sidebar.css");
+@import url("components/navbar.css");
+
+/* Pages */
+@import url("pages/pages.css");
