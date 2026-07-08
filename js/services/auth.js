@@ -93,11 +93,21 @@ export async function getPendingUsers() {
   return data.users;
 }
 
-export async function approveUser(userId) {
-  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/approve`, {
+export async function getAllUsers() {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/users`, {
+    headers: authHeaders(),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data.users;
+}
+
+export async function adminUserAction(userId, action) {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/action`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({ userId, action }),
   });
 
   const data = await parseJsonSafe(res);
@@ -105,16 +115,26 @@ export async function approveUser(userId) {
   return data;
 }
 
-export async function rejectUser(userId) {
-  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/reject`, {
-    method: "POST",
+export async function updateUserAdmin(userId, patch) {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/users/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify(patch),
   });
 
   const data = await parseJsonSafe(res);
   if (!res.ok) throw errorFromResponse(res.status, data);
   return data;
+}
+
+/** @deprecated use adminUserAction(userId, "approve") */
+export async function approveUser(userId) {
+  return adminUserAction(userId, "approve");
+}
+
+/** @deprecated use adminUserAction(userId, "reject") */
+export async function rejectUser(userId) {
+  return adminUserAction(userId, "reject");
 }
 
 export function logout() {

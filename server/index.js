@@ -15,8 +15,9 @@ import {
   loginUser,
   getCurrentUser,
   listPendingUsers,
-  approveUser,
-  rejectUser,
+  listAllUsers,
+  adminUserAction,
+  patchUserAdmin,
   requireAuth,
   requireAdmin,
   extractBearer,
@@ -81,41 +82,44 @@ app.get("/api/auth/admin/pending", requireAdmin, (_req, res) => {
   res.json({ users: listPendingUsers() });
 });
 
-app.post("/api/auth/admin/approve", requireAdmin, (req, res) => {
+app.get("/api/auth/admin/users", requireAdmin, (_req, res) => {
+  res.json({ users: listAllUsers() });
+});
+
+app.post("/api/auth/admin/action", requireAdmin, (req, res) => {
   try {
-    const { userId } = req.body ?? {};
-    if (!userId) {
-      res.status(400).json({ error: { message: "userId is required.", code: "INVALID_INPUT" } });
+    const { userId, action } = req.body ?? {};
+    if (!userId || !action) {
+      res.status(400).json({ error: { message: "userId and action are required.", code: "INVALID_INPUT" } });
       return;
     }
-    const user = approveUser(userId);
-    res.json({ user, message: "User approved." });
+    const result = adminUserAction(userId, action);
+    res.json({ user: result, message: `Action "${action}" completed.` });
   } catch (err) {
+    if (handleAuthError(res, err)) return;
     if (err.message === "USER_NOT_FOUND") {
       res.status(404).json({ error: { message: "User not found.", code: "NOT_FOUND" } });
       return;
     }
-    console.error("[/api/auth/admin/approve]", err);
-    res.status(500).json({ error: { message: "Approval failed.", code: "SERVER_ERROR" } });
+    console.error("[/api/auth/admin/action]", err);
+    res.status(500).json({ error: { message: "Action failed.", code: "SERVER_ERROR" } });
   }
 });
 
-app.post("/api/auth/admin/reject", requireAdmin, (req, res) => {
+app.patch("/api/auth/admin/users/:userId", requireAdmin, (req, res) => {
   try {
-    const { userId } = req.body ?? {};
-    if (!userId) {
-      res.status(400).json({ error: { message: "userId is required.", code: "INVALID_INPUT" } });
-      return;
-    }
-    const user = rejectUser(userId);
-    res.json({ user, message: "User rejected." });
+    const { userId } = req.params;
+    const { accessLevel, expiresAt } = req.body ?? {};
+    const user = patchUserAdmin(userId, { accessLevel, expiresAt });
+    res.json({ user, message: "User updated." });
   } catch (err) {
+    if (handleAuthError(res, err)) return;
     if (err.message === "USER_NOT_FOUND") {
       res.status(404).json({ error: { message: "User not found.", code: "NOT_FOUND" } });
       return;
     }
-    console.error("[/api/auth/admin/reject]", err);
-    res.status(500).json({ error: { message: "Rejection failed.", code: "SERVER_ERROR" } });
+    console.error("[/api/auth/admin/users/:userId]", err);
+    res.status(500).json({ error: { message: "Update failed.", code: "SERVER_ERROR" } });
   }
 });
 

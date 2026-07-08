@@ -37,12 +37,12 @@ function Get-PortOwnerPids {
 function Stop-PortListeners {
     param([int]$Port)
     $pids = Get-PortOwnerPids -Port $Port
-    foreach ($pid in $pids) {
-        if ($pid -le 0) { continue }
+    foreach ($procId in $pids) {
+        if ($procId -le 0) { continue }
         try {
-            $proc = Get-Process -Id $pid -ErrorAction Stop
-            Write-Host "  Stopping $($proc.ProcessName) (PID $pid) on port $Port..." -ForegroundColor DarkGray
-            Stop-Process -Id $pid -Force -ErrorAction Stop
+            $proc = Get-Process -Id $procId -ErrorAction Stop
+            Write-Host "  Stopping $($proc.ProcessName) (PID $procId) on port $Port..." -ForegroundColor DarkGray
+            Stop-Process -Id $procId -Force -ErrorAction Stop
         } catch {
             # Process may have already exited
         }

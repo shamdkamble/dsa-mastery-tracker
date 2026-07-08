@@ -5,12 +5,18 @@
 import crypto from "crypto";
 import { promisify } from "util";
 import {
+  ACCESS_LEVELS,
+  USER_STATUSES,
   createUser,
+  deleteUser,
   findUserByEmail,
   findUserById,
   generateUserId,
+  getAllUsers,
   getPendingUsers,
+  isUserAccessValid,
   toPublicUser,
+  updateUser,
   updateUserStatus,
 } from "./users-db.js";
 
@@ -224,6 +230,14 @@ export async function loginUser({ identifier, password }) {
     throw new AuthError("Your registration was rejected. Contact the administrator.", { status: 403, code: "REJECTED" });
   }
 
+  if (account.status === "suspended") {
+    throw new AuthError("Your account has been suspended. Contact the administrator.", { status: 403, code: "SUSPENDED" });
+  }
+
+  if (!isUserAccessValid(account)) {
+    throw new AuthError("Your account access has expired. Contact the administrator.", { status: 403, code: "ACCOUNT_EXPIRED" });
+  }
+
   if (account.status !== "approved") {
     throw new AuthError("Your account is not approved.", { status: 403, code: "NOT_APPROVED" });
   }
@@ -255,12 +269,80 @@ export function listPendingUsers() {
   return getPendingUsers().map(toPublicUser);
 }
 
+export function listAllUsers() {
+  return getAllUsers()
+    .map(toPublicUser)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
 export function approveUser(userId) {
-  const user = updateUserStatus(userId, "approved");
+  const user = updateUser(userId, { status: "approved" });
   return toPublicUser(user);
 }
 
 export function rejectUser(userId) {
-  const user = updateUserStatus(userId, "rejected");
+  const user = updateUser(userId, { status: "rejected" });
   return toPublicUser(user);
 }
+
+export function suspendUser(userId) {
+  const user = updateUser(userId, { status: "suspended" });
+  return toPublicUser(user);
+}
+
+export function activateUser(userId) {
+  const existing = findUserById(userId);
+  if (!existing) throw new AuthError("User not found.", { status: 404, code: "NOT_FOUND" });
+  const user = updateUser(userId, { status: "approved" });
+  return toPublicUser(user);
+}
+
+export function removeUser(userId) {
+  deleteUser(userId);
+  return { id: userId, deleted: true };
+}
+
+function parseExpiryDate(value) {
+  if (value === null || value === "") return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new AuthError("Invalid expiry date.", { status: 400, code: "INVALID_INPUT" });
+  }
+  return date.toISOString();
+}
+
+export function patchUserAdmin(userId, { accessLevel, expiresAt }) {
+  const patch = {};
+
+  if (accessLevel !== undefined) {
+    if (!ACCESS_LEVELS.includes(accessLevel)) {
+      throw new AuthError(`Invalid access level. Use: ${ACCESS_LEVELS.join(", ")}`, { status: 400, code: "INVALID_INPUT" });
+    }
+    patch.accessLevel = accessLevel;
+  }
+
+  if (expiresAt !== undefined) {
+    patch.expiresAt = parseExpiryDate(expiresAt);
+  }
+
+  if (!Object.keys(patch).length) {
+    throw new AuthError("No valid fields to update.", { status: 400, code: "INVALID_INPUT" });
+  }
+
+  const user = updateUser(userId, patch);
+  return toPublicUser(user);
+}
+
+export function adminUserAction(userId, action) {
+  switch (action) {
+    case "approve": return approveUser(userId);
+    case "reject": return rejectUser(userId);
+    case "suspend": return suspendUser(userId);
+    case "activate": return activateUser(userId);
+    case "delete": return removeUser(userId);
+    default:
+      throw new AuthError(`Unknown action "${action}".`, { status: 400, code: "INVALID_INPUT" });
+  }
+}
+
+export { USER_STATUSES, ACCESS_LEVELS };
