@@ -4,9 +4,37 @@
 
 import "./env.js";
 
-const GEMINI_BASE_URL = (process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"];
+
+/**
+ * Resolve Gemini API base URL (strip accidental /models/... suffix from env)
+ */
+export function resolveBaseUrl() {
+  const raw = process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
+  return raw.replace(/\/$/, "").replace(/\/models\/[^/]+$/i, "");
+}
+
+/**
+ * Normalize model id from env — must be "gemini-x.x-name", NOT "models/gemini-..."
+ */
+export function normalizeModelName(raw) {
+  if (!raw || typeof raw !== "string") return DEFAULT_GEMINI_MODEL;
+
+  let model = raw.replace(/^\uFEFF/, "").trim();
+  model = model.replace(/^["']|["']$/g, "");
+  model = model.replace(/^models\//i, "");
+
+  if (!model || !/^gemini-[\w.-]+$/i.test(model)) {
+    return DEFAULT_GEMINI_MODEL;
+  }
+
+  return model;
+}
+
+export function resolveModel() {
+  return normalizeModelName(process.env.GEMINI_MODEL);
+}
 const DEFAULT_TIMEOUT_MS = 120_000;
 
 export const TEACHING_SYSTEM_PROMPT = `You are an expert computer science tutor in the DSA Mastery Tracker app. Your student is preparing for FAANG-level technical interviews.
@@ -152,7 +180,9 @@ function errorFromResponse(status, data) {
 }
 
 function buildGenerateUrl(model) {
-  return `${GEMINI_BASE_URL}/models/${model}:generateContent`;
+  const base = resolveBaseUrl();
+  const id = normalizeModelName(model);
+  return `${base}/models/${id}:generateContent`;
 }
 
 function buildRequestBody(userPrompt, options = {}) {
@@ -185,16 +215,24 @@ function extractContent(data) {
 }
 
 function isRetryableModelError(status, data) {
+  const msg = parseApiErrorMessage(data, status).toLowerCase();
+
   if (status === 404) return true;
+
+  if (status === 400) {
+    return msg.includes("model") || msg.includes("not found") || msg.includes("unexpected");
+  }
+
   if (status === 429) {
-    const msg = parseApiErrorMessage(data, status).toLowerCase();
     return msg.includes("quota") || msg.includes("rate");
   }
+
   return false;
 }
 
 async function callGemini(model, apiKey, userPrompt, options, signal) {
-  const url = buildGenerateUrl(model);
+  const modelId = normalizeModelName(model);
+  const url = buildGenerateUrl(modelId);
 
   const res = await fetch(url, {
     method: "POST",
@@ -235,7 +273,7 @@ async function callGemini(model, apiKey, userPrompt, options, signal) {
     ok: true,
     content,
     usage: data.usageMetadata,
-    model,
+    model: modelId,
     id: data?.candidates?.[0]?.finishReason,
   };
 }
@@ -249,7 +287,13 @@ export async function teachTopic(topic, options = {}) {
 
   const apiKey = resolveApiKey();
   const userPrompt = buildUserPrompt(topic);
-  const primaryModel = options.model || GEMINI_MODEL;
+  const rawModel = options.model || process.env.GEMINI_MODEL;
+  const primaryModel = normalizeModelName(rawModel || resolveModel());
+
+  if (rawModel && normalizeModelName(rawModel) !== rawModel.replace(/^\uFEFF/, "").trim().replace(/^["']|["']$/g, "").replace(/^models\//i, "")) {
+    console.warn(`[gemini] normalized invalid GEMINI_MODEL "${rawModel}" → "${primaryModel}"`);
+  }
+
   const modelsToTry = [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
 
   const controller = new AbortController();

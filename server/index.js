@@ -8,7 +8,7 @@ import "./env.js";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { teachTopic, TeachApiError, resolveApiKey } from "./gemini.js";
+import { teachTopic, TeachApiError, resolveApiKey, resolveModel } from "./gemini.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -53,7 +53,7 @@ app.get("/api/health", (_req, res) => {
     teach: keyStatus === "configured",
     keyStatus,
     provider: "gemini",
-    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    model: resolveModel(),
   });
 });
 
@@ -81,7 +81,7 @@ if (!IS_VERCEL) {
     console.log("  DSA Mastery Tracker");
     console.log(`  Serving at: http://localhost:${PORT}`);
     console.log(`  API proxy:  POST http://localhost:${PORT}/api/teach`);
-    console.log(`  Provider:   Gemini (${process.env.GEMINI_MODEL || "gemini-2.5-flash"})`);
+    console.log(`  Provider:   Gemini (${resolveModel()})`);
     console.log(`  Gemini API: ${keyLabel}`);
     console.log("  Press Ctrl+C to stop");
     console.log("");
