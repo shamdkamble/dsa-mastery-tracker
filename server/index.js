@@ -40,10 +40,14 @@ app.use("/api", async (req, res, next) => {
     next();
   } catch (err) {
     console.error("[mongodb] Connection failed:", err.message);
+    const missingUri = !process.env.MONGODB_URI?.trim();
+    const message = missingUri
+      ? "MONGODB_URI is not set. Add it to .env (local) or Vercel → Settings → Environment Variables (production), then redeploy."
+      : "Database unavailable. Verify MONGODB_URI, MongoDB Atlas network access (allow 0.0.0.0/0 for Vercel), and redeploy.";
     res.status(503).json({
       error: {
-        message: "Database unavailable. Check MONGODB_URI configuration.",
-        code: "DB_UNAVAILABLE",
+        message,
+        code: missingUri ? "MONGODB_URI_MISSING" : "DB_UNAVAILABLE",
       },
     });
   }
