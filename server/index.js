@@ -23,7 +23,16 @@ import {
   extractBearer,
 } from "./auth.js";
 import { canAccessTeachTopic } from "./roadmap-access.js";
-import { connectDB, getMongoStatus, isMongoConnected } from "./db/mongodb.js";
+import {
+  connectDB,
+  formatMongoError,
+  getLastMongoError,
+  getMongoDiagnostics,
+  getMongoStatus,
+  getMongoUri,
+  initDatabase,
+  isMongoConnected,
+} from "./db/mongodb.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -34,24 +43,78 @@ const app = express();
 
 app.use(express.json({ limit: "32kb" }));
 
+function sendDbError(res, err) {
+  const details = formatMongoError(err);
+  const missingUri = !getMongoUri();
+  res.status(503).json({
+    error: {
+      message: missingUri
+        ? details.message
+        : `Database unavailable: ${details.message}`,
+      code: missingUri ? "MONGODB_URI_MISSING" : "DB_UNAVAILABLE",
+      mongo: details,
+    },
+  });
+}
+
+app.get("/api/health", async (_req, res) => {
+  let keyStatus = "missing";
+  try {
+    const key = resolveApiKey();
+    keyStatus = key ? "configured" : "missing";
+  } catch {
+    keyStatus = "invalid";
+  }
+
+  let dbOk = false;
+  let dbError = null;
+
+  try {
+    await connectDB();
+    dbOk = isMongoConnected();
+  } catch (err) {
+    dbError = formatMongoError(err);
+    console.error("[/api/health] MongoDB check failed:", dbError.message);
+  }
+
+  const diagnostics = getMongoDiagnostics();
+
+  res.status(dbOk ? 200 : 503).json({
+    ok: dbOk,
+    teach: keyStatus === "configured",
+    keyStatus,
+    provider: "gemini",
+    model: resolveModel(),
+    userStore: "mongodb-atlas",
+    userStorePersistent: dbOk,
+    mongodb: diagnostics.status,
+    mongo: {
+      connected: dbOk,
+      database: diagnostics.database,
+      host: diagnostics.host,
+      configured: diagnostics.configured,
+      uriPreview: diagnostics.uriPreview,
+      error: dbError || diagnostics.lastError,
+    },
+  });
+});
+
 app.use("/api", async (req, res, next) => {
+  if (req.path === "/health") {
+    next();
+    return;
+  }
+
   try {
     await connectDB();
     next();
   } catch (err) {
-    console.error("[mongodb] Connection failed:", err.message);
-    const missingUri = !process.env.MONGODB_URI?.trim();
-    const message = missingUri
-      ? "MONGODB_URI is not set. Add it to .env (local) or Vercel → Settings → Environment Variables (production), then redeploy."
-      : "Database unavailable. Verify MONGODB_URI, MongoDB Atlas network access (allow 0.0.0.0/0 for Vercel), and redeploy.";
-    res.status(503).json({
-      error: {
-        message,
-        code: missingUri ? "MONGODB_URI_MISSING" : "DB_UNAVAILABLE",
-      },
-    });
+    sendDbError(res, err);
   }
 });
+
+// Eager database connection when the serverless function / process loads
+initDatabase();
 
 function handleAuthError(res, err) {
   if (err instanceof AuthError) {
@@ -189,27 +252,6 @@ app.post("/api/teach", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/health", (_req, res) => {
-  let keyStatus = "missing";
-  try {
-    const key = resolveApiKey();
-    keyStatus = key ? "configured" : "missing";
-  } catch {
-    keyStatus = "invalid";
-  }
-
-  res.json({
-    ok: true,
-    teach: keyStatus === "configured",
-    keyStatus,
-    provider: "gemini",
-    model: resolveModel(),
-    userStore: "mongodb-atlas",
-    userStorePersistent: isMongoConnected(),
-    mongodb: getMongoStatus(),
-  });
-});
-
 if (!IS_VERCEL) {
   app.use(express.static(ROOT));
 
@@ -241,9 +283,14 @@ if (!IS_VERCEL && isMainModule) {
     console.log(`  Gemini API: ${keyLabel}`);
     try {
       await connectDB();
-      console.log(`  MongoDB:    connected (${getMongoStatus()})`);
+      const diag = getMongoDiagnostics();
+      console.log(`  MongoDB:    connected (${getMongoStatus()}) → ${diag.database} @ ${diag.host}`);
     } catch (err) {
-      console.log(`  MongoDB:    ${err.message}`);
+      const details = formatMongoError(err);
+      console.log(`  MongoDB:    FAILED — ${details.message}`);
+      if (getLastMongoError()) {
+        console.log(`  MongoDB:    code=${getLastMongoError().code} name=${getLastMongoError().name}`);
+      }
     }
     console.log("  Press Ctrl+C to stop");
     console.log("");
