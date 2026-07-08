@@ -3,6 +3,13 @@ import { icon } from "../components/icons.js";
 import { Badge, DifficultyBadge, ProgressBar, StatCard } from "../components/ui/index.js";
 import { ROADMAP_PHASES } from "../data/roadmap.js";
 import { bindTeachTopicHandlers } from "../components/teach-modal.js";
+import { openUpgradeModal } from "../components/upgrade-modal.js";
+import {
+  canAccessPhase,
+  canAccessRoadmapStep,
+  hasFullRoadmapAccess,
+} from "../auth/access.js";
+import { getSessionUser } from "../auth/session.js";
 import { $$ } from "../utils.js";
 
 const ROADMAP_META = {
@@ -69,8 +76,23 @@ function topicTrack(topic) {
   return "";
 }
 
-function learnButton(topic) {
+function learnButton(topic, { locked = false, step } = {}) {
   const track = topicTrack(topic);
+
+  if (locked) {
+    return `
+      <button
+        class="btn btn--sm btn--ghost roadmap-topic__learn roadmap-topic__learn--locked"
+        type="button"
+        data-action="upgrade"
+        data-roadmap-locked
+        title="Subscribe to unlock AI lessons"
+      >
+        ${icon("lock")}
+        <span>Learn</span>
+      </button>
+    `;
+  }
 
   return `
     <button
@@ -80,6 +102,7 @@ function learnButton(topic) {
       data-topic-id="${escapeAttr(topic.id)}"
       data-topic-name="${escapeAttr(topic.name)}"
       data-topic-phase="${topic.phase}"
+      data-topic-step="${step ?? ""}"
       data-topic-difficulty="${escapeAttr(topic.difficulty)}"
       data-topic-track="${escapeAttr(track)}"
       title="Get an AI lesson on ${escapeAttr(topic.name)}"
@@ -90,20 +113,28 @@ function learnButton(topic) {
   `;
 }
 
-function topicCard(topic) {
+function lockBadge() {
+  return `<span class="roadmap-lock-badge" title="Subscribe to unlock">${icon("lock")}<span>Locked</span></span>`;
+}
+
+function topicCard(topic, { locked = false, step } = {}) {
   const track = topicTrack(topic);
   const trackLabel = track === "cpp" ? "C++" : track === "dsa" ? "DSA" : "Topic";
   const trackClass = track ? `roadmap-topic--${track}` : "roadmap-topic--general";
 
   return `
-    <div class="roadmap-topic ${trackClass}">
+    <div
+      class="roadmap-topic ${trackClass}${locked ? " roadmap-topic--locked" : ""}"
+      ${locked ? 'data-roadmap-locked tabindex="0" role="button" aria-label="Locked — subscribe to unlock"' : ""}
+    >
+      ${locked ? `<div class="roadmap-topic__lock-overlay" aria-hidden="true">${icon("lock")}</div>` : ""}
       <div class="roadmap-topic__head">
         <span class="roadmap-topic__track">${trackLabel}</span>
-        ${DifficultyBadge(topic.difficulty)}
+        ${locked ? lockBadge() : DifficultyBadge(topic.difficulty)}
       </div>
       <h4 class="roadmap-topic__title">${topic.name}</h4>
       <div class="roadmap-topic__footer">
-        ${learnButton(topic)}
+        ${learnButton(topic, { locked, step })}
       </div>
     </div>
   `;
@@ -123,27 +154,34 @@ function buildPhase1Steps(topics) {
   return steps;
 }
 
-function phase1StepRow(entry) {
+function phase1StepRow(entry, user) {
+  const locked = !canAccessRoadmapStep(user, 1, entry.step);
+
   return `
-    <div class="roadmap-step" data-step="${entry.step}">
+    <div
+      class="roadmap-step${locked ? " roadmap-step--locked" : ""}"
+      data-step="${entry.step}"
+      ${locked ? 'data-roadmap-locked tabindex="0" role="button" aria-label="Locked step — subscribe to unlock"' : ""}
+    >
       <div class="roadmap-step__header">
         <span class="roadmap-step__num">Step ${entry.step}</span>
         ${Badge({ label: entry.label, variant: "default", size: "sm" })}
+        ${locked ? lockBadge() : ""}
       </div>
       <div class="roadmap-step__grid">
-        ${topicCard(entry.cpp)}
+        ${topicCard(entry.cpp, { locked, step: entry.step })}
         <div class="roadmap-step__bridge" aria-hidden="true">
           <span class="roadmap-step__bridge-line"></span>
-          <span class="roadmap-step__bridge-icon">${icon("gitBranch")}</span>
+          <span class="roadmap-step__bridge-icon">${locked ? icon("lock") : icon("gitBranch")}</span>
           <span class="roadmap-step__bridge-line"></span>
         </div>
-        ${topicCard(entry.dsa)}
+        ${topicCard(entry.dsa, { locked, step: entry.step })}
       </div>
     </div>
   `;
 }
 
-function renderPhase1Content(phase) {
+function renderPhase1Content(phase, user) {
   const steps = buildPhase1Steps(phase.topics);
 
   return `
@@ -169,14 +207,15 @@ function renderPhase1Content(phase) {
       </div>
 
       <div class="roadmap-step-list">
-        ${steps.map(phase1StepRow).join("")}
+        ${steps.map((entry) => phase1StepRow(entry, user)).join("")}
       </div>
     </div>
   `;
 }
 
-function renderPhaseTopicsGrid(phase) {
+function renderPhaseTopicsGrid(phase, user) {
   const meta = PHASE_META[phase.id];
+  const locked = !canAccessPhase(user, phase.id);
 
   return `
     <div class="roadmap-phase__focus">
@@ -187,23 +226,25 @@ function renderPhaseTopicsGrid(phase) {
     </div>
 
     <div class="roadmap-topics-grid">
-      ${phase.topics.map(topicCard).join("")}
+      ${phase.topics.map((topic) => topicCard(topic, { locked })).join("")}
     </div>
   `;
 }
 
-function phaseSection(phaseData, { isOpen = false } = {}) {
+function phaseSection(phaseData, user, { isOpen = false } = {}) {
   const meta = PHASE_META[phaseData.id];
   const panelId = `roadmap-phase-panel-${phaseData.id}`;
   const progress = 0;
+  const phaseLocked = !canAccessPhase(user, phaseData.id);
   const panelContent = phaseData.id === 1
-    ? renderPhase1Content(phaseData)
-    : renderPhaseTopicsGrid(phaseData);
+    ? renderPhase1Content(phaseData, user)
+    : renderPhaseTopicsGrid(phaseData, user);
 
   return `
     <article
-      class="roadmap-phase roadmap-phase--${meta.accent}${isOpen ? " is-open" : ""}"
+      class="roadmap-phase roadmap-phase--${meta.accent}${isOpen ? " is-open" : ""}${phaseLocked && phaseData.id !== 1 ? " roadmap-phase--locked" : ""}"
       data-phase="${phaseData.id}"
+      ${phaseLocked && phaseData.id !== 1 ? "data-roadmap-locked" : ""}
     >
       <button
         class="roadmap-phase__toggle"
@@ -225,6 +266,7 @@ function phaseSection(phaseData, { isOpen = false } = {}) {
             ${Badge({ label: meta.duration, variant: "default", size: "sm" })}
             ${Badge({ label: "0% complete", variant: "default", size: "sm" })}
             ${Badge({ label: `${phaseData.topics.length} topics`, variant: "accent", size: "sm" })}
+            ${phaseLocked && phaseData.id !== 1 ? lockBadge() : ""}
           </div>
           <h3 class="roadmap-phase__title">${phaseData.title}</h3>
           <p class="roadmap-phase__desc">${meta.description}</p>
@@ -261,7 +303,14 @@ function bindPhaseAccordion(container) {
     const panel = phaseEl.querySelector(".roadmap-phase__panel");
     if (!toggle || !panel) return;
 
-    toggle.addEventListener("click", () => {
+    toggle.addEventListener("click", (e) => {
+      if (phaseEl.classList.contains("roadmap-phase--locked")) {
+        e.preventDefault();
+        e.stopPropagation();
+        openUpgradeModal();
+        return;
+      }
+
       const willOpen = !phaseEl.classList.contains("is-open");
 
       phaseEl.classList.toggle("is-open", willOpen);
@@ -271,12 +320,45 @@ function bindPhaseAccordion(container) {
   });
 }
 
+function bindLockedContentHandlers(container) {
+  container.addEventListener("click", (e) => {
+    const upgradeBtn = e.target.closest('[data-action="upgrade"]');
+    if (upgradeBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      openUpgradeModal();
+      return;
+    }
+
+    const locked = e.target.closest("[data-roadmap-locked]");
+    if (!locked) return;
+
+    if (e.target.closest('[data-action="teach-topic"]')) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    openUpgradeModal();
+  });
+
+  container.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const locked = e.target.closest("[data-roadmap-locked]");
+    if (!locked || e.target.closest('[data-action="teach-topic"]')) return;
+    e.preventDefault();
+    openUpgradeModal();
+  });
+}
+
 export default {
   title: "FAANG Mastery Roadmap",
   render() {
+    const user = getSessionUser();
     const overallProgress = 0;
     const completedPhases = 0;
     const totalTopics = ROADMAP_PHASES.reduce((sum, p) => sum + p.topics.length, 0);
+    const accessHint = hasFullRoadmapAccess(user)
+      ? "Full access"
+      : "Free preview: Week 1 · Step 1";
 
     return createPage({
       title: "FAANG Mastery Roadmap",
@@ -330,10 +412,13 @@ export default {
         <section class="page-section roadmap-phases" aria-label="Learning phases">
           <div class="page-section__header">
             <h2 class="page-section__title">Learning Phases</h2>
-            <span class="text-sm text-tertiary">Expand a phase and click <strong>Learn</strong> for an AI lesson</span>
+            <span class="text-sm text-tertiary">
+              Expand a phase and click <strong>Learn</strong> for an AI lesson
+              ${hasFullRoadmapAccess(user) ? "" : ` · <span class="roadmap-access-hint">${accessHint}</span>`}
+            </span>
           </div>
           <div class="roadmap-phase-list" id="roadmap-phases" data-roadmap-accordion>
-            ${ROADMAP_PHASES.map((phase, i) => phaseSection(phase, { isOpen: i === 0 })).join("")}
+            ${ROADMAP_PHASES.map((phase, i) => phaseSection(phase, user, { isOpen: i === 0 })).join("")}
           </div>
         </section>
       `,
@@ -341,6 +426,7 @@ export default {
   },
   onMount(container) {
     bindPhaseAccordion(container);
+    bindLockedContentHandlers(container);
     bindTeachTopicHandlers(container);
   },
 };

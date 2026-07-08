@@ -22,6 +22,7 @@ import {
   requireAdmin,
   extractBearer,
 } from "./auth.js";
+import { canAccessTeachTopic } from "./roadmap-access.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -126,6 +127,19 @@ app.patch("/api/auth/admin/users/:userId", requireAdmin, (req, res) => {
 app.post("/api/teach", requireAuth, async (req, res) => {
   try {
     const { topic } = req.body ?? {};
+    const token = extractBearer(req);
+    const user = getCurrentUser(token);
+
+    if (!canAccessTeachTopic(user, topic)) {
+      res.status(403).json({
+        error: {
+          message: "Subscribe to unlock the full roadmap and AI lessons.",
+          code: "ROADMAP_LOCKED",
+        },
+      });
+      return;
+    }
+
     const result = await teachTopic(topic);
     res.json(result);
   } catch (err) {

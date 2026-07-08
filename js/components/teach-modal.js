@@ -6,6 +6,9 @@ import { icon } from "./icons.js";
 import { Badge, DifficultyBadge } from "./ui/index.js";
 import { openModal, closeModal, initModals } from "./ui/interactions.js";
 import { teachTopic, TeachApiError } from "../api/geminiApi.js";
+import { canAccessTopic } from "../auth/access.js";
+import { getSessionUser } from "../auth/session.js";
+import { openUpgradeModal } from "./upgrade-modal.js";
 
 const MODAL_ID = "teach";
 
@@ -246,10 +249,12 @@ function stopLoadingAnimation() {
 }
 
 export function parseTopicFromButton(btn) {
+  const stepRaw = btn.dataset.topicStep;
   return {
     id: btn.dataset.topicId || "",
     name: btn.dataset.topicName || btn.dataset.topicTitle || "Topic",
     phase: btn.dataset.topicPhase ? Number(btn.dataset.topicPhase) : undefined,
+    step: stepRaw ? Number(stepRaw) : undefined,
     difficulty: btn.dataset.topicDifficulty || "",
     track: btn.dataset.topicTrack || "",
   };
@@ -328,7 +333,15 @@ function onTeachButtonClick(e) {
   e.preventDefault();
   e.stopPropagation();
 
-  openTeachLesson(parseTopicFromButton(btn), btn);
+  const topic = parseTopicFromButton(btn);
+  const user = getSessionUser();
+
+  if (!canAccessTopic(user, topic, topic.step)) {
+    openUpgradeModal();
+    return;
+  }
+
+  openTeachLesson(topic, btn);
 }
 
 /**
