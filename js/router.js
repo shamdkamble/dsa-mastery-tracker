@@ -36,7 +36,18 @@ export function getCurrentPath() {
   return normalizePath(window.location.hash);
 }
 
+let authGuard = null;
+
+export function setAuthGuard(fn) {
+  authGuard = fn;
+}
+
 export async function renderRoute(path, container) {
+  if (authGuard) {
+    const allowed = await authGuard(path);
+    if (!allowed) return;
+  }
+
   const config = getRouteConfig(path);
 
   if (!config) {

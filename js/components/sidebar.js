@@ -9,6 +9,8 @@ import { toggleTheme } from "../theme.js";
 import { $, $$, on } from "../utils.js";
 import { getProblems } from "../storage/db.js";
 import { computeTodaysMission } from "../storage/computed.js";
+import { isAdmin } from "../auth/session.js";
+import { logout } from "../services/auth.js";
 
 function getNavSections() {
   const problemCount = getProblems().length;
@@ -38,6 +40,12 @@ function getNavSections() {
       { path: "search", label: "Search", icon: "search" },
     ],
   },
+  ...(isAdmin() ? [{
+    label: "Administration",
+    items: [
+      { path: "admin", label: "Admin Panel", icon: "shield" },
+    ],
+  }] : []),
 ];
 }
 
@@ -106,6 +114,10 @@ function renderSidebar(state) {
           <div class="sidebar__user-role">${user.role}</div>
         </div>
       </div>
+      <button class="btn btn--ghost btn--sm sidebar__logout" type="button" id="sidebar-logout">
+        ${icon("logOut")}
+        <span>Sign out</span>
+      </button>
     </div>
   `;
 }
@@ -143,6 +155,13 @@ export function initSidebar(container) {
       return;
     }
 
+    const logoutBtn = e.target.closest("#sidebar-logout");
+    if (logoutBtn) {
+      logout();
+      navigate("login");
+      return;
+    }
+
     const link = e.target.closest("[data-route]");
     if (!link) return;
 
@@ -168,6 +187,12 @@ export function initSidebar(container) {
   });
 
   document.addEventListener("data:change", () => {
+    container.innerHTML = renderSidebar(getState());
+    syncAppClasses(app, getState());
+    updateActiveLinks(container, getState().currentRoute);
+  });
+
+  document.addEventListener("auth:change", () => {
     container.innerHTML = renderSidebar(getState());
     syncAppClasses(app, getState());
     updateActiveLinks(container, getState().currentRoute);

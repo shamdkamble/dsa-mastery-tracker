@@ -31,3 +31,6 @@ coverage/
 
 # Optional local config overrides
 js/config.local.js
+
+# User database (local runtime data)
+data/users.json

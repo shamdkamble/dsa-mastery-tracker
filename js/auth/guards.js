@@ -1,0 +1,85 @@
+/**
+ * Route access control
+ */
+
+import { getCurrentPath, navigate } from "../router.js";
+import { getSessionUser, isAuthenticated, isAdmin } from "./session.js";
+import { fetchMe } from "../services/auth.js";
+import { clearSession } from "./session.js";
+import { setState } from "../state.js";
+import { getInitials } from "../storage/helpers.js";
+import { dispatch } from "../utils.js";
+
+export const PUBLIC_ROUTES = new Set(["login", "register"]);
+export const ADMIN_ROUTES = new Set(["admin"]);
+
+export function isPublicRoute(path) {
+  return PUBLIC_ROUTES.has(path);
+}
+
+export function syncAuthState(user) {
+  if (!user) return;
+
+  setState({
+    user: {
+      name: user.name,
+      initials: getInitials(user.name),
+      role: user.role === "admin" ? "Administrator" : "DSA Learner",
+      authRole: user.role,
+      status: user.status,
+    },
+  });
+  dispatch("auth:change", { user });
+}
+
+export function setAuthShellMode(path) {
+  const app = document.getElementById("app");
+  if (!app) return;
+
+  const isPublic = isPublicRoute(path);
+  app.classList.toggle("app--auth", isPublic);
+  app.classList.toggle("app--authenticated", !isPublic && isAuthenticated());
+}
+
+export async function resolveAuthSession() {
+  if (!isAuthenticated()) return null;
+
+  try {
+    const user = await fetchMe();
+    syncAuthState(user);
+    return user;
+  } catch {
+    clearSession();
+    return null;
+  }
+}
+
+export async function enforceRouteAccess(path = getCurrentPath()) {
+  setAuthShellMode(path);
+
+  if (isPublicRoute(path)) {
+    if (isAuthenticated()) {
+      const user = getSessionUser() || await resolveAuthSession();
+      if (user) {
+        const dest = user.role === "admin" ? "admin" : "dashboard";
+        if (path !== dest) navigate(dest);
+        setAuthShellMode(dest);
+        return path === dest;
+      }
+    }
+    return true;
+  }
+
+  const user = await resolveAuthSession();
+  if (!user) {
+    navigate("login");
+    return false;
+  }
+
+  if (ADMIN_ROUTES.has(path) && user.role !== "admin") {
+    navigate("dashboard");
+    return false;
+  }
+
+  return true;
+}

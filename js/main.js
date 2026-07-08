@@ -3,13 +3,15 @@
  */
 
 import { initTheme } from "./theme.js";
-import { initRouter, registerRoutes, getCurrentPath, renderRoute } from "./router.js";
+import { initRouter, registerRoutes, getCurrentPath, renderRoute, setAuthGuard } from "./router.js";
+import { enforceRouteAccess, resolveAuthSession } from "./auth/guards.js";
 import { initSidebar } from "./components/sidebar.js";
 import { initNavbar } from "./components/navbar.js";
 import { getState, setState } from "./state.js";
 import { $ } from "./utils.js";
 import { initDB, getUser } from "./storage/db.js";
 import { getInitials } from "./storage/helpers.js";
+import { getSessionUser } from "./auth/session.js";
 import { initProblemModalTriggers } from "./components/problem-modal.js";
 import { initLeetcodeLinks } from "./components/leetcode-actions.js";
 import { initTeachModal } from "./components/teach-modal.js";
@@ -24,8 +26,14 @@ import analytics from "./pages/analytics.js";
 import calendar from "./pages/calendar.js";
 import search from "./pages/search.js";
 import settings from "./pages/settings.js";
+import login from "./pages/login.js";
+import register from "./pages/register.js";
+import admin from "./pages/admin.js";
 
 registerRoutes({
+  login,
+  register,
+  admin,
   dashboard,
   mission,
   problems,
@@ -38,6 +46,20 @@ registerRoutes({
 });
 
 function syncUserFromDB() {
+  const sessionUser = getSessionUser();
+  if (sessionUser) {
+    setState({
+      user: {
+        name: sessionUser.name,
+        initials: getInitials(sessionUser.name),
+        role: sessionUser.role === "admin" ? "Administrator" : "DSA Learner",
+        authRole: sessionUser.role,
+        status: sessionUser.status,
+      },
+    });
+    return;
+  }
+
   const user = getUser();
   setState({
     user: {
@@ -82,14 +104,18 @@ function initDataRefresh() {
   });
 }
 
-function init() {
+async function init() {
   initDB();
-  syncUserFromDB();
   initTheme();
   initAppShell();
 
   const content = $("#content");
   setContentContainer(content);
+
+  setAuthGuard(enforceRouteAccess);
+
+  await resolveAuthSession();
+  syncUserFromDB();
 
   initSidebar($("#sidebar"));
   initNavbar($("#navbar"));
@@ -101,4 +127,6 @@ function init() {
   initRouter(content);
 }
 
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => {
+  init().catch((err) => console.error("App init failed:", err));
+});

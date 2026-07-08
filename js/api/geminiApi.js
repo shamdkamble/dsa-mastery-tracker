@@ -7,6 +7,7 @@
  */
 
 import { API_BASE_URL } from "../config.js";
+import { getToken } from "../auth/session.js";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
@@ -115,9 +116,13 @@ export async function teachTopic(topic, options = {}) {
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   try {
+    const headers = { "Content-Type": "application/json", Accept: "application/json" };
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
     const res = await fetch(`${resolveBaseUrl()}/api/teach`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers,
       body: JSON.stringify({ topic }),
       signal: options.signal ?? controller.signal,
     });

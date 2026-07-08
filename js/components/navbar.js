@@ -19,6 +19,9 @@ const ROUTE_TITLES = {
   calendar: "Calendar",
   search: "Search",
   settings: "Settings",
+  login: "Sign In",
+  register: "Create Account",
+  admin: "Admin Panel",
 };
 
 function renderNavbar(state) {
