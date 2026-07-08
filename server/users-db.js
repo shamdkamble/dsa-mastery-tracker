@@ -1,46 +1,12 @@
 /**
- * Simple JSON file user store
+ * User database — CRUD over persistent JSON store
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 import crypto from "crypto";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, "..");
-const IS_VERCEL = Boolean(process.env.VERCEL);
-const DATA_DIR = IS_VERCEL ? "/tmp" : path.join(ROOT, "data");
-const USERS_PATH = path.join(DATA_DIR, "users.json");
-const SEED_PATH = path.join(ROOT, "data", "users.seed.json");
+import { readUsersStore, writeUsersStore } from "./user-store.js";
 
 export const USER_STATUSES = ["pending", "approved", "rejected", "suspended"];
 export const ACCESS_LEVELS = ["standard", "premium", "trial"];
-
-function ensureStore() {
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
-  }
-
-  if (!existsSync(USERS_PATH)) {
-    const seed = existsSync(SEED_PATH)
-      ? readFileSync(SEED_PATH, "utf8")
-      : JSON.stringify({ users: [] }, null, 2);
-    writeFileSync(USERS_PATH, seed, "utf8");
-  }
-}
-
-function readStore() {
-  ensureStore();
-  const raw = readFileSync(USERS_PATH, "utf8");
-  const data = JSON.parse(raw);
-  return { users: Array.isArray(data.users) ? data.users : [] };
-}
-
-function writeStore(data) {
-  ensureStore();
-  writeFileSync(USERS_PATH, JSON.stringify(data, null, 2), "utf8");
-}
 
 function normalizeUser(user) {
   return {
@@ -54,30 +20,34 @@ export function generateUserId() {
   return `user_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
 }
 
-export function getAllUsers() {
-  return readStore().users.map(normalizeUser);
+export async function getAllUsers() {
+  const store = await readUsersStore();
+  return store.users.map(normalizeUser);
 }
 
-export function findUserByEmail(email) {
+export async function findUserByEmail(email) {
   const normalized = email.trim().toLowerCase();
-  return getAllUsers().find((u) => u.email.toLowerCase() === normalized) || null;
+  const users = await getAllUsers();
+  return users.find((u) => u.email.toLowerCase() === normalized) || null;
 }
 
-export function findUserById(id) {
-  return getAllUsers().find((u) => u.id === id) || null;
+export async function findUserById(id) {
+  const users = await getAllUsers();
+  return users.find((u) => u.id === id) || null;
 }
 
-export function createUser({ id, name, email, passwordHash }) {
-  const store = readStore();
+export async function createUser({ id, name, email, passwordHash }) {
+  const store = await readUsersStore();
 
-  if (findUserByEmail(email)) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (store.users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
     throw new Error("EMAIL_EXISTS");
   }
 
   const user = {
     id,
     name: name.trim(),
-    email: email.trim().toLowerCase(),
+    email: normalizedEmail,
     passwordHash,
     role: "user",
     status: "pending",
@@ -88,12 +58,12 @@ export function createUser({ id, name, email, passwordHash }) {
   };
 
   store.users.push(user);
-  writeStore(store);
+  await writeUsersStore(store);
   return user;
 }
 
-export function updateUser(id, patch) {
-  const store = readStore();
+export async function updateUser(id, patch) {
+  const store = await readUsersStore();
   const index = store.users.findIndex((u) => u.id === id);
 
   if (index === -1) {
@@ -109,16 +79,16 @@ export function updateUser(id, patch) {
   if (patch.name !== undefined) next.name = patch.name.trim();
 
   store.users[index] = next;
-  writeStore(store);
+  await writeUsersStore(store);
   return normalizeUser(next);
 }
 
-export function updateUserStatus(id, status) {
+export async function updateUserStatus(id, status) {
   return updateUser(id, { status });
 }
 
-export function deleteUser(id) {
-  const store = readStore();
+export async function deleteUser(id) {
+  const store = await readUsersStore();
   const index = store.users.findIndex((u) => u.id === id);
 
   if (index === -1) {
@@ -126,12 +96,13 @@ export function deleteUser(id) {
   }
 
   const [removed] = store.users.splice(index, 1);
-  writeStore(store);
+  await writeUsersStore(store);
   return removed;
 }
 
-export function getPendingUsers() {
-  return getAllUsers().filter((u) => u.status === "pending");
+export async function getPendingUsers() {
+  const users = await getAllUsers();
+  return users.filter((u) => u.status === "pending");
 }
 
 export function toPublicUser(user) {

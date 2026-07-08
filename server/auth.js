@@ -174,7 +174,7 @@ export async function registerUser({ name, email, password }) {
 
   try {
     const passwordHash = await hashPassword(password);
-    const user = createUser({
+    const user = await createUser({
       id: generateUserId(),
       name,
       email,
@@ -211,7 +211,7 @@ export async function loginUser({ identifier, password }) {
     throw new AuthError("Invalid email or password.", { status: 401, code: "INVALID_CREDENTIALS" });
   }
 
-  const account = findUserByEmail(id);
+  const account = await findUserByEmail(id);
 
   if (!account) {
     throw new AuthError("Invalid email or password.", { status: 401, code: "INVALID_CREDENTIALS" });
@@ -245,7 +245,7 @@ export async function loginUser({ identifier, password }) {
   return buildSession(account);
 }
 
-export function getCurrentUser(token) {
+export async function getCurrentUser(token) {
   const payload = verifyToken(token);
   if (payload.sub === "admin") {
     return {
@@ -257,7 +257,7 @@ export function getCurrentUser(token) {
     };
   }
 
-  const user = findUserById(payload.sub);
+  const user = await findUserById(payload.sub);
   if (!user) {
     throw new AuthError("User not found.", { status: 401, code: "UNAUTHORIZED" });
   }
@@ -265,40 +265,42 @@ export function getCurrentUser(token) {
   return toPublicUser(user);
 }
 
-export function listPendingUsers() {
-  return getPendingUsers().map(toPublicUser);
+export async function listPendingUsers() {
+  const users = await getPendingUsers();
+  return users.map(toPublicUser);
 }
 
-export function listAllUsers() {
-  return getAllUsers()
+export async function listAllUsers() {
+  const users = await getAllUsers();
+  return users
     .map(toPublicUser)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
-export function approveUser(userId) {
-  const user = updateUser(userId, { status: "approved" });
+export async function approveUser(userId) {
+  const user = await updateUser(userId, { status: "approved" });
   return toPublicUser(user);
 }
 
-export function rejectUser(userId) {
-  const user = updateUser(userId, { status: "rejected" });
+export async function rejectUser(userId) {
+  const user = await updateUser(userId, { status: "rejected" });
   return toPublicUser(user);
 }
 
-export function suspendUser(userId) {
-  const user = updateUser(userId, { status: "suspended" });
+export async function suspendUser(userId) {
+  const user = await updateUser(userId, { status: "suspended" });
   return toPublicUser(user);
 }
 
-export function activateUser(userId) {
-  const existing = findUserById(userId);
+export async function activateUser(userId) {
+  const existing = await findUserById(userId);
   if (!existing) throw new AuthError("User not found.", { status: 404, code: "NOT_FOUND" });
-  const user = updateUser(userId, { status: "approved" });
+  const user = await updateUser(userId, { status: "approved" });
   return toPublicUser(user);
 }
 
-export function removeUser(userId) {
-  deleteUser(userId);
+export async function removeUser(userId) {
+  await deleteUser(userId);
   return { id: userId, deleted: true };
 }
 
@@ -311,7 +313,7 @@ function parseExpiryDate(value) {
   return date.toISOString();
 }
 
-export function patchUserAdmin(userId, { accessLevel, expiresAt }) {
+export async function patchUserAdmin(userId, { accessLevel, expiresAt }) {
   const patch = {};
 
   if (accessLevel !== undefined) {
@@ -329,11 +331,11 @@ export function patchUserAdmin(userId, { accessLevel, expiresAt }) {
     throw new AuthError("No valid fields to update.", { status: 400, code: "INVALID_INPUT" });
   }
 
-  const user = updateUser(userId, patch);
+  const user = await updateUser(userId, patch);
   return toPublicUser(user);
 }
 
-export function adminUserAction(userId, action) {
+export async function adminUserAction(userId, action) {
   switch (action) {
     case "approve": return approveUser(userId);
     case "reject": return rejectUser(userId);

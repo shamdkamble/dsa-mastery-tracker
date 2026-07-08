@@ -23,6 +23,7 @@ import {
   extractBearer,
 } from "./auth.js";
 import { canAccessTeachTopic } from "./roadmap-access.js";
+import { getUserStoreLabel } from "./user-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -68,10 +69,10 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-app.get("/api/auth/me", (req, res) => {
+app.get("/api/auth/me", async (req, res) => {
   try {
     const token = extractBearer(req);
-    const user = getCurrentUser(token);
+    const user = await getCurrentUser(token);
     res.json({ user });
   } catch (err) {
     if (handleAuthError(res, err)) return;
@@ -79,22 +80,34 @@ app.get("/api/auth/me", (req, res) => {
   }
 });
 
-app.get("/api/auth/admin/pending", requireAdmin, (_req, res) => {
-  res.json({ users: listPendingUsers() });
+app.get("/api/auth/admin/pending", requireAdmin, async (_req, res) => {
+  try {
+    const users = await listPendingUsers();
+    res.json({ users });
+  } catch (err) {
+    console.error("[/api/auth/admin/pending]", err);
+    res.status(500).json({ error: { message: "Failed to load users.", code: "SERVER_ERROR" } });
+  }
 });
 
-app.get("/api/auth/admin/users", requireAdmin, (_req, res) => {
-  res.json({ users: listAllUsers() });
+app.get("/api/auth/admin/users", requireAdmin, async (_req, res) => {
+  try {
+    const users = await listAllUsers();
+    res.json({ users });
+  } catch (err) {
+    console.error("[/api/auth/admin/users]", err);
+    res.status(500).json({ error: { message: "Failed to load users.", code: "SERVER_ERROR" } });
+  }
 });
 
-app.post("/api/auth/admin/action", requireAdmin, (req, res) => {
+app.post("/api/auth/admin/action", requireAdmin, async (req, res) => {
   try {
     const { userId, action } = req.body ?? {};
     if (!userId || !action) {
       res.status(400).json({ error: { message: "userId and action are required.", code: "INVALID_INPUT" } });
       return;
     }
-    const result = adminUserAction(userId, action);
+    const result = await adminUserAction(userId, action);
     res.json({ user: result, message: `Action "${action}" completed.` });
   } catch (err) {
     if (handleAuthError(res, err)) return;
@@ -107,11 +120,11 @@ app.post("/api/auth/admin/action", requireAdmin, (req, res) => {
   }
 });
 
-app.patch("/api/auth/admin/users/:userId", requireAdmin, (req, res) => {
+app.patch("/api/auth/admin/users/:userId", requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
     const { accessLevel, expiresAt } = req.body ?? {};
-    const user = patchUserAdmin(userId, { accessLevel, expiresAt });
+    const user = await patchUserAdmin(userId, { accessLevel, expiresAt });
     res.json({ user, message: "User updated." });
   } catch (err) {
     if (handleAuthError(res, err)) return;
@@ -128,7 +141,7 @@ app.post("/api/teach", requireAuth, async (req, res) => {
   try {
     const { topic } = req.body ?? {};
     const token = extractBearer(req);
-    const user = getCurrentUser(token);
+    const user = await getCurrentUser(token);
 
     if (!canAccessTeachTopic(user, topic)) {
       res.status(403).json({
@@ -172,6 +185,8 @@ app.get("/api/health", (_req, res) => {
     keyStatus,
     provider: "gemini",
     model: resolveModel(),
+    userStore: getUserStoreLabel(),
+    userStorePersistent: getUserStoreLabel() !== "ephemeral-tmp",
   });
 });
 
