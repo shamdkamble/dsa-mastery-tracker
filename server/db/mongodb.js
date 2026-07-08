@@ -7,45 +7,83 @@ import mongoose from "mongoose";
 const LOG_PREFIX = "[mongodb]";
 const DEFAULT_DB_NAME = "dsa-mastery";
 
-/** @type {{ conn: typeof mongoose | null, promise: Promise<typeof mongoose> | null, lastError: object | null }} */
+/** @type {{ conn: typeof mongoose | null, promise: Promise<typeof mongoose> | null, lastError: object | null, source: string | null }} */
 const globalCache = globalThis.__dsaMongoCache ?? {
   conn: null,
   promise: null,
   lastError: null,
+  source: null,
 };
 globalThis.__dsaMongoCache = globalCache;
 
+function cleanEnv(value) {
+  if (!value?.trim()) return "";
+  return value.trim().replace(/^['"]|['"]$/g, "");
+}
+
 /**
- * Read and sanitize MONGODB_URI at runtime (not module load).
- * Strips quotes/newlines often introduced when pasting into Vercel UI.
+ * Build URI from separate env vars (recommended for Vercel — avoids paste/encoding issues).
  */
-export function getMongoUri() {
-  const raw = process.env.MONGODB_URI;
-  if (!raw?.trim()) {
+function buildUriFromParts() {
+  const user = cleanEnv(process.env.MONGODB_USER);
+  const pass = cleanEnv(process.env.MONGODB_PASSWORD);
+  const host = cleanEnv(process.env.MONGODB_HOST || process.env.MONGODB_CLUSTER);
+  const db = cleanEnv(process.env.MONGODB_DB) || DEFAULT_DB_NAME;
+
+  if (!user || !pass || !host) {
     return null;
   }
 
+  const encodedUser = encodeURIComponent(user);
+  const encodedPass = encodeURIComponent(pass);
+  const cleanHost = host.replace(/^mongodb\+srv:\/\//, "").replace(/\/$/, "");
+
+  globalCache.source = "parts";
+  return `mongodb+srv://${encodedUser}:${encodedPass}@${cleanHost}/${db}?retryWrites=true&w=majority&appName=Cluster0`;
+}
+
+/**
+ * Parse mongodb+srv://user:pass@host/db?opts and rebuild with encoded credentials.
+ */
+function normalizeExistingUri(raw) {
   let uri = raw.trim().replace(/^['"]|['"]$/g, "").replace(/\s+/g, "");
 
   if (!uri.startsWith("mongodb://") && !uri.startsWith("mongodb+srv://")) {
-    throw new Error(`MONGODB_URI must start with mongodb:// or mongodb+srv:// (got: ${uri.slice(0, 20)}...)`);
+    throw new Error(`MONGODB_URI must start with mongodb:// or mongodb+srv:// (got: ${uri.slice(0, 24)}...)`);
   }
 
-  // Fix double slashes after host (common when pasting into Vercel)
+  const match = uri.match(/^(mongodb(?:\+srv)?:\/\/)(?:([^:@]+)(?::([^@]*))?@)?([^/?#]+)(\/[^?#]*)?(\?[^#]*)?(#.*)?$/);
+
+  if (match) {
+    const [, protocol, user, pass, host, path = "", query = "", hash = ""] = match;
+    const encodedUser = user ? encodeURIComponent(decodeURIComponent(user)) : "";
+    const encodedPass = pass ? encodeURIComponent(decodeURIComponent(pass)) : "";
+    const auth = encodedUser ? `${encodedUser}${encodedPass ? `:${encodedPass}` : ""}@` : "";
+    let dbPath = (path || "").replace(/^\/+/, "");
+    if (!dbPath) dbPath = DEFAULT_DB_NAME;
+    const qs = query || "?retryWrites=true&w=majority";
+    uri = `${protocol}${auth}${host}/${dbPath}${qs}${hash || ""}`;
+  }
+
   uri = uri.replace(/(mongodb(?:\+srv)?:\/\/[^/]+)\/+/g, "$1/");
+  globalCache.source = "uri";
+  return uri;
+}
 
-  // Ensure a database name is present in the path
-  const pathMatch = uri.match(/^mongodb(?:\+srv)?:\/\/[^/]+\/([^?]*)/);
-  const dbInPath = (pathMatch?.[1] || "").replace(/^\/+/, "");
-  if (!dbInPath) {
-    if (uri.includes("?")) {
-      uri = uri.replace("?", `/${DEFAULT_DB_NAME}?`);
-    } else {
-      uri = `${uri.replace(/\/$/, "")}/${DEFAULT_DB_NAME}`;
-    }
+/**
+ * Resolve MongoDB connection string at runtime.
+ */
+export function getMongoUri() {
+  const fromParts = buildUriFromParts();
+  if (fromParts) return fromParts;
+
+  const raw = process.env.MONGODB_URI;
+  if (!raw?.trim()) {
+    globalCache.source = null;
+    return null;
   }
 
-  return uri;
+  return normalizeExistingUri(raw);
 }
 
 /** Safe URI for logs — password redacted */
@@ -71,9 +109,11 @@ export function formatMongoError(err) {
   if (err.reason?.type) base.reason = err.reason.type;
   if (err.codeName) base.codeName = err.codeName;
   if (err.errorLabels?.length) base.errorLabels = err.errorLabels;
-
-  // Mongoose ServerSelectionError often wraps the real cause
   if (err.cause?.message) base.cause = err.cause.message;
+
+  if (base.message.includes("bad auth") || base.codeName === "AtlasError") {
+    base.hint = "Reset the database user password in MongoDB Atlas → Database Access, then update MONGODB_PASSWORD or MONGODB_URI on Vercel and redeploy.";
+  }
 
   return base;
 }
@@ -84,16 +124,13 @@ function logMongoError(phase, err) {
   console.error(`${LOG_PREFIX} Error name:`, details.name);
   console.error(`${LOG_PREFIX} Error code:`, details.code);
   if (details.codeName) console.error(`${LOG_PREFIX} Code name:`, details.codeName);
+  if (details.hint) console.error(`${LOG_PREFIX} Hint:`, details.hint);
   if (details.reason) console.error(`${LOG_PREFIX} Reason:`, details.reason);
   if (details.cause) console.error(`${LOG_PREFIX} Cause:`, details.cause);
   if (err?.stack) console.error(`${LOG_PREFIX} Stack:`, err.stack);
   globalCache.lastError = details;
 }
 
-/**
- * Mongoose 8+ — useNewUrlParser / useUnifiedTopology are defaults (do not pass).
- * `family: 4` forces IPv4 — fixes many Vercel → Atlas connection failures.
- */
 function getConnectOptions() {
   return {
     maxPoolSize: process.env.VERCEL ? 5 : 10,
@@ -120,10 +157,6 @@ async function runMigrations() {
   }
 }
 
-/**
- * Connect to MongoDB Atlas. Cached on globalThis for warm Vercel invocations.
- * @returns {Promise<typeof mongoose>}
- */
 export async function connectDB() {
   if (globalCache.conn && mongoose.connection.readyState === 1) {
     return globalCache.conn;
@@ -134,10 +167,17 @@ export async function connectDB() {
     return mongoose;
   }
 
-  const uri = getMongoUri();
+  let uri;
+  try {
+    uri = getMongoUri();
+  } catch (err) {
+    logMongoError("URI parse", err);
+    throw err;
+  }
+
   if (!uri) {
     const err = new Error(
-      "MONGODB_URI is not set. Add it to .env (local) or Vercel → Settings → Environment Variables, then redeploy.",
+      "MongoDB is not configured. Set MONGODB_USER + MONGODB_PASSWORD + MONGODB_HOST (recommended) or MONGODB_URI on Vercel, then redeploy.",
     );
     err.code = "MONGODB_URI_MISSING";
     throw err;
@@ -145,6 +185,7 @@ export async function connectDB() {
 
   if (!globalCache.promise) {
     console.log(`${LOG_PREFIX} Connecting to Atlas...`);
+    console.log(`${LOG_PREFIX} Source: ${globalCache.source || "unknown"}`);
     console.log(`${LOG_PREFIX} URI: ${getMongoUriForLogs()}`);
     console.log(`${LOG_PREFIX} Runtime: ${process.env.VERCEL ? "vercel-serverless" : "node"}`);
 
@@ -177,7 +218,6 @@ export async function connectDB() {
   }
 }
 
-/** Eager connect — call when the server / serverless function loads */
 export function initDatabase() {
   return connectDB().catch((err) => {
     logMongoError("Init", err);
@@ -199,15 +239,29 @@ export function getMongoStatus() {
 }
 
 export function getMongoDiagnostics() {
-  const uri = getMongoUri();
+  let uri = null;
+  let parseError = null;
+  try {
+    uri = getMongoUri();
+  } catch (err) {
+    parseError = formatMongoError(err);
+  }
+
   return {
     configured: Boolean(uri),
+    source: globalCache.source,
+    hasSplitConfig: Boolean(
+      cleanEnv(process.env.MONGODB_USER)
+      && cleanEnv(process.env.MONGODB_PASSWORD)
+      && cleanEnv(process.env.MONGODB_HOST || process.env.MONGODB_CLUSTER),
+    ),
     uriPreview: getMongoUriForLogs(),
     status: getMongoStatus(),
     connected: isMongoConnected(),
     database: mongoose.connection.name || null,
     host: mongoose.connection.host || null,
     runtime: process.env.VERCEL ? "vercel" : "node",
+    parseError,
     lastError: globalCache.lastError,
   };
 }
