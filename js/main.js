@@ -118,10 +118,10 @@ function initDataRefresh() {
   }, 120);
 
   document.addEventListener("data:change", refreshCurrentPage);
+  document.addEventListener("auth:change", refreshCurrentPage);
 }
 
 async function init() {
-  initDB();
   initTheme();
   initAuthForms();
   initAppShell();
@@ -132,7 +132,8 @@ async function init() {
 
   setAuthGuard(enforceRouteAccess);
 
-  await resolveAuthSession();
+  const sessionUser = await resolveAuthSession();
+  initDB(sessionUser || getSessionUser());
   syncUserFromDB();
 
   initSidebar($("#sidebar"));

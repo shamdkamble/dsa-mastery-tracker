@@ -9,6 +9,7 @@ import { clearSession } from "./session.js";
 import { setState } from "../state.js";
 import { getInitials } from "../storage/helpers.js";
 import { dispatch } from "../utils.js";
+import { switchUserContext } from "../storage/db.js";
 
 export const PUBLIC_ROUTES = new Set(["login", "register"]);
 export const ADMIN_ROUTES = new Set(["admin"]);
@@ -19,6 +20,8 @@ export function isPublicRoute(path) {
 
 export function syncAuthState(user) {
   if (!user) return;
+
+  switchUserContext(user);
 
   setState({
     user: {

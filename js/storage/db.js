@@ -5,8 +5,11 @@
 import { dispatch } from "../utils.js";
 import { generateId, todayKey } from "./helpers.js";
 
-const STORAGE_KEY = "dsa-tracker-db";
+const STORAGE_KEY_LEGACY = "dsa-tracker-db";
+const STORAGE_KEY_PREFIX = "dsa-tracker-db";
 const DB_VERSION = 1;
+
+let activeUserId = null;
 
 function defaultDB() {
   return {
@@ -40,25 +43,82 @@ function defaultDB() {
 
 let cache = null;
 
+function resolveUserId(user) {
+  if (!user) return null;
+  return user.id || user.email || null;
+}
+
+function getStorageKey() {
+  if (!activeUserId) return `${STORAGE_KEY_PREFIX}:guest`;
+  return `${STORAGE_KEY_PREFIX}:${activeUserId}`;
+}
+
+function mergeStoredData(parsed) {
+  const base = defaultDB();
+  return {
+    ...base,
+    ...parsed,
+    user: { ...base.user, ...parsed.user },
+    settings: { ...base.settings, ...parsed.settings },
+    meta: { ...base.meta, ...parsed.meta },
+    problems: Array.isArray(parsed.problems) ? parsed.problems : [],
+    notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+    activities: Array.isArray(parsed.activities) ? parsed.activities : [],
+    searchRecent: Array.isArray(parsed.searchRecent) ? parsed.searchRecent : [],
+  };
+}
+
+function applyAuthProfile(db, authUser) {
+  if (!authUser) return db;
+  db.user = {
+    ...db.user,
+    name: authUser.name || db.user.name,
+    email: authUser.email || db.user.email,
+  };
+  if (!db.user.joined) {
+    db.user.joined = new Date().toISOString();
+  }
+  return db;
+}
+
+function readStorageRaw(key) {
+  let raw = localStorage.getItem(key);
+
+  if (!raw && activeUserId && key !== STORAGE_KEY_LEGACY) {
+    const legacy = localStorage.getItem(STORAGE_KEY_LEGACY);
+    if (legacy) {
+      localStorage.setItem(key, legacy);
+      raw = legacy;
+    }
+  }
+
+  return raw;
+}
+
 function load() {
   if (cache) return cache;
+
+  const key = getStorageKey();
+
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = readStorageRaw(key);
     if (raw) {
-      cache = { ...defaultDB(), ...JSON.parse(raw) };
+      cache = mergeStoredData(JSON.parse(raw));
       return cache;
     }
   } catch (e) {
     console.warn("Failed to load DB", e);
   }
+
   cache = defaultDB();
-  persist();
+  persist({ silent: true });
   return cache;
 }
 
 function persist({ silent = false } = {}) {
+  if (!cache) return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
+    localStorage.setItem(getStorageKey(), JSON.stringify(cache));
     if (!silent) {
       dispatch("data:change", { db: cache });
     }
@@ -67,7 +127,44 @@ function persist({ silent = false } = {}) {
   }
 }
 
-export function initDB() {
+/**
+ * Switch the in-memory store to the given authenticated user (or guest).
+ * Each account gets its own localStorage key so progress is isolated per user.
+ * @param {Object | null | undefined} authUser
+ */
+export function switchUserContext(authUser) {
+  const nextId = resolveUserId(authUser);
+
+  if (nextId === activeUserId && cache) {
+    if (authUser) applyAuthProfile(cache, authUser);
+    return cache;
+  }
+
+  if (cache) {
+    persist({ silent: true });
+  }
+
+  activeUserId = nextId;
+  cache = null;
+
+  const db = load();
+  if (authUser) {
+    applyAuthProfile(db, authUser);
+    persist({ silent: true });
+  }
+
+  dispatch("data:change", { db });
+  return db;
+}
+
+export function getActiveUserId() {
+  return activeUserId;
+}
+
+export function initDB(authUser = null) {
+  if (authUser) {
+    return switchUserContext(authUser);
+  }
   load();
   return cache;
 }

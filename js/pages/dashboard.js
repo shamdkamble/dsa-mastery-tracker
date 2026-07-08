@@ -2,6 +2,7 @@ import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
 import { StatCard, ProgressBar, Button, Card, EmptyState } from "../components/ui/index.js";
 import { getUser } from "../storage/db.js";
+import { getSessionUser } from "../auth/session.js";
 import {
   computeStats,
   computeTodaysMission,
@@ -50,12 +51,17 @@ function activityItem(item) {
 export default {
   title: "Dashboard",
   render() {
-    const user = getUser();
+    const sessionUser = getSessionUser();
+    const profile = getUser();
     const stats = computeStats();
     const mission = computeTodaysMission();
     const activity = computeRecentActivity();
     const topics = computeTopicProgress();
-    const firstName = user.name?.split(" ")[0] || "there";
+    const displayName = sessionUser?.name || profile.name || "Learner";
+    const firstName = displayName.split(" ")[0] || "there";
+    const accountLabel = sessionUser?.email
+      ? `<span class="text-tertiary">${sessionUser.email}</span>`
+      : "";
     const doneCount = mission.filter((m) => m.done).length;
     const missionPercent = mission.length ? Math.round((doneCount / mission.length) * 100) : 0;
 
@@ -74,6 +80,7 @@ export default {
               ${icon("calendar")} ${formatLongDate()}
               <span aria-hidden="true">·</span>
               ${icon("clock")} ${stats.studyTimeToday} studied
+              ${accountLabel ? `<span aria-hidden="true">·</span> ${accountLabel}` : ""}
             </div>
           </div>
           <div class="page-greeting__actions">

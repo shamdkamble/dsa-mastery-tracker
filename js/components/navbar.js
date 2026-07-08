@@ -63,11 +63,21 @@ function renderNotificationPanel() {
           <h3 class="navbar-notif__title">Notifications</h3>
           <p class="navbar-notif__subtitle">${unread ? `${unread} unread` : "All caught up"}</p>
         </div>
-        ${unread > 0 ? `
-          <button type="button" class="btn btn--ghost btn--sm" id="navbar-notif-mark-all">
-            Mark all read
+        <div class="navbar-notif__head-actions">
+          ${unread > 0 ? `
+            <button type="button" class="btn btn--ghost btn--sm" id="navbar-notif-mark-all">
+              Mark all read
+            </button>
+          ` : ""}
+          <button
+            type="button"
+            class="btn btn--ghost navbar-notif__close"
+            id="navbar-notif-close"
+            aria-label="Close notifications"
+          >
+            ${icon("close")}
           </button>
-        ` : ""}
+        </div>
       </div>
       <div class="navbar-notif__list">
         ${items.map(renderNotificationItem).join("")}
@@ -210,6 +220,13 @@ function bindNotificationPanelEvents(container) {
   wrap.dataset.notifBound = "true";
 
   wrap.addEventListener("click", (e) => {
+    const closeBtn = e.target.closest("#navbar-notif-close");
+    if (closeBtn) {
+      e.stopPropagation();
+      closeNotificationPanel(container);
+      return;
+    }
+
     const markAll = e.target.closest("#navbar-notif-mark-all");
     if (markAll) {
       const ids = getNotifications().filter((n) => !n.read).map((n) => n.id);
@@ -337,7 +354,20 @@ export function initNavbar(container) {
 
   const refresh = debounce(() => refreshNotificationUI(container), 80);
   document.addEventListener("data:change", refresh);
-  document.addEventListener("auth:change", refresh);
   document.addEventListener("notifications:change", refresh);
-  document.addEventListener("route:change", refresh);
+
+  document.addEventListener("route:change", () => {
+    closeNotificationPanel(container);
+    refresh();
+  });
+
+  document.addEventListener("auth:change", () => {
+    closeNotificationPanel(container);
+    const { user } = getState();
+    const avatar = $(".navbar__profile-avatar", container);
+    const nameEl = $(".navbar__profile-name", container);
+    if (avatar) avatar.textContent = user.initials;
+    if (nameEl) nameEl.textContent = user.name;
+    refresh();
+  });
 }

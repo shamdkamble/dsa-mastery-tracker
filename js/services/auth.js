@@ -4,6 +4,9 @@
 
 import { API_BASE_URL } from "../config.js";
 import { getToken, setSession, clearSession } from "../auth/session.js";
+import { switchUserContext } from "../storage/db.js";
+import { setState } from "../state.js";
+import { dispatch } from "../utils.js";
 
 export class AuthApiError extends Error {
   constructor(message, { status, code, details } = {}) {
@@ -139,4 +142,13 @@ export async function rejectUser(userId) {
 
 export function logout() {
   clearSession();
+  switchUserContext(null);
+  setState({
+    user: {
+      name: "Guest",
+      initials: "G",
+      role: "DSA Learner",
+    },
+  });
+  dispatch("auth:change", { user: null });
 }
