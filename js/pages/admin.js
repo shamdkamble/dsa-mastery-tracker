@@ -164,7 +164,7 @@ function userRow(user) {
 
   return `
     <tr class="user-mgmt__row" data-user-id="${user.id}" data-status="${user.status}">
-      <td>
+      <td data-label="Name">
         <div class="admin-user">
           <div class="admin-user__avatar" aria-hidden="true">${escapeHtml(user.name.charAt(0).toUpperCase())}</div>
           <div>
@@ -172,10 +172,10 @@ function userRow(user) {
           </div>
         </div>
       </td>
-      <td class="user-mgmt__email">${escapeHtml(user.email)}</td>
-      <td>${statusBadge(user.status)}</td>
-      <td class="text-tertiary user-mgmt__date">${formatDate(user.createdAt, { dateOnly: true })}</td>
-      <td class="user-mgmt__expiry">
+      <td class="user-mgmt__email" data-label="Email">${escapeHtml(user.email)}</td>
+      <td data-label="Status">${statusBadge(user.status)}</td>
+      <td class="text-tertiary user-mgmt__date" data-label="Registered">${formatDate(user.createdAt, { dateOnly: true })}</td>
+      <td class="user-mgmt__expiry" data-label="Expiry">
         <input
           type="date"
           class="input input--sm user-mgmt__date-input"
@@ -186,14 +186,14 @@ function userRow(user) {
         />
         ${expired ? `<span class="user-mgmt__expired-tag">Expired</span>` : ""}
       </td>
-      <td>
+      <td data-label="Access">
         <select class="input input--sm user-mgmt__level-select" data-field="accessLevel" data-user-id="${user.id}" aria-label="Access level for ${escapeHtml(user.name)}">
           ${ACCESS_LEVELS.map((level) => `
             <option value="${level}"${user.accessLevel === level ? " selected" : ""}>${level.charAt(0).toUpperCase() + level.slice(1)}</option>
           `).join("")}
         </select>
       </td>
-      <td>
+      <td data-label="Actions">
         <div class="user-mgmt__actions">
           ${primaryActions(user)}
           ${overflowMenu(user)}

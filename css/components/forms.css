@@ -261,3 +261,13 @@
 .search-input-wrapper .search-input:not(:placeholder-shown) ~ .search-shortcut {
   opacity: 0;
 }
+
+/* Prevent iOS zoom on input focus */
+@media (max-width: 768px) {
+  .input,
+  .textarea,
+  .select,
+  .search-input {
+    font-size: max(16px, var(--text-sm));
+  }
+}

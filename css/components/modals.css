@@ -110,3 +110,24 @@
 .modal__footer--between {
   justify-content: space-between;
 }
+
+@media (max-width: 640px) {
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    max-width: none;
+    max-height: 92dvh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: none;
+    margin-bottom: 0;
+  }
+
+  .modal--sm,
+  .modal--lg,
+  .modal--xl {
+    max-width: none;
+  }
+}

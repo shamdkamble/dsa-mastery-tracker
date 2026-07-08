@@ -1,5 +1,5 @@
 /**
- * Shared problem add/edit/delete modal with LeetCode auto-fill
+ * Shared problem add/edit/delete modal with LeetCode auto-fill & AI helpers
  */
 
 import { icon } from "./icons.js";
@@ -18,6 +18,7 @@ import {
   parseLeetcodeUrlOffline,
   buildLeetcodeUrl,
 } from "../services/leetcode.js";
+import { detectPattern, analyzeComplexity } from "../api/problemAiApi.js";
 import { debounce } from "../utils.js";
 import { refreshPage } from "../controllers/page-controller.js";
 
@@ -29,6 +30,20 @@ function selectOptions(items, selected) {
     const label = typeof item === "string" ? item : item.name;
     return `<option value="${val}"${val === selected ? " selected" : ""}>${label}</option>`;
   }).join("");
+}
+
+function escapeAttr(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function renderLeetcodePreview(meta) {
@@ -50,9 +65,88 @@ function renderLeetcodePreview(meta) {
   `;
 }
 
+function renderPatternSuggestion() {
+  return `
+    <div class="problem-ai-suggestion" id="pattern-suggestion" hidden>
+      <div class="problem-ai-suggestion__text">
+        AI suggests: <strong id="pattern-suggestion-name"></strong>
+      </div>
+      <p class="problem-ai-suggestion__reason" id="pattern-suggestion-reason"></p>
+      <div class="problem-ai-suggestion__actions">
+        <button class="btn btn--primary btn--xs" type="button" id="pattern-accept-btn">Use this</button>
+        <button class="btn btn--ghost btn--xs" type="button" id="pattern-dismiss-btn">Dismiss</button>
+      </div>
+    </div>
+    <p class="problem-ai-status" id="pattern-ai-status" aria-live="polite"></p>
+  `;
+}
+
+function renderComplexityResult(time = "", space = "", explanation = "") {
+  if (!time && !space) return "";
+  return `
+    <div class="problem-complexity__result" id="complexity-result">
+      <div class="problem-complexity__badges">
+        ${time ? `<span class="badge badge--accent">Time: ${escapeHtml(time)}</span>` : ""}
+        ${space ? `<span class="badge badge--info">Space: ${escapeHtml(space)}</span>` : ""}
+      </div>
+      ${explanation ? `<p class="problem-complexity__explanation">${escapeHtml(explanation)}</p>` : ""}
+    </div>
+  `;
+}
+
+function renderSolutionSection(p = {}) {
+  const hasSolution = Boolean(p.solution?.trim());
+  const isOpen = hasSolution;
+
+  return `
+    <div class="problem-optional-section${isOpen ? " is-open" : ""}" id="solution-section">
+      <button
+        type="button"
+        class="problem-optional-section__toggle"
+        id="solution-toggle-btn"
+        aria-expanded="${isOpen}"
+        aria-controls="solution-panel"
+      >
+        ${icon(isOpen ? "chevronDown" : "plus")}
+        <span>${isOpen ? "My Solution" : "Add My Solution"}</span>
+        <span class="problem-optional-section__toggle-chevron" aria-hidden="true">${icon("chevronDown")}</span>
+      </button>
+      <div class="problem-optional-section__panel" id="solution-panel" ${isOpen ? "" : "hidden"}>
+        ${Field({
+          label: "",
+          hint: "Optional — paste your accepted solution (any language)",
+          children: `<textarea
+            class="textarea problem-code-input"
+            name="solution"
+            id="problem-solution"
+            rows="8"
+            placeholder="class Solution {&#10;public:&#10;    vector&lt;int&gt; twoSum(vector&lt;int&gt;&amp; nums, int target) {&#10;        // ...&#10;    }&#10;};"
+          >${escapeHtml(p.solution || "")}</textarea>`,
+        })}
+        <div class="problem-complexity" id="complexity-section">
+          <div class="problem-complexity__actions">
+            <button class="btn btn--ghost btn--sm" type="button" id="analyze-complexity-btn" disabled>
+              ${icon("zap")}
+              <span>Analyze Complexity</span>
+            </button>
+            <span class="problem-complexity__hint" id="complexity-hint">Paste code above, then analyze with AI</span>
+          </div>
+          <p class="problem-ai-status" id="complexity-ai-status" aria-live="polite"></p>
+          <div id="complexity-result-host">
+            ${renderComplexityResult(p.timeComplexity, p.spaceComplexity)}
+          </div>
+          <input type="hidden" name="timeComplexity" id="time-complexity" value="${escapeAttr(p.timeComplexity || "")}">
+          <input type="hidden" name="spaceComplexity" id="space-complexity" value="${escapeAttr(p.spaceComplexity || "")}">
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderForm(problem = null) {
   const p = problem || {};
   const lcUrl = p.leetcodeUrl || (p.leetcodeSlug ? buildLeetcodeUrl(p.leetcodeSlug) : "");
+  const showDetect = Boolean(p.title && lcUrl);
 
   return `
     <form id="problem-form" class="stack stack-md">
@@ -91,16 +185,30 @@ function renderForm(problem = null) {
       <div class="divider divider--subtle"></div>
 
       ${Field({ label: "Problem title", children: Input({ placeholder: "e.g. Two Sum", value: p.title || "", attrs: 'name="title" id="problem-title" required' }) })}
+
       <div class="ds-grid md:grid-cols-2 gap-4">
         ${Field({ label: "Topic", children: Input({ placeholder: "e.g. Array · Hash Table", value: p.topic || "", attrs: 'name="topic" id="problem-topic"' }) })}
-        ${Field({
-          label: "Pattern",
-          children: `<select class="select" name="pattern" id="problem-pattern">
+        <div class="field">
+          <div class="problem-field-header">
+            <label class="field__label" for="problem-pattern">Pattern</label>
+            <button
+              class="btn btn--ghost btn--xs"
+              type="button"
+              id="detect-pattern-btn"
+              ${showDetect ? "" : "hidden"}
+            >
+              ${icon("zap")}
+              <span>Auto Detect</span>
+            </button>
+          </div>
+          <select class="select" name="pattern" id="problem-pattern">
             <option value="">Select pattern</option>
             ${selectOptions(PATTERN_CATALOG, p.pattern)}
-          </select>`,
-        })}
+          </select>
+          ${renderPatternSuggestion()}
+        </div>
       </div>
+
       <div class="ds-grid md:grid-cols-2 gap-4">
         ${Field({
           label: "Difficulty",
@@ -128,6 +236,8 @@ function renderForm(problem = null) {
           </select>`,
         })}
       </div>
+
+      ${renderSolutionSection(p)}
     </form>
   `;
 }
@@ -168,6 +278,13 @@ function setStatus(host, message, type = "") {
   el.className = `leetcode-import__status${type ? ` leetcode-import__status--${type}` : ""}`;
 }
 
+function setAiStatus(host, id, message, type = "") {
+  const el = host.querySelector(id);
+  if (!el) return;
+  el.textContent = message;
+  el.className = `problem-ai-status${type ? ` problem-ai-status--${type}` : ""}`;
+}
+
 function applyMetadata(host, meta) {
   const form = host.querySelector("#problem-form");
   if (!form || !meta) return;
@@ -195,6 +312,80 @@ function applyMetadata(host, meta) {
   const previewHost = host.querySelector("#leetcode-preview-host");
   if (previewHost) {
     previewHost.innerHTML = renderLeetcodePreview(meta);
+  }
+
+  host._lastLcMeta = meta;
+  showDetectPatternBtn(host, true);
+  hidePatternSuggestion(host);
+}
+
+function showDetectPatternBtn(host, show) {
+  const btn = host.querySelector("#detect-pattern-btn");
+  if (btn) btn.hidden = !show;
+}
+
+function hidePatternSuggestion(host) {
+  const el = host.querySelector("#pattern-suggestion");
+  if (el) el.hidden = true;
+  setAiStatus(host, "#pattern-ai-status", "");
+}
+
+function showPatternSuggestion(host, { primary, reasoning }) {
+  const el = host.querySelector("#pattern-suggestion");
+  const nameEl = host.querySelector("#pattern-suggestion-name");
+  const reasonEl = host.querySelector("#pattern-suggestion-reason");
+
+  if (nameEl) nameEl.textContent = primary;
+  if (reasonEl) reasonEl.textContent = reasoning || "";
+  if (el) {
+    el.hidden = false;
+    el.dataset.pattern = primary;
+  }
+  setAiStatus(host, "#pattern-ai-status", "");
+}
+
+function toggleSolutionPanel(host, open) {
+  const section = host.querySelector("#solution-section");
+  const panel = host.querySelector("#solution-panel");
+  const btn = host.querySelector("#solution-toggle-btn");
+  const label = btn?.querySelector("span");
+
+  if (!section || !panel || !btn) return;
+
+  section.classList.toggle("is-open", open);
+  panel.hidden = !open;
+  btn.setAttribute("aria-expanded", String(open));
+
+  if (label) label.textContent = open ? "My Solution" : "Add My Solution";
+
+  if (open) {
+    updateAnalyzeButtonState(host);
+    host.querySelector("#problem-solution")?.focus();
+  }
+}
+
+function updateAnalyzeButtonState(host) {
+  const code = host.querySelector("#problem-solution")?.value?.trim();
+  const btn = host.querySelector("#analyze-complexity-btn");
+  const hint = host.querySelector("#complexity-hint");
+
+  if (btn) btn.disabled = !code || code.length < 8;
+  if (hint) {
+    hint.textContent = code && code.length >= 8
+      ? "AI will estimate time & space complexity"
+      : "Paste code above, then analyze with AI";
+  }
+}
+
+function applyComplexityResult(host, { timeComplexity, spaceComplexity, explanation }) {
+  const timeInput = host.querySelector("#time-complexity");
+  const spaceInput = host.querySelector("#space-complexity");
+  const hostEl = host.querySelector("#complexity-result-host");
+
+  if (timeInput) timeInput.value = timeComplexity;
+  if (spaceInput) spaceInput.value = spaceComplexity;
+  if (hostEl) {
+    hostEl.innerHTML = renderComplexityResult(timeComplexity, spaceComplexity, explanation);
   }
 }
 
@@ -235,6 +426,69 @@ async function handleLeetcodeFetch(host) {
   }
 }
 
+async function handleDetectPattern(host) {
+  const btn = host.querySelector("#detect-pattern-btn");
+  const form = host.querySelector("#problem-form");
+  const title = form?.querySelector("#problem-title")?.value?.trim();
+
+  if (!title) {
+    setAiStatus(host, "#pattern-ai-status", "Enter or fetch a problem title first.", "error");
+    return;
+  }
+
+  const meta = host._lastLcMeta || {};
+  const topicTagsRaw = form.querySelector('[name="topicTags"]')?.value || "";
+  const topicTags = topicTagsRaw
+    ? topicTagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
+    : (meta.topicTags || []);
+
+  btn?.classList.add("is-loading");
+  btn.disabled = true;
+  hidePatternSuggestion(host);
+  setAiStatus(host, "#pattern-ai-status", "Detecting pattern with AI…", "loading");
+
+  try {
+    const result = await detectPattern({
+      title,
+      difficulty: form.querySelector("#problem-difficulty")?.value || meta.difficulty,
+      topic: form.querySelector("#problem-topic")?.value || meta.topic,
+      topicTags,
+    });
+    showPatternSuggestion(host, result);
+  } catch (err) {
+    setAiStatus(host, "#pattern-ai-status", err.message || "Pattern detection failed.", "error");
+  } finally {
+    btn?.classList.remove("is-loading");
+    btn.disabled = false;
+  }
+}
+
+async function handleAnalyzeComplexity(host) {
+  const btn = host.querySelector("#analyze-complexity-btn");
+  const code = host.querySelector("#problem-solution")?.value?.trim();
+  const title = host.querySelector("#problem-title")?.value?.trim();
+
+  if (!code || code.length < 8) {
+    setAiStatus(host, "#complexity-ai-status", "Paste your solution code first.", "error");
+    return;
+  }
+
+  btn?.classList.add("is-loading");
+  btn.disabled = true;
+  setAiStatus(host, "#complexity-ai-status", "Analyzing complexity with AI…", "loading");
+
+  try {
+    const result = await analyzeComplexity({ code, title });
+    applyComplexityResult(host, result);
+    setAiStatus(host, "#complexity-ai-status", "Complexity analyzed — will be saved with this problem.", "success");
+  } catch (err) {
+    setAiStatus(host, "#complexity-ai-status", err.message || "Analysis failed.", "error");
+  } finally {
+    btn?.classList.remove("is-loading");
+    updateAnalyzeButtonState(host);
+  }
+}
+
 function bindLeetcodeHandlers(host) {
   const urlInput = host.querySelector("#leetcode-url");
   const fetchBtn = host.querySelector("#leetcode-fetch-btn");
@@ -258,10 +512,36 @@ function bindLeetcodeHandlers(host) {
   });
 }
 
+function bindAiHandlers(host) {
+  host.querySelector("#detect-pattern-btn")?.addEventListener("click", () => handleDetectPattern(host));
+
+  host.querySelector("#pattern-accept-btn")?.addEventListener("click", () => {
+    const suggestion = host.querySelector("#pattern-suggestion");
+    const pattern = suggestion?.dataset.pattern;
+    const select = host.querySelector("#problem-pattern");
+    if (pattern && select) select.value = pattern;
+    hidePatternSuggestion(host);
+    setAiStatus(host, "#pattern-ai-status", `Pattern set to "${pattern}".`, "success");
+  });
+
+  host.querySelector("#pattern-dismiss-btn")?.addEventListener("click", () => hidePatternSuggestion(host));
+
+  host.querySelector("#solution-toggle-btn")?.addEventListener("click", () => {
+    const panel = host.querySelector("#solution-panel");
+    toggleSolutionPanel(host, panel?.hidden);
+  });
+
+  const solutionInput = host.querySelector("#problem-solution");
+  solutionInput?.addEventListener("input", debounce(() => updateAnalyzeButtonState(host), 200));
+
+  host.querySelector("#analyze-complexity-btn")?.addEventListener("click", () => handleAnalyzeComplexity(host));
+}
+
 function readForm(form) {
   const fd = new FormData(form);
   const inMission = form.querySelector('[name="inMission"]')?.checked;
   const tagsRaw = fd.get("topicTags") || "";
+  const solution = (fd.get("solution") || "").trim();
 
   return {
     id: fd.get("id"),
@@ -276,6 +556,9 @@ function readForm(form) {
     leetcodeSlug: fd.get("leetcodeSlug") || parseLeetcodeSlug(fd.get("leetcodeUrl")),
     leetcodeId: fd.get("leetcodeId") || null,
     topicTags: tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [],
+    solution,
+    timeComplexity: solution ? (fd.get("timeComplexity") || "").trim() : "",
+    spaceComplexity: solution ? (fd.get("spaceComplexity") || "").trim() : "",
     inMission,
     missionType: inMission ? (fd.get("missionType") || "new") : null,
   };
@@ -297,6 +580,24 @@ export function openProblemModal(problemId = null) {
   host.innerHTML = getModalHTML(problem);
   initModals(host);
   bindLeetcodeHandlers(host);
+  bindAiHandlers(host);
+
+  if (problem?.leetcodeUrl || problem?.leetcodeSlug) {
+    host._lastLcMeta = {
+      title: problem.title,
+      topic: problem.topic,
+      difficulty: problem.difficulty,
+      topicTags: problem.topicTags || [],
+      leetcodeUrl: problem.leetcodeUrl,
+      leetcodeSlug: problem.leetcodeSlug,
+      leetcodeId: problem.leetcodeId,
+    };
+    showDetectPatternBtn(host, true);
+  }
+
+  if (problem?.solution?.trim()) {
+    updateAnalyzeButtonState(host);
+  }
 
   const form = host.querySelector("#problem-form");
   const saveBtn = host.querySelector("#problem-save-btn");

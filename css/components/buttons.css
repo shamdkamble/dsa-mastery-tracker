@@ -216,3 +216,34 @@
   background-color: var(--color-accent-subtle);
   color: var(--color-accent);
 }
+
+@media (orientation: portrait) and (max-width: 1024px) {
+  .page-greeting__actions .btn,
+  .mission-card__actions .btn,
+  .admin-actions .btn {
+    white-space: normal;
+    height: auto;
+    min-height: var(--btn-height-md);
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+  }
+}
+
+@media (max-width: 640px) {
+  .btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .btn-group .btn {
+    flex: 1 1 auto;
+    border-radius: var(--radius-md) !important;
+    border-left-width: var(--border-width);
+    margin-top: var(--space-1);
+  }
+
+  .btn-group .btn + .btn {
+    border-left-width: var(--border-width);
+  }
+}

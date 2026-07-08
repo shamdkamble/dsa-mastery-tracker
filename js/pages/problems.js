@@ -31,7 +31,7 @@ function problemRow(p, i) {
       tabindex="0"
       role="button"
     >
-      <td>
+      <td data-label="Problem">
         <div class="flex items-center gap-2">
           <span class="text-tertiary font-mono text-xs">${i + 1}</span>
           <span class="table__cell-primary">${p.title}</span>
@@ -39,12 +39,12 @@ function problemRow(p, i) {
           ${leetcodeIconLink(getProblemLeetcodeUrl(p))}
         </div>
       </td>
-      <td><span class="table__cell-secondary">${p.topic || "—"}</span></td>
-      <td><span class="text-tertiary text-xs">${p.pattern || "—"}</span></td>
-      <td>${DifficultyBadge(p.difficulty)}</td>
-      <td>${statusPill(p.status)}</td>
-      <td><span class="text-secondary text-xs">${formatRelativeTime(p.lastReviewAt)}</span></td>
-      <td>
+      <td data-label="Topic"><span class="table__cell-secondary">${p.topic || "—"}</span></td>
+      <td data-label="Pattern"><span class="text-tertiary text-xs">${p.pattern || "—"}</span></td>
+      <td data-label="Difficulty">${DifficultyBadge(p.difficulty)}</td>
+      <td data-label="Status">${statusPill(p.status)}</td>
+      <td data-label="Last Review"><span class="text-secondary text-xs">${formatRelativeTime(p.lastReviewAt)}</span></td>
+      <td data-label="Attempts">
         <div class="flex items-center gap-2">
           <span class="text-tertiary text-xs font-mono">${p.attempts || "—"}</span>
           ${!p.inMission ? `<button class="btn btn--xs btn--ghost" data-action="add-to-mission" data-id="${p.id}" type="button" title="Add to mission">+</button>` : ""}

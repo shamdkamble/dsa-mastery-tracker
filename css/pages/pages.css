@@ -74,7 +74,7 @@
 
 .dash-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-8);
 }
@@ -423,7 +423,7 @@
 
 .patterns-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
 }
 
@@ -1195,6 +1195,169 @@
   pointer-events: none;
 }
 
+/* ── Problem modal: optional sections & AI helpers ── */
+
+.problem-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.problem-field-header .field__label {
+  margin: 0;
+}
+
+.problem-optional-section {
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-bg-secondary);
+  overflow: hidden;
+}
+
+.problem-optional-section__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+  text-align: left;
+  transition: var(--transition-colors);
+}
+
+.problem-optional-section__toggle:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-hover);
+}
+
+.problem-optional-section__toggle svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.problem-optional-section__toggle-chevron {
+  margin-left: auto;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.problem-optional-section.is-open .problem-optional-section__toggle-chevron {
+  transform: rotate(180deg);
+}
+
+.problem-optional-section__panel {
+  padding: 0 var(--space-4) var(--space-4);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.problem-optional-section__panel[hidden] {
+  display: none !important;
+}
+
+.problem-code-input {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+  min-height: 160px;
+  resize: vertical;
+  background-color: var(--color-bg-primary);
+}
+
+.problem-complexity {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.problem-complexity__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.problem-complexity__hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.problem-complexity__result {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--color-bg-primary);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.problem-complexity__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.problem-complexity__explanation {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+.problem-ai-suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background-color: var(--color-accent-subtle);
+  border: var(--border-width) solid var(--color-accent-muted);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.problem-ai-suggestion[hidden] {
+  display: none !important;
+}
+
+.problem-ai-suggestion__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--color-text-secondary);
+}
+
+.problem-ai-suggestion__text strong {
+  color: var(--color-accent);
+  font-weight: var(--font-semibold);
+}
+
+.problem-ai-suggestion__reason {
+  width: 100%;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  line-height: var(--leading-relaxed);
+}
+
+.problem-ai-suggestion__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.problem-ai-status {
+  font-size: var(--text-xs);
+  min-height: 1.2em;
+  margin-top: var(--space-2);
+  color: var(--color-text-tertiary);
+}
+
+.problem-ai-status--error { color: var(--color-danger); }
+.problem-ai-status--success { color: var(--color-success); }
+.problem-ai-status--loading { color: var(--color-accent); }
+
 #leetcode-fetch-btn.is-loading svg {
   animation: spin 0.8s linear infinite;
   color: var(--color-text-secondary);
@@ -1251,7 +1414,7 @@
 
 .roadmap-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-8);
 }
@@ -1896,17 +2059,29 @@
     flex-direction: column;
   }
 
-  .roadmap-stats { grid-template-columns: repeat(2, 1fr); }
-  .dash-stats { grid-template-columns: repeat(2, 1fr); }
+  .roadmap-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dash-grid { grid-template-columns: 1fr; }
   .analytics-grid { grid-template-columns: 1fr; }
-  .patterns-grid { grid-template-columns: repeat(2, 1fr); }
+  .patterns-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .calendar-layout { grid-template-columns: 1fr; }
   .settings-layout { grid-template-columns: 1fr; }
   .settings-nav {
     flex-direction: row;
     flex-wrap: wrap;
     position: static;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 1024px) {
+  .roadmap-phase__content {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .roadmap-phase.is-open .roadmap-phase__content {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
   }
 }
 
@@ -1930,6 +2105,9 @@
   .mission-hero__stats { justify-content: center; }
   .metric-row { grid-template-columns: 1fr; }
   .page-greeting { flex-direction: column; }
+  .page-greeting__actions { width: 100%; }
   .mission-card { flex-wrap: wrap; }
   .mission-card__actions { width: 100%; justify-content: flex-end; }
+  .admin-actions { width: 100%; }
+  .admin-actions .btn { flex: 1 1 auto; }
 }

@@ -1,0 +1,685 @@
+/* ═══════════════════════════════════════════
+   Responsive System — all screen sizes
+   ═══════════════════════════════════════════ */
+
+/* ── Foundation: safe areas & overflow guard ── */
+
+.app {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+.navbar {
+  padding-left: max(var(--space-6), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-6), env(safe-area-inset-right, 0px));
+}
+
+.content {
+  padding: var(--content-padding);
+  padding-bottom: max(var(--content-padding), env(safe-area-inset-bottom, 0px));
+}
+
+.content-inner {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Fluid typography */
+.page-title,
+.page-greeting__title {
+  font-size: clamp(var(--text-xl), 4vw, var(--text-2xl));
+}
+
+.page-description,
+.page-greeting__subtitle {
+  font-size: clamp(var(--text-sm), 2.5vw, var(--text-md));
+}
+
+.stat-card__value {
+  font-size: clamp(var(--text-2xl), 5vw, var(--text-3xl));
+}
+
+.streak-card__count {
+  font-size: clamp(var(--text-3xl), 8vw, var(--text-4xl));
+}
+
+/* ── Touch devices: larger targets, no hover-only UI ── */
+
+@media (hover: none) and (pointer: coarse) {
+  .sidebar__link {
+    min-height: var(--touch-target-min);
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-3);
+  }
+
+  .navbar__menu-btn,
+  .navbar__action {
+    width: var(--touch-target-min);
+    height: var(--touch-target-min);
+  }
+
+  .chip {
+    min-height: 32px;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .table__actions {
+    opacity: 1;
+  }
+
+  .card--interactive:hover {
+    transform: none;
+  }
+
+  .mission-card:hover {
+    transform: none;
+  }
+
+  .pattern-card:hover {
+    transform: none;
+  }
+}
+
+/* ── Tablet landscape & small laptops (≤1024px) ── */
+
+@media (max-width: 1024px) {
+  .page-section__header {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .problems-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .problems-summary {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .settings-row > *:last-child {
+    align-self: flex-start;
+  }
+
+  .admin-section__head {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .calendar-day {
+    min-height: 40px;
+    font-size: var(--text-xs);
+  }
+
+}
+
+/* ── Tablet portrait (≤768px) ── */
+
+@media (max-width: 768px) {
+  .navbar {
+    padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
+    gap: var(--space-2);
+  }
+
+  .sidebar {
+    width: min(var(--sidebar-width), 85%);
+    max-width: var(--sidebar-width);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .page-header {
+    margin-bottom: var(--space-6);
+  }
+
+  .page-greeting__actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .page-greeting__actions .btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .card,
+  .stat-card,
+  .chart-card {
+    padding: var(--space-4);
+  }
+
+  .card__header {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .mission-hero {
+    padding: var(--space-5);
+    gap: var(--space-4);
+  }
+
+  .mission-hero__stats {
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    justify-content: center;
+  }
+
+  .roadmap-header {
+    padding: var(--space-5);
+  }
+
+  .roadmap-phase__toggle {
+    gap: var(--space-3);
+  }
+
+  .roadmap-phase__indicator {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .settings-profile {
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+  }
+
+  .settings-nav {
+    flex-wrap: wrap;
+    position: static;
+  }
+
+  .settings-nav__item {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .search-page {
+    max-width: none;
+  }
+
+  .search-hero__input {
+    height: 48px;
+    font-size: var(--text-base);
+  }
+
+  .navbar-notif__panel {
+    position: fixed;
+    top: calc(var(--navbar-height) + var(--space-2));
+    left: var(--space-4);
+    right: var(--space-4);
+    width: auto;
+    max-height: min(480px, calc(100dvh - var(--navbar-height) - var(--space-8)));
+  }
+
+}
+
+/* ── Large phones (≤640px) ── */
+
+@media (max-width: 640px) {
+  .page-section {
+    margin-bottom: var(--space-6);
+  }
+
+  .problems-filters {
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .problems-filters .chip {
+    flex: 0 1 auto;
+  }
+
+  .mission-card {
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .mission-card__actions {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .calendar-grid {
+    gap: 2px;
+  }
+
+  .calendar-grid__head {
+    padding: var(--space-1);
+    font-size: 10px;
+  }
+
+  .calendar-day {
+    min-height: 36px;
+    gap: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .calendar-day__dot {
+    width: 4px;
+    height: 4px;
+  }
+
+  .calendar-header {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .review-list__item {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .review-list__date {
+    min-width: 0;
+  }
+
+  .modal__header,
+  .modal__body,
+  .modal__footer {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .modal__footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .modal__footer .btn {
+    width: 100%;
+  }
+
+  .modal__footer--between {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .auth-card {
+    padding: var(--space-6);
+  }
+
+  .auth-page {
+    padding: var(--space-4);
+    align-items: flex-start;
+    padding-top: max(var(--space-8), env(safe-area-inset-top, 0px));
+  }
+
+  .admin-section__head,
+  .user-mgmt__toolbar,
+  .user-mgmt__content {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .user-mgmt__count {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .roadmap-phase__title {
+    font-size: var(--text-md);
+  }
+
+  .roadmap-phase__desc {
+    font-size: var(--text-xs);
+  }
+
+  .flex.items-center.justify-between.mt-6 {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .flex.items-center.justify-between.mt-6 .btn {
+    width: 100%;
+  }
+}
+
+/* ── Small phones (≤480px) ── */
+
+@media (max-width: 480px) {
+  .page-greeting__title {
+    font-size: var(--text-xl);
+  }
+
+  .page-greeting__meta {
+    flex-wrap: wrap;
+  }
+
+  .streak-card {
+    padding: var(--space-4);
+  }
+
+  .donut-chart {
+    width: 120px;
+    height: 120px;
+  }
+
+  .donut-chart__center {
+    inset: 16px;
+  }
+
+  .donut-chart__total {
+    font-size: var(--text-xl);
+  }
+
+  .metric-mini {
+    padding: var(--space-3);
+  }
+
+  .metric-mini__value {
+    font-size: var(--text-lg);
+  }
+
+  .search-result {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .leetcode-import {
+    padding: var(--space-3);
+  }
+
+  .tab {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+  }
+
+  .roadmap-parallel__legend {
+    flex-wrap: wrap;
+  }
+
+  .upgrade-modal__hero {
+    padding: var(--space-6) var(--space-4) var(--space-3);
+  }
+
+  .modal--teach {
+    max-height: 95dvh;
+  }
+
+  .teach-modal__header {
+    flex-wrap: wrap;
+    padding: var(--space-4);
+  }
+
+  .teach-modal__title {
+    font-size: var(--text-lg);
+  }
+
+  .empty-state {
+    padding: var(--space-8) var(--space-4);
+  }
+
+  .empty-state__actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .empty-state__actions .btn {
+    width: 100%;
+  }
+}
+
+/* ── Very small phones (≤360px) ── */
+
+@media (max-width: 360px) {
+  .content {
+    padding: var(--space-3);
+  }
+
+  .navbar {
+    padding-left: max(var(--space-3), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--space-3), env(safe-area-inset-right, 0px));
+  }
+
+  .stat-card__icon {
+    width: 36px;
+    height: 36px;
+    margin-bottom: var(--space-2);
+  }
+
+  .calendar-day {
+    min-height: 32px;
+    font-size: 11px;
+  }
+
+  .btn--lg {
+    height: var(--btn-height-md);
+    padding: 0 var(--space-4);
+    font-size: var(--text-sm);
+  }
+}
+
+/* ── Short viewports (landscape phones) ── */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .modal-overlay {
+    align-items: flex-start;
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+  }
+
+  .modal {
+    max-height: calc(100dvh - var(--space-4));
+  }
+
+  .auth-page {
+    align-items: flex-start;
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-4);
+  }
+}
+
+/* ── Large screens (≥1280px) ── */
+
+@media (min-width: 1280px) {
+  .content-inner {
+    max-width: var(--content-max-width);
+  }
+
+  .dash-grid {
+    grid-template-columns: 1fr minmax(320px, 380px);
+  }
+}
+
+/* ── Ultra-wide: prevent excessive line length in prose ── */
+
+@media (min-width: 1600px) {
+  :root {
+    --content-max-width: 1320px;
+  }
+}
+
+/* ═══════════════════════════════════════════
+   Portrait — phones & tablets (no horizontal scroll)
+   ═══════════════════════════════════════════ */
+
+@media (orientation: portrait) and (max-width: 1024px) {
+  :root {
+    --content-padding: clamp(var(--space-3), 3vw, var(--space-5));
+  }
+
+  .navbar__center,
+  .search-input-wrapper {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .navbar-notif__panel {
+    left: var(--content-padding);
+    right: var(--content-padding);
+    width: auto;
+  }
+
+  .problems-toolbar,
+  .problems-filters,
+  .problems-summary,
+  .page-greeting,
+  .page-section__header,
+  .mission-hero,
+  .roadmap-header,
+  .roadmap-header__top,
+  .roadmap-phase__toggle,
+  .roadmap-parallel__intro,
+  .calendar-header,
+  .admin-section__head,
+  .user-mgmt__toolbar,
+  .card__header,
+  .mission-card,
+  .mission-item {
+    flex-wrap: wrap;
+  }
+
+  .mission-item__time {
+    margin-left: auto;
+  }
+
+  .mission-item,
+  .tabs,
+  .tabs__list,
+  .ds-row,
+  .cluster,
+  .cluster-md {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .problems-filters,
+  .tabs__list {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .bar-chart {
+    height: auto;
+    min-height: 120px;
+    max-width: 100%;
+    overflow-x: visible;
+    gap: var(--space-1);
+  }
+
+  .bar-chart__col {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .bar-chart__bar {
+    max-width: 100%;
+  }
+
+  .roadmap-phase__content {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .roadmap-phase.is-open .roadmap-phase__content {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .roadmap-phase__indicator {
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-shrink: 0;
+  }
+
+  .roadmap-phase__chevron {
+    flex-shrink: 0;
+  }
+
+  .roadmap-phase__summary {
+    min-width: 0;
+  }
+
+  .mission-card__actions,
+  .page-greeting__actions,
+  .admin-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .mission-card__actions .btn,
+  .page-greeting__actions .btn {
+    white-space: normal;
+    text-align: center;
+  }
+
+  .settings-nav {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .settings-nav__item {
+    flex: 1 1 calc(50% - var(--space-1));
+  }
+
+  .leetcode-import__row {
+    flex-direction: column;
+  }
+
+  .leetcode-import__row .btn {
+    width: 100%;
+  }
+
+  .calendar-grid {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .calendar-day {
+    min-height: 0;
+    aspect-ratio: 1;
+    font-size: clamp(10px, 2.8vw, var(--text-sm));
+  }
+
+  .donut-chart {
+    width: min(140px, 40vw);
+    height: min(140px, 40vw);
+  }
+
+  .chart-card,
+  .card,
+  .stat-card,
+  .pattern-card,
+  .roadmap-phase,
+  .roadmap-step,
+  .roadmap-topic {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .teach-modal__body pre,
+  .teach-section__body pre {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-overlay {
+    padding-left: max(var(--space-3), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--space-3), env(safe-area-inset-right, 0px));
+  }
+}
+
+/* Narrow portrait phones */
+@media (orientation: portrait) and (max-width: 480px) {
+  .settings-nav__item {
+    flex: 1 1 100%;
+  }
+
+  .roadmap-phase__meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

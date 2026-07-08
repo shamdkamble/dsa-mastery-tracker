@@ -9,6 +9,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { teachTopic, TeachApiError, resolveApiKey, resolveModel } from "./gemini.js";
+import { detectProblemPattern, analyzeSolutionComplexity } from "./problem-ai.js";
 import {
   AuthError,
   registerUser,
@@ -41,7 +42,7 @@ const IS_VERCEL = Boolean(process.env.VERCEL);
 
 const app = express();
 
-app.use(express.json({ limit: "32kb" }));
+app.use(express.json({ limit: "128kb" }));
 
 function sendDbError(res, err) {
   const details = formatMongoError(err);
@@ -216,6 +217,36 @@ app.patch("/api/auth/admin/users/:userId", requireAdmin, async (req, res) => {
     }
     console.error("[/api/auth/admin/users/:userId]", err);
     res.status(500).json({ error: { message: "Update failed.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/problem/detect-pattern", requireAuth, async (req, res) => {
+  try {
+    const { title, difficulty, topic, topicTags } = req.body ?? {};
+    const result = await detectProblemPattern({ title, difficulty, topic, topicTags });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof TeachApiError) {
+      res.status(err.status).json({ error: { message: err.message, code: err.code } });
+      return;
+    }
+    console.error("[/api/problem/detect-pattern]", err);
+    res.status(500).json({ error: { message: "Pattern detection failed.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/problem/analyze-complexity", requireAuth, async (req, res) => {
+  try {
+    const { code, title } = req.body ?? {};
+    const result = await analyzeSolutionComplexity({ code, title });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof TeachApiError) {
+      res.status(err.status).json({ error: { message: err.message, code: err.code } });
+      return;
+    }
+    console.error("[/api/problem/analyze-complexity]", err);
+    res.status(500).json({ error: { message: "Complexity analysis failed.", code: "SERVER_ERROR" } });
   }
 });
 

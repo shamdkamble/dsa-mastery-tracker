@@ -186,10 +186,15 @@ function buildGenerateUrl(model) {
 }
 
 function buildRequestBody(userPrompt, options = {}) {
-  return {
-    systemInstruction: {
-      parts: [{ text: TEACHING_SYSTEM_PROMPT }],
-    },
+  return buildGenericRequestBody(TEACHING_SYSTEM_PROMPT, userPrompt, {
+    temperature: options.temperature ?? 0.6,
+    maxTokens: options.maxTokens ?? 4096,
+    ...options,
+  });
+}
+
+function buildGenericRequestBody(systemPrompt, userPrompt, options = {}) {
+  const body = {
     contents: [
       {
         role: "user",
@@ -197,11 +202,21 @@ function buildRequestBody(userPrompt, options = {}) {
       },
     ],
     generationConfig: {
-      temperature: options.temperature ?? 0.6,
-      maxOutputTokens: options.maxTokens ?? 4096,
+      temperature: options.temperature ?? 0.4,
+      maxOutputTokens: options.maxTokens ?? 1024,
       topP: 0.95,
     },
   };
+
+  if (systemPrompt) {
+    body.systemInstruction = { parts: [{ text: systemPrompt }] };
+  }
+
+  if (options.json) {
+    body.generationConfig.responseMimeType = "application/json";
+  }
+
+  return body;
 }
 
 function extractContent(data) {
@@ -230,9 +245,12 @@ function isRetryableModelError(status, data) {
   return false;
 }
 
-async function callGemini(model, apiKey, userPrompt, options, signal) {
+async function callGemini(model, apiKey, userPrompt, options, signal, systemPrompt = null) {
   const modelId = normalizeModelName(model);
   const url = buildGenerateUrl(modelId);
+  const requestBody = systemPrompt != null
+    ? buildGenericRequestBody(systemPrompt, userPrompt, options)
+    : buildRequestBody(userPrompt, options);
 
   const res = await fetch(url, {
     method: "POST",
@@ -240,7 +258,7 @@ async function callGemini(model, apiKey, userPrompt, options, signal) {
       "Content-Type": "application/json",
       "x-goog-api-key": apiKey,
     },
-    body: JSON.stringify(buildRequestBody(userPrompt, options)),
+    body: JSON.stringify(requestBody),
     signal,
   });
 
@@ -282,6 +300,57 @@ async function callGemini(model, apiKey, userPrompt, options, signal) {
  * @param {string | object} topic
  * @param {Object} [options]
  */
+/**
+ * Generic Gemini content generation with optional custom system prompt.
+ * @param {{ systemPrompt?: string, userPrompt: string, options?: object }} params
+ */
+export async function generateContent({ systemPrompt = null, userPrompt, options = {} }) {
+  if (!userPrompt?.trim()) {
+    throw new TeachApiError("userPrompt is required.", { status: 400, code: "INVALID_INPUT" });
+  }
+
+  const apiKey = resolveApiKey();
+  const rawModel = options.model || process.env.GEMINI_MODEL;
+  const primaryModel = normalizeModelName(rawModel || resolveModel());
+  const modelsToTry = [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 60_000);
+
+  try {
+    let lastError = null;
+
+    for (const model of modelsToTry) {
+      const result = await callGemini(model, apiKey, userPrompt, options, controller.signal, systemPrompt);
+
+      if (result.ok) {
+        return {
+          content: result.content,
+          usage: result.usage,
+          model: result.model,
+        };
+      }
+
+      if (isRetryableModelError(result.status, result.data)) {
+        lastError = errorFromResponse(result.status, result.data);
+        continue;
+      }
+
+      throw errorFromResponse(result.status, result.data);
+    }
+
+    throw lastError || new TeachApiError("No available Gemini model found.", { status: 502, code: "MODEL_NOT_FOUND" });
+  } catch (err) {
+    if (err instanceof TeachApiError) throw err;
+    if (err?.name === "AbortError") {
+      throw new TeachApiError("Request timed out.", { status: 504, code: "TIMEOUT" });
+    }
+    throw new TeachApiError(err?.message || "Unexpected error calling Gemini.", { status: 500, code: "UNKNOWN" });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function teachTopic(topic, options = {}) {
   validateTopic(topic);
 

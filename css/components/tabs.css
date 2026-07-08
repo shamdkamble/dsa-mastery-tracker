@@ -12,6 +12,8 @@
   border-radius: var(--radius-lg);
   border: var(--border-width) solid var(--color-border-subtle);
   overflow-x: auto;
+  max-width: 100%;
+  min-width: 0;
   scrollbar-width: none;
 }
 
