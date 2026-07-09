@@ -16,7 +16,7 @@ import { getOrderedRoadmapTopics, getPhaseById } from "../data/roadmap.js";
 import { isTopicCompleted } from "../storage/roadmap-progress.js";
 
 const ACTIVITY_PREVIEW_LIMIT = 8;
-const MISSION_PREVIEW_LIMIT = 4;
+const MISSION_PREVIEW_LIMIT = 3;
 
 function escapeHtml(str) {
   return String(str)
@@ -41,18 +41,17 @@ function getContinueLearningTopic() {
   return ordered.find((t) => !isTopicCompleted(t.id)) ?? ordered[0] ?? null;
 }
 
-function missionChip(item) {
+function missionSideItem(item) {
   return `
-    <article class="dash-mission-chip${item.done ? " is-done" : ""}">
-      <div class="dash-mission-chip__check${item.done ? " is-done" : ""}" aria-hidden="true">
+    <div class="dash-mission-side__item${item.done ? " is-done" : ""}">
+      <div class="dash-mission-side__check${item.done ? " is-done" : ""}" aria-hidden="true">
         ${item.done ? icon("check") : ""}
       </div>
-      <div class="dash-mission-chip__body">
-        <span class="dash-mission-chip__title">${escapeHtml(item.title)}</span>
-        <span class="dash-mission-chip__meta">${escapeHtml(item.topic)}</span>
+      <div class="dash-mission-side__body">
+        <span class="dash-mission-side__item-title">${escapeHtml(item.title)}</span>
+        <span class="dash-mission-side__meta">${escapeHtml(item.topic)}</span>
       </div>
-      <span class="dash-mission-chip__time">${escapeHtml(item.time)}</span>
-    </article>
+    </div>
   `;
 }
 
@@ -77,7 +76,7 @@ function activityItem(item) {
 function renderContinueLearningHero(topic) {
   if (!topic) {
     return `
-      <section class="dash-continue dash-continue--hero dash-continue--empty">
+      <section class="dash-continue dash-continue--hero dash-continue--main dash-continue--empty">
         <div class="dash-continue__glow" aria-hidden="true"></div>
         <div class="dash-continue__inner">
           <span class="dash-continue__eyebrow">Continue Learning</span>
@@ -95,7 +94,7 @@ function renderContinueLearningHero(topic) {
   const phaseLabel = phase?.title ? `Phase ${topic.phase} · ${phase.title}` : `Phase ${topic.phase}`;
 
   return `
-    <section class="dash-continue dash-continue--hero">
+    <section class="dash-continue dash-continue--hero dash-continue--main">
       <div class="dash-continue__glow" aria-hidden="true"></div>
       <div class="dash-continue__inner">
         <div class="dash-continue__icon" aria-hidden="true">${icon("target")}</div>
@@ -130,47 +129,40 @@ function renderContinueLearningHero(topic) {
   `;
 }
 
-function renderMissionCompact(mission, missionPercent, doneCount) {
+function renderMissionSide(mission, missionPercent, doneCount) {
   if (!mission.length) {
     return `
-      <section class="dash-mission-compact dash-mission-compact--empty">
-        <div class="dash-mission-compact__head">
-          <h2 class="dash-mission-compact__title">Today's Mission</h2>
-          <a href="#/mission" class="page-section__link">Set up →</a>
+      <section class="dash-mission-side dash-mission-side--empty">
+        <div class="dash-mission-side__head">
+          <h2 class="dash-mission-side__title">${icon("mission")} Today's Mission</h2>
         </div>
-        <p class="dash-mission-compact__empty">No missions yet — add problems to today's mission to build your plan.</p>
+        <p class="dash-mission-side__empty-text">Build a daily plan by adding problems to your mission.</p>
+        <button class="btn btn--primary btn--sm dash-mission-side__cta" data-action="add-problem" type="button">
+          ${icon("plus")}<span>Add Your First Mission</span>
+        </button>
       </section>
     `;
   }
 
   const preview = mission.slice(0, MISSION_PREVIEW_LIMIT);
-  const remaining = mission.length - preview.length;
 
   return `
-    <section class="dash-mission-compact">
-      <div class="dash-mission-compact__head">
-        <div class="dash-mission-compact__intro">
-          <h2 class="dash-mission-compact__title">Today's Mission</h2>
-          <span class="dash-mission-compact__stat">${doneCount}/${mission.length} done · ${missionPercent}%</span>
-        </div>
-        <a href="#/mission" class="page-section__link">View all →</a>
+    <section class="dash-mission-side">
+      <div class="dash-mission-side__head">
+        <h2 class="dash-mission-side__title">${icon("mission")} Today's Mission</h2>
+        <span class="dash-mission-side__stat">${doneCount}/${mission.length}</span>
       </div>
-      <div class="dash-mission-compact__progress">
+      <div class="dash-mission-side__progress">
         ${ProgressBar({
           value: missionPercent,
           variant: missionPercent === 100 ? "success" : "",
           showValue: false,
         })}
       </div>
-      <div class="dash-mission-compact__track">
-        ${preview.map(missionChip).join("")}
-        ${remaining > 0 ? `
-          <a href="#/mission" class="dash-mission-chip dash-mission-chip--more">
-            <span class="dash-mission-chip__title">+${remaining} more</span>
-            <span class="dash-mission-chip__meta">View mission</span>
-          </a>
-        ` : ""}
+      <div class="dash-mission-side__list">
+        ${preview.map(missionSideItem).join("")}
       </div>
+      <a href="#/mission" class="btn btn--secondary btn--sm dash-mission-side__cta">View All</a>
     </section>
   `;
 }
@@ -227,7 +219,7 @@ export default {
 
         <div class="dash-body">
           <div class="dash-body__main">
-            ${renderMissionCompact(mission, missionPercent, doneCount)}
+            ${renderContinueLearningHero(continueTopic)}
 
             <section class="page-section page-section--flush dash-topics-section">
               <div class="page-section__header">
@@ -253,7 +245,7 @@ export default {
           </div>
 
           <aside class="dash-body__aside">
-            ${renderContinueLearningHero(continueTopic)}
+            ${renderMissionSide(mission, missionPercent, doneCount)}
 
             <section class="page-section page-section--flush dash-activity">
               <div class="page-section__header">
