@@ -211,7 +211,6 @@
 /* Collapsed sidebar */
 .app.sidebar-collapsed .sidebar {
   width: var(--sidebar-collapsed-width);
-  overflow: visible;
 }
 
 .app.sidebar-collapsed .sidebar__header {
@@ -239,8 +238,17 @@
 
 .app.sidebar-collapsed .sidebar__nav {
   padding: var(--space-2);
-  overflow-x: visible;
   overflow-y: auto;
+}
+
+@media (min-width: 769px) {
+  .app.sidebar-collapsed .sidebar {
+    overflow: visible;
+  }
+
+  .app.sidebar-collapsed .sidebar__nav {
+    overflow-x: visible;
+  }
 }
 
 .app.sidebar-collapsed .sidebar__section + .sidebar__section {

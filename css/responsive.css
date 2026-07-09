@@ -311,8 +311,15 @@
 
   .auth-page {
     padding: var(--space-4);
-    align-items: flex-start;
-    padding-top: max(var(--space-8), env(safe-area-inset-top, 0px));
+    align-items: center;
+    justify-content: center;
+    padding-top: max(var(--space-6), env(safe-area-inset-top, 0px));
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom, 0px));
+  }
+
+  .auth-card {
+    width: 100%;
+    max-width: 100%;
   }
 
   .admin-section__head,
@@ -508,6 +515,16 @@
 @media (orientation: portrait) and (max-width: 1024px) {
   :root {
     --content-padding: clamp(var(--space-3), 3vw, var(--space-5));
+  }
+
+  .app-footer__inner {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .app-footer__credit,
+  .app-footer__tagline {
+    text-align: center;
   }
 
   .navbar__center,
