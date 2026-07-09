@@ -6,7 +6,9 @@ import { icon } from "./icons.js";
 import { getState, setState, subscribe } from "../state.js";
 import { toggleTheme } from "../theme.js";
 import { navigate } from "../router.js";
-import { addSearchRecent } from "../storage/db.js";
+import { addSearchRecent, getUser } from "../storage/db.js";
+import { logout } from "../services/auth.js";
+import { renderProfileAvatar } from "../utils/profile-avatar.js";
 import { markNotificationRead, markAllNotificationsRead } from "../storage/db.js";
 import { getNotifications, getUnreadNotificationCount } from "../services/notifications.js";
 import { $, debounce } from "../utils.js";
@@ -22,7 +24,7 @@ const ROUTE_TITLES = {
   analytics: "Analytics",
   calendar: "Calendar",
   search: "Search",
-  settings: "Settings",
+  settings: "Profile & Settings",
   login: "Sign In",
   register: "Create Account",
   admin: "Admin Panel",
@@ -159,13 +161,87 @@ function renderNavbar(state) {
 
       <div class="navbar__subscription" data-subscription-badge ${subBadge ? "" : "hidden"}>${subBadge}</div>
 
-      <button class="navbar__profile${isPremium ? " navbar__profile--premium" : ""}" type="button" aria-label="User profile menu" aria-haspopup="true">
-        <span class="navbar__profile-avatar" aria-hidden="true">${user.initials}</span>
-        <span class="navbar__profile-name">${user.name}</span>
-        <span class="navbar__profile-chevron" aria-hidden="true">${icon("chevronDown")}</span>
-      </button>
+      <div class="navbar__profile-wrap">
+        <button
+          class="navbar__profile${isPremium ? " navbar__profile--premium" : ""}"
+          type="button"
+          id="navbar-profile-btn"
+          aria-label="User profile menu"
+          aria-haspopup="menu"
+          aria-expanded="false"
+          aria-controls="navbar-profile-menu"
+        >
+          ${renderProfileAvatar(getUser(), user, "navbar__profile-avatar")}
+          <span class="navbar__profile-name">${escapeHtml(user.name)}</span>
+          <span class="navbar__profile-chevron" aria-hidden="true">${icon("chevronDown")}</span>
+        </button>
+        <div class="navbar-profile-menu" id="navbar-profile-menu" role="menu" hidden>
+          <div class="navbar-profile-menu__head">
+            ${renderProfileAvatar(getUser(), user, "navbar-profile-menu__avatar")}
+            <div class="navbar-profile-menu__meta">
+              <span class="navbar-profile-menu__name">${escapeHtml(user.name)}</span>
+              <span class="navbar-profile-menu__role">${escapeHtml(user.role || "DSA Learner")}</span>
+            </div>
+          </div>
+          ${subBadge ? `<div class="navbar-profile-menu__badge">${subBadge}</div>` : ""}
+          <div class="navbar-profile-menu__actions">
+            <button type="button" class="navbar-profile-menu__item" role="menuitem" data-profile-action="settings">
+              ${icon("user")}
+              <span>Profile &amp; Settings</span>
+            </button>
+            <button type="button" class="navbar-profile-menu__item" role="menuitem" data-profile-action="theme">
+              ${icon("palette")}
+              <span>Toggle theme</span>
+            </button>
+            <button type="button" class="navbar-profile-menu__item navbar-profile-menu__item--danger" role="menuitem" data-profile-action="logout">
+              ${icon("logOut")}
+              <span>Sign out</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   `;
+}
+
+function closeProfileMenu(container) {
+  const btn = $("#navbar-profile-btn", container);
+  const menu = $("#navbar-profile-menu", container);
+  menu?.setAttribute("hidden", "");
+  btn?.setAttribute("aria-expanded", "false");
+  container.classList.remove("navbar--profile-open");
+}
+
+function openProfileMenu(container) {
+  closeNotificationPanel(container);
+  const btn = $("#navbar-profile-btn", container);
+  const menu = $("#navbar-profile-menu", container);
+  menu?.removeAttribute("hidden");
+  btn?.setAttribute("aria-expanded", "true");
+  container.classList.add("navbar--profile-open");
+}
+
+function refreshProfileChrome(container) {
+  const { user } = getState();
+  const profile = getUser();
+  const btn = $("#navbar-profile-btn", container);
+  if (!btn) return;
+
+  const avatarSlot = btn.querySelector(".navbar__profile-avatar--photo, .navbar__profile-avatar--initials, .navbar__profile-avatar");
+  if (avatarSlot) {
+    avatarSlot.outerHTML = renderProfileAvatar(profile, user, "navbar__profile-avatar");
+  }
+
+  const nameEl = $(".navbar__profile-name", btn);
+  if (nameEl) nameEl.textContent = user.name;
+
+  const menuAvatar = $(".navbar-profile-menu__avatar, .navbar-profile-menu__avatar--photo, .navbar-profile-menu__avatar--initials", container);
+  if (menuAvatar) {
+    menuAvatar.outerHTML = renderProfileAvatar(profile, user, "navbar-profile-menu__avatar");
+  }
+
+  const menuName = $(".navbar-profile-menu__name", container);
+  if (menuName) menuName.textContent = user.name;
 }
 
 function closeNotificationPanel(container) {
@@ -302,6 +378,27 @@ function bindEvents(container) {
 
   bindNotificationPanelEvents(container);
 
+  const profileBtn = $("#navbar-profile-btn", container);
+  profileBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const menu = $("#navbar-profile-menu", container);
+    const isOpen = menu && !menu.hasAttribute("hidden");
+    if (isOpen) closeProfileMenu(container);
+    else openProfileMenu(container);
+  });
+
+  $("#navbar-profile-menu", container)?.addEventListener("click", (e) => {
+    const action = e.target.closest("[data-profile-action]")?.dataset.profileAction;
+    if (!action) return;
+    closeProfileMenu(container);
+    if (action === "settings") navigate("settings");
+    else if (action === "theme") toggleTheme();
+    else if (action === "logout") {
+      logout();
+      navigate("login");
+    }
+  });
+
   if (!document.body.dataset.notifDismissBound) {
     document.body.dataset.notifDismissBound = "true";
     document.addEventListener("click", (e) => {
@@ -313,7 +410,16 @@ function bindEvents(container) {
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
       const navbar = $(".navbar");
-      if (navbar) closeNotificationPanel(navbar);
+      if (navbar) {
+        closeNotificationPanel(navbar);
+        closeProfileMenu(navbar);
+      }
+    });
+    document.addEventListener("click", (e) => {
+      const navbar = $(".navbar");
+      if (!navbar?.classList.contains("navbar--profile-open")) return;
+      if (e.target.closest(".navbar__profile-wrap")) return;
+      closeProfileMenu(navbar);
     });
   }
 
@@ -364,7 +470,10 @@ export function initNavbar(container) {
 
   document.addEventListener("route:change", () => {
     closeNotificationPanel(container);
+    closeProfileMenu(container);
   });
+
+  document.addEventListener("data:change", debounce(() => refreshProfileChrome(container), 150));
 
   document.addEventListener("auth:change", () => {
     closeNotificationPanel(container);

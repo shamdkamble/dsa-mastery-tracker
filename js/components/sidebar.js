@@ -5,49 +5,47 @@
 import { icon } from "./icons.js";
 import { getState, setState, subscribe } from "../state.js";
 import { navigate } from "../router.js";
-import { toggleTheme } from "../theme.js";
 import { $, $$, on, debounce } from "../utils.js";
 import { getProblems } from "../storage/db.js";
 import { computeTodaysMission } from "../storage/computed.js";
 import { isAdmin } from "../auth/session.js";
-import { logout } from "../services/auth.js";
-import { renderSubscriptionBadge } from "../subscription-theme.js";
 
 function getNavSections() {
   const problemCount = getProblems().length;
   const missionCount = computeTodaysMission().length;
 
   return [
-  {
-    label: "Overview",
-    items: [
-      { path: "dashboard", label: "Dashboard", icon: "dashboard" },
-      { path: "mission", label: "Today's Mission", icon: "mission", badge: missionCount || null },
-      { path: "problems", label: "Problems", icon: "problems", badge: problemCount || null },
-      { path: "patterns", label: "Patterns", icon: "patterns" },
-      { path: "roadmap", label: "FAANG Mastery Roadmap", icon: "target" },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { path: "analytics", label: "Analytics", icon: "analytics" },
-      { path: "calendar", label: "Calendar", icon: "calendar" },
-    ],
-  },
-  {
-    label: "Tools",
-    items: [
-      { path: "search", label: "Search", icon: "search" },
-    ],
-  },
-  ...(isAdmin() ? [{
-    label: "Administration",
-    items: [
-      { path: "admin", label: "Admin Panel", icon: "shield" },
-    ],
-  }] : []),
-];
+    {
+      label: "Overview",
+      items: [
+        { path: "dashboard", label: "Dashboard", icon: "dashboard" },
+        { path: "mission", label: "Today's Mission", icon: "mission", badge: missionCount || null },
+        { path: "problems", label: "Problems", icon: "problems", badge: problemCount || null },
+        { path: "patterns", label: "Patterns", icon: "patterns" },
+        { path: "roadmap", label: "FAANG Mastery Roadmap", icon: "target" },
+      ],
+    },
+    {
+      label: "Insights",
+      items: [
+        { path: "analytics", label: "Analytics", icon: "analytics" },
+        { path: "calendar", label: "Calendar", icon: "calendar" },
+      ],
+    },
+    {
+      label: "Tools",
+      items: [
+        { path: "search", label: "Search", icon: "search" },
+        { path: "settings", label: "Profile & Settings", icon: "user" },
+      ],
+    },
+    ...(isAdmin() ? [{
+      label: "Administration",
+      items: [
+        { path: "admin", label: "Admin Panel", icon: "shield" },
+      ],
+    }] : []),
+  ];
 }
 
 function renderNavLink(item, currentRoute) {
@@ -67,8 +65,7 @@ function renderNavLink(item, currentRoute) {
 }
 
 function renderSidebar(state) {
-  const { currentRoute, user } = state;
-  const subBadge = renderSubscriptionBadge();
+  const { currentRoute } = state;
 
   const sections = getNavSections().map(
     (section) => `
@@ -76,7 +73,7 @@ function renderSidebar(state) {
         <div class="sidebar__section-label">${section.label}</div>
         ${section.items.map((item) => renderNavLink(item, currentRoute)).join("")}
       </div>
-    `
+    `,
   ).join("");
 
   return `
@@ -96,33 +93,6 @@ function renderSidebar(state) {
     <nav class="sidebar__nav" aria-label="Primary">
       ${sections}
     </nav>
-
-    <div class="sidebar__footer">
-      <div class="sidebar__footer-actions">
-        <button class="theme-toggle" id="sidebar-theme-toggle" type="button" aria-label="Toggle theme" title="Toggle theme">
-          <span class="icon-theme-light" aria-hidden="true">${icon("sun")}</span>
-          <span class="icon-theme-dark" aria-hidden="true">${icon("moon")}</span>
-        </button>
-        <a href="#/settings" class="btn btn--ghost btn--icon" data-route="settings" aria-label="Settings" title="Settings">
-          ${icon("settings")}
-        </a>
-        <button class="btn btn--ghost btn--icon" type="button" aria-label="Help" title="Help">
-          ${icon("help")}
-        </button>
-      </div>
-      <div class="sidebar__user">
-        <div class="sidebar__user-avatar" aria-hidden="true">${user.initials}</div>
-        <div class="sidebar__user-info">
-          <div class="sidebar__user-name">${user.name}</div>
-          <div class="sidebar__user-role">${user.role}</div>
-          <div class="sidebar__user-tier" data-subscription-badge ${subBadge ? "" : "hidden"}>${subBadge}</div>
-        </div>
-      </div>
-      <button class="btn btn--ghost btn--sm sidebar__logout" type="button" id="sidebar-logout">
-        ${icon("logOut")}
-        <span>Sign out</span>
-      </button>
-    </div>
   `;
 }
 
@@ -150,19 +120,6 @@ export function initSidebar(container) {
     if (collapseBtn) {
       const { sidebarCollapsed } = getState();
       setState({ sidebarCollapsed: !sidebarCollapsed });
-      return;
-    }
-
-    const themeBtn = e.target.closest("#sidebar-theme-toggle");
-    if (themeBtn) {
-      toggleTheme();
-      return;
-    }
-
-    const logoutBtn = e.target.closest("#sidebar-logout");
-    if (logoutBtn) {
-      logout();
-      navigate("login");
       return;
     }
 

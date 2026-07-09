@@ -180,22 +180,6 @@
   box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 0 3px var(--subscription-ring, var(--color-accent));
 }
 
-.sidebar__user-tier {
-  margin-top: var(--space-1);
-}
-
-.sidebar__user-tier[hidden] {
-  display: none;
-}
-
-[data-subscription="premium"] .sidebar__user-avatar {
-  box-shadow: 0 0 0 2px var(--color-bg-sidebar), 0 0 12px var(--subscription-ring, rgba(251, 191, 36, 0.4));
-}
-
-[data-subscription="trial"] .sidebar__user-avatar {
-  box-shadow: 0 0 0 2px var(--color-bg-sidebar), 0 0 0 3px rgba(14, 165, 233, 0.45), 0 0 12px rgba(14, 165, 233, 0.2);
-}
-
 [data-subscription="premium"] .sidebar__logo-icon {
   box-shadow: var(--shadow-glow);
 }

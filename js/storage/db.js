@@ -27,7 +27,9 @@ function defaultDB() {
     user: {
       name: "",
       email: "",
+      bio: "",
       goal: "",
+      profilePhoto: "",
       joined: new Date().toISOString(),
     },
     settings: {

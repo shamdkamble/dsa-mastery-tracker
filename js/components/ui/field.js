@@ -24,9 +24,9 @@ export function Input({ type = "text", placeholder = "", value = "", error = fal
   return `<input type="${type}" class="${classes}" placeholder="${placeholder}" value="${value}" ${attrs}>`;
 }
 
-export function Textarea({ placeholder = "", rows = 4, error = false, className = "", attrs = "" }) {
+export function Textarea({ placeholder = "", rows = 4, value = "", error = false, className = "", attrs = "" }) {
   const classes = ["textarea", error && "textarea--error", className].filter(Boolean).join(" ");
-  return `<textarea class="${classes}" placeholder="${placeholder}" rows="${rows}" ${attrs}></textarea>`;
+  return `<textarea class="${classes}" placeholder="${placeholder}" rows="${rows}" ${attrs}>${value}</textarea>`;
 }
 
 export function Toggle({ label = "", checked = false, id = "", className = "", attrs = "" }) {

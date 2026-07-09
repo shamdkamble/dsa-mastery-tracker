@@ -20,9 +20,10 @@ import { navigate, getCurrentPath, refreshRouteContent } from "../router.js";
 import { openProblemModal } from "../components/problem-modal.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getTheme, setTheme, toggleTheme } from "../theme.js";
-import { setState } from "../state.js";
+import { getState, setState } from "../state.js";
 import { getUser } from "../storage/db.js";
 import { getInitials } from "../storage/helpers.js";
+import { renderProfileAvatar } from "../utils/profile-avatar.js";
 import { debounce } from "../utils.js";
 
 let contentContainer = null;
@@ -180,20 +181,55 @@ export function bindSettingsHandlers(root) {
   root.dataset.settingsHandlersBound = "true";
 
   const profileForm = $("#settings-profile-form", root);
+  const MAX_PHOTO_BYTES = 280_000;
+
   const saveProfile = debounce(() => {
     if (!profileForm) return;
     const fd = new FormData(profileForm);
+    const photoInput = $("#profile-photo-data", root);
     updateUser({
-      name: fd.get("name"),
-      email: fd.get("email"),
-      goal: fd.get("goal"),
+      name: String(fd.get("name") || "").trim(),
+      bio: String(fd.get("bio") || "").trim(),
+      goal: String(fd.get("goal") || "").trim(),
+      profilePhoto: photoInput?.value || "",
     });
     syncUserState();
     showToast(Toast({ title: "Profile saved", variant: "success" }));
-    refreshPage();
+    refreshProfilePreview(root);
   }, 500);
 
+  profileForm?.addEventListener("input", () => {
+    refreshProfilePreview(root);
+    saveProfile();
+  });
   profileForm?.addEventListener("change", saveProfile);
+
+  const photoFileInput = $("#profile-photo-input", root);
+  photoFileInput?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast(Toast({ title: "Invalid file", text: "Please choose an image.", variant: "danger" }));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      if (dataUrl.length > MAX_PHOTO_BYTES) {
+        showToast(Toast({ title: "Image too large", text: "Use a photo under 200 KB.", variant: "danger" }));
+        return;
+      }
+      const hidden = $("#profile-photo-data", root);
+      if (hidden) hidden.value = dataUrl;
+      updateUser({ profilePhoto: dataUrl });
+      syncUserState();
+      refreshProfilePreview(root);
+      showToast(Toast({ title: "Photo updated", variant: "success" }));
+    };
+    reader.readAsDataURL(file);
+  });
+
+  $("#profile-photo-remove", root)?.addEventListener("click", () => handlePhotoRemove(root));
 
   root.addEventListener("change", (e) => {
     const toggle = e.target.closest("[data-setting]");
@@ -246,7 +282,28 @@ export function bindSettingsHandlers(root) {
       refreshPage();
     }
   });
+
+  const navItems = $$(".settings-nav__item", root);
+  const sections = SETTINGS_SECTION_IDS.map((id) => $(`#${id}`, root)).filter(Boolean);
+  if (navItems.length && sections.length && typeof IntersectionObserver !== "undefined") {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        const id = visible.target.id;
+        navItems.forEach((item) => {
+          item.classList.toggle("is-active", item.getAttribute("href") === `#${id}`);
+        });
+      },
+      { rootMargin: "-20% 0px -60% 0px", threshold: [0, 0.25, 0.5, 1] },
+    );
+    sections.forEach((section) => observer.observe(section));
+  }
 }
+
+const SETTINGS_SECTION_IDS = ["profile", "subscription", "appearance", "notifications", "data"];
 
 function syncUserState() {
   const u = getUser();
@@ -255,8 +312,60 @@ function syncUserState() {
       name: u.name || "Learner",
       initials: getInitials(u.name || "Learner"),
       role: "DSA Learner",
+      profilePhoto: u.profilePhoto || "",
     },
   });
+}
+
+function refreshProfilePreview(root) {
+  const u = getUser();
+  const nameInput = $("#profile-name", root);
+  const bioInput = $("#profile-bio", root);
+  const displayName = nameInput?.value?.trim() || u.name || "Your name";
+  const displayBio = bioInput?.value?.trim() ?? u.bio ?? "";
+
+  const previewName = $("#profile-preview-name", root);
+  const previewBio = $("#profile-preview-bio", root);
+  const avatarHost = $("#profile-avatar-preview", root);
+  if (previewName) previewName.textContent = displayName;
+  if (previewBio) {
+    previewBio.textContent = displayBio || "Add a short bio to personalize your profile.";
+    previewBio.classList.toggle("profile-hero__bio--empty", !displayBio);
+  }
+  if (avatarHost) {
+    const stateUser = getState().user;
+    const previewUser = { ...u, name: displayName };
+    avatarHost.innerHTML = renderProfileAvatar(previewUser, {
+      ...stateUser,
+      initials: getInitials(displayName),
+    }, "profile-hero__avatar");
+  }
+
+  const removeBtn = $("#profile-photo-remove", root);
+  if (u.profilePhoto && !removeBtn) {
+    const actions = $(".profile-hero__photo-actions", root);
+    const uploadLabel = actions?.querySelector(".profile-photo-btn");
+    if (actions && uploadLabel) {
+      uploadLabel.insertAdjacentHTML(
+        "afterend",
+        '<button type="button" class="btn btn--ghost btn--sm" id="profile-photo-remove">Remove</button>',
+      );
+      $("#profile-photo-remove", root)?.addEventListener("click", () => handlePhotoRemove(root));
+    }
+  } else if (!u.profilePhoto && removeBtn) {
+    removeBtn.remove();
+  }
+}
+
+function handlePhotoRemove(root) {
+  const photoFileInput = $("#profile-photo-input", root);
+  const hidden = $("#profile-photo-data", root);
+  if (hidden) hidden.value = "";
+  if (photoFileInput) photoFileInput.value = "";
+  updateUser({ profilePhoto: "" });
+  syncUserState();
+  refreshProfilePreview(root);
+  showToast(Toast({ title: "Photo removed", variant: "info" }));
 }
 
 /* ── Calendar month nav ── */
