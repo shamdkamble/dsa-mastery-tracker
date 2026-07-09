@@ -17,6 +17,7 @@ import { getSessionUser } from "./auth/session.js";
 import { initProblemModalTriggers } from "./components/problem-modal.js";
 import { initLeetcodeLinks } from "./components/leetcode-actions.js";
 import { initTeachModal } from "./components/teach-modal.js";
+import { initRecommendProblemsModal } from "./components/recommend-problems-modal.js";
 import { setContentContainer } from "./controllers/page-controller.js";
 
 import dashboard from "./pages/dashboard.js";
@@ -143,6 +144,7 @@ async function init() {
   initProblemModalTriggers(document);
   initLeetcodeLinks(document);
   initTeachModal();
+  initRecommendProblemsModal();
   initDataRefresh();
   initRouter(content);
 }

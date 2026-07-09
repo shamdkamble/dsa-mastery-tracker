@@ -19,6 +19,8 @@ import {
   markTopicComplete,
 } from "../storage/roadmap-progress.js";
 import { refreshPage } from "../controllers/page-controller.js";
+import { getPendingRecommendations } from "../services/roadmap-problems.js";
+import { openRecommendProblemsModal } from "./recommend-problems-modal.js";
 
 const MODAL_ID = "teach";
 const SECTION_ICONS = ["clock", "layers", "zap", "database"];
@@ -445,11 +447,24 @@ async function handleMarkComplete() {
   btn?.setAttribute("disabled", "true");
 
   try {
-    if (!isTopicCompleted(currentTopic.id)) {
+    const wasNewCompletion = !isTopicCompleted(currentTopic.id);
+    if (wasNewCompletion) {
       await markTopicComplete(currentTopic.id);
     }
 
     refreshPage();
+
+    if (wasNewCompletion) {
+      const pending = getPendingRecommendations(currentTopic.id);
+      if (pending.length > 0) {
+        await openRecommendProblemsModal({
+          topicId: currentTopic.id,
+          topicName: currentTopic.name,
+          slugs: pending,
+        });
+        refreshPage();
+      }
+    }
 
     const next = getNextRoadmapTopic(currentTopic.id);
     const user = getSessionUser();

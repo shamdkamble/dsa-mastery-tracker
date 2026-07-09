@@ -18,7 +18,8 @@ const PROBLEM_FIELDS = [
   "title", "topic", "pattern", "difficulty", "status", "attempts", "estimatedMinutes",
   "leetcodeUrl", "leetcodeSlug", "leetcodeId", "topicTags", "solution",
   "timeComplexity", "spaceComplexity", "missionType", "inMission", "missionDone",
-  "missionDate", "nextReviewAt", "lastReviewAt", "solvedAt", "createdAt", "updatedAt",
+  "missionDate", "nextReviewAt", "lastReviewAt", "solvedAt", "startedAt", "actualSolveMinutes",
+  "source", "roadmapTopicId", "createdAt", "updatedAt",
 ];
 
 function pickProblemFields(data) {

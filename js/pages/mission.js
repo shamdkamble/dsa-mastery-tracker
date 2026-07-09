@@ -25,7 +25,7 @@ function missionCard(item, index) {
         ${Badge({ label: item.due, variant: item.due === "Overdue" ? "danger" : "default", size: "sm" })}
         ${DifficultyBadge(item.difficulty)}
         <span class="text-xs text-tertiary">${item.time}</span>
-        ${leetcodeLinkButton(item.leetcodeUrl || buildLeetcodeUrl(item.leetcodeSlug), { label: "Solve" })}
+        ${leetcodeLinkButton(item.leetcodeUrl || buildLeetcodeUrl(item.leetcodeSlug), { label: "Solve", problemId: item.id })}
         ${!item.done
           ? `<button class="btn btn--sm btn--secondary" data-action="toggle-mission" data-id="${item.id}" type="button">Done</button>`
           : Badge({ label: "Done", variant: "success" })}

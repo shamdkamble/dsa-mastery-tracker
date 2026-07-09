@@ -1,22 +1,36 @@
 /**
- * Reusable LeetCode solve / link UI
+ * Reusable LeetCode solve / link UI + wall-clock solve timer
  */
 
 import { icon } from "./icons.js";
-import { buildLeetcodeUrl } from "../services/leetcode.js";
+import { buildLeetcodeUrl, openLeetcode } from "../services/leetcode.js";
+import { startProblemSolve } from "../storage/db.js";
+import { showToast, Toast } from "./ui/index.js";
+import { refreshPage } from "../controllers/page-controller.js";
 
 export function getProblemLeetcodeUrl(problem) {
   return problem?.leetcodeUrl || buildLeetcodeUrl(problem?.leetcodeSlug);
 }
 
-export function leetcodeLinkButton(url, { size = "sm", label = "Solve", className = "" } = {}) {
+export function leetcodeLinkButton(url, options = {}) {
+  const {
+    size = "sm",
+    label = "Solve",
+    className = "",
+    problemId = "",
+  } = options;
+
   if (!url) return "";
+
+  const action = problemId ? "start-solve" : "open-leetcode";
+  const problemAttr = problemId ? ` data-problem-id="${problemId}"` : "";
+
   return `
     <a
       href="${url}"
       class="btn btn--${size === "xs" ? "xs" : size} btn--outline leetcode-solve-btn ${className}"
-      data-action="open-leetcode"
-      data-url="${url}"
+      data-action="${action}"
+      data-url="${url}"${problemAttr}
       target="_blank"
       rel="noopener noreferrer"
       title="Open on LeetCode"
@@ -28,14 +42,17 @@ export function leetcodeLinkButton(url, { size = "sm", label = "Solve", classNam
   `;
 }
 
-export function leetcodeIconLink(url) {
+export function leetcodeIconLink(url, problemId = "") {
   if (!url) return "";
+  const action = problemId ? "start-solve" : "open-leetcode";
+  const problemAttr = problemId ? ` data-problem-id="${problemId}"` : "";
+
   return `
     <a
       href="${url}"
       class="leetcode-icon-link"
-      data-action="open-leetcode"
-      data-url="${url}"
+      data-action="${action}"
+      data-url="${url}"${problemAttr}
       target="_blank"
       rel="noopener noreferrer"
       title="Open on LeetCode"
@@ -47,11 +64,35 @@ export function leetcodeIconLink(url) {
   `;
 }
 
+let solveHandlersBound = false;
+
 export function initLeetcodeLinks(root = document) {
+  if (solveHandlersBound) return;
+  solveHandlersBound = true;
+
   root.addEventListener("click", (e) => {
-    const link = e.target.closest("[data-action='open-leetcode']");
-    if (link) {
-      e.stopPropagation();
+    const link = e.target.closest("[data-action='open-leetcode'], [data-action='start-solve']");
+    if (!link) return;
+
+    e.stopPropagation();
+
+    if (link.dataset.action === "start-solve" && link.dataset.problemId) {
+      e.preventDefault();
+      const { problemId, url } = link.dataset;
+      void startProblemSolve(problemId)
+        .then(() => {
+          openLeetcode(url);
+          showToast(Toast({
+            title: "Timer started",
+            text: "Mark solved when you return to record your time.",
+            variant: "info",
+          }));
+          refreshPage();
+        })
+        .catch((err) => {
+          console.error("[solve-timer]", err);
+          openLeetcode(url);
+        });
     }
   });
 }

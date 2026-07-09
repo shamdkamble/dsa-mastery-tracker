@@ -354,6 +354,10 @@ export async function createProblem(data) {
     nextReviewAt: data.nextReviewAt || null,
     lastReviewAt: null,
     solvedAt: null,
+    startedAt: data.startedAt || null,
+    actualSolveMinutes: data.actualSolveMinutes ?? null,
+    source: data.source || "manual",
+    roadmapTopicId: data.roadmapTopicId || null,
     createdAt: now,
     updatedAt: now,
   };
@@ -494,9 +498,37 @@ export async function toggleMissionDone(id) {
   return updateProblem(id, updates, { silent: true });
 }
 
+export function getProblemsInProgress() {
+  return getProblems().filter(
+    (p) => p.startedAt && p.status !== "mastered",
+  );
+}
+
+export async function startProblemSolve(id) {
+  const problem = getProblem(id);
+  if (!problem) return null;
+
+  return updateProblem(id, {
+    startedAt: new Date().toISOString(),
+    status: problem.status === "todo" ? "learning" : problem.status,
+  }, { silent: true });
+}
+
+export async function clearProblemSolveTimer(id) {
+  return updateProblem(id, { startedAt: null }, { silent: true });
+}
+
+function computeActualSolveMinutes(problem) {
+  if (!problem?.startedAt) return problem?.actualSolveMinutes ?? null;
+  const elapsed = Date.now() - new Date(problem.startedAt).getTime();
+  return Math.max(1, Math.round(elapsed / 60000));
+}
+
 export async function markProblemSolved(id) {
   const problem = getProblem(id);
   if (!problem) return null;
+
+  const actualSolveMinutes = computeActualSolveMinutes(problem);
 
   const activity = logActivity({
     action: "Solved",
@@ -510,6 +542,8 @@ export async function markProblemSolved(id) {
     lastReviewAt: new Date().toISOString(),
     attempts: (problem.attempts || 0) + 1,
     nextReviewAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+    startedAt: null,
+    actualSolveMinutes,
   }, { silent: true });
   if (isRemoteMode()) await syncActivityRemote(activity);
   return result;

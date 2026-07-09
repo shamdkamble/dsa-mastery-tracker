@@ -45,6 +45,12 @@ export function formatDateLabel(iso) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+export function formatElapsedSince(iso) {
+  if (!iso) return "0m";
+  const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  return formatMinutes(mins);
+}
+
 export function formatMinutes(total) {
   if (!total) return "0m";
   if (total < 60) return `${total}m`;

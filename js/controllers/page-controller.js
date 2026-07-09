@@ -7,6 +7,7 @@ import {
   toggleMissionDone,
   addToMission,
   markProblemSolved,
+  clearProblemSolveTimer,
   updateUser,
   updateSettings,
   updateNotificationSetting,
@@ -58,11 +59,27 @@ export function bindMissionHandlers(root) {
     const solveBtn = e.target.closest("[data-action='mark-solved']");
     if (solveBtn) {
       void markProblemSolved(solveBtn.dataset.id)
-        .then(() => refreshPage())
+        .then((problem) => {
+          const mins = problem?.actualSolveMinutes;
+          showToast(Toast({
+            title: "Marked solved",
+            text: mins ? `Recorded ${mins} minute${mins !== 1 ? "s" : ""}.` : undefined,
+            variant: "success",
+          }));
+          refreshPage();
+        })
         .catch((err) => {
           console.error("[mission] solve failed", err);
           showToast(Toast({ title: "Update failed", text: err?.message || "Could not mark solved.", variant: "danger" }));
         });
+      return;
+    }
+
+    const cancelSolveBtn = e.target.closest("[data-action='cancel-solve']");
+    if (cancelSolveBtn) {
+      void clearProblemSolveTimer(cancelSolveBtn.dataset.id)
+        .then(() => refreshPage())
+        .catch((err) => console.error("[solve-timer] cancel failed", err));
       return;
     }
 
@@ -111,6 +128,7 @@ export function bindFilterHandlers(root) {
 
     rows.forEach((row) => {
       const match = filter === "all"
+        || (filter === "roadmap" && row.dataset.source === "roadmap")
         || row.dataset.difficulty === filter
         || row.dataset.topic?.toLowerCase().includes(filter)
         || row.dataset.status === filter;

@@ -70,11 +70,18 @@ export function computeStats() {
     : 0;
 
   const todayActs = activities.filter((a) => a.timestamp.slice(0, 10) === today);
-  const studyMinutesToday = todayActs.length * 20;
+  const todaySolved = problems.filter(
+    (p) => p.solvedAt && p.solvedAt.slice(0, 10) === today && p.actualSolveMinutes,
+  );
+  const studyMinutesToday = todaySolved.reduce((sum, p) => sum + (p.actualSolveMinutes || 0), 0)
+    || todayActs.length * 20;
 
-  const solvedWithTime = problems.filter((p) => p.estimatedMinutes && p.solvedAt);
+  const solvedWithTime = problems.filter((p) => p.solvedAt && (p.actualSolveMinutes || p.estimatedMinutes));
   const avgMinutes = solvedWithTime.length
-    ? Math.round(solvedWithTime.reduce((s, p) => s + p.estimatedMinutes, 0) / solvedWithTime.length)
+    ? Math.round(solvedWithTime.reduce(
+      (s, p) => s + (p.actualSolveMinutes || p.estimatedMinutes || 0),
+      0,
+    ) / solvedWithTime.length)
     : 0;
 
   return {
@@ -110,7 +117,7 @@ export function computeTodaysMission() {
       type: p.missionType || "new",
       due,
       done: p.missionDone,
-      time: `${p.estimatedMinutes || 30}m`,
+      time: p.actualSolveMinutes ? `${p.actualSolveMinutes}m` : `${p.estimatedMinutes || 30}m`,
       leetcodeUrl: p.leetcodeUrl || null,
       leetcodeSlug: p.leetcodeSlug || null,
     };
