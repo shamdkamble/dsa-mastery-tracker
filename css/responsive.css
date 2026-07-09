@@ -488,8 +488,8 @@
     max-width: var(--content-max-width);
   }
 
-  .dash-grid {
-    grid-template-columns: 1fr minmax(320px, 380px);
+  .dash-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   }
 }
 
