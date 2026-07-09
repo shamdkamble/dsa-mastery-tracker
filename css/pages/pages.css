@@ -2353,6 +2353,15 @@
   opacity: 1;
 }
 
+.problem-ai-btn--locked {
+  color: var(--color-text-tertiary);
+}
+
+.problem-ai-btn--locked:hover {
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+}
+
 .roadmap-topic__learn--locked {
   color: var(--color-text-tertiary);
 }

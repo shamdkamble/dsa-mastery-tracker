@@ -20,8 +20,11 @@ import {
   slugToTitle,
 } from "../services/leetcode.js";
 import { detectPattern, analyzeComplexity } from "../api/problemAiApi.js";
+import { canAccessProblemAi } from "../auth/access.js";
+import { getSessionUser } from "../auth/session.js";
 import { debounce } from "../utils.js";
 import { refreshPage } from "../controllers/page-controller.js";
+import { openUpgradeModal } from "./upgrade-modal.js";
 
 const MODAL_ID = "problem-modal";
 
@@ -95,7 +98,22 @@ function renderComplexityResult(time = "", space = "", explanation = "") {
   `;
 }
 
-function renderSolutionSection(p = {}) {
+function renderLockedAiButton({ id, label, size = "sm" }) {
+  return `
+    <button
+      class="btn btn--ghost btn--${size} problem-ai-btn--locked"
+      type="button"
+      id="${id}"
+      data-action="upgrade-ai"
+      title="Upgrade to Premium to unlock this AI feature"
+    >
+      ${icon("lock")}
+      <span>${label}</span>
+    </button>
+  `;
+}
+
+function renderSolutionSection(p = {}, { aiLocked = false } = {}) {
   const hasSolution = Boolean(p.solution?.trim());
   const isOpen = hasSolution;
 
@@ -126,11 +144,13 @@ function renderSolutionSection(p = {}) {
         })}
         <div class="problem-complexity" id="complexity-section">
           <div class="problem-complexity__actions">
-            <button class="btn btn--ghost btn--sm" type="button" id="analyze-complexity-btn" disabled>
-              ${icon("zap")}
-              <span>Analyze Complexity</span>
-            </button>
-            <span class="problem-complexity__hint" id="complexity-hint">Paste code above, then analyze with AI</span>
+            ${aiLocked
+              ? renderLockedAiButton({ id: "analyze-complexity-btn", label: "Analyze Complexity" })
+              : `<button class="btn btn--ghost btn--sm" type="button" id="analyze-complexity-btn" disabled>
+                  ${icon("zap")}
+                  <span>Analyze Complexity</span>
+                </button>`}
+            <span class="problem-complexity__hint" id="complexity-hint">${aiLocked ? "Premium unlocks AI complexity analysis" : "Paste code above, then analyze with AI"}</span>
           </div>
           <p class="problem-ai-status" id="complexity-ai-status" aria-live="polite"></p>
           <div id="complexity-result-host">
@@ -162,7 +182,7 @@ function renderSolutionSection(p = {}) {
   `;
 }
 
-function renderForm(problem = null) {
+function renderForm(problem = null, { aiLocked = false } = {}) {
   const p = problem || {};
   const lcUrl = p.leetcodeUrl || (p.leetcodeSlug ? buildLeetcodeUrl(p.leetcodeSlug) : "");
   const showDetect = Boolean(p.title && lcUrl);
@@ -210,15 +230,17 @@ function renderForm(problem = null) {
         <div class="field">
           <div class="problem-field-header">
             <label class="field__label" for="problem-pattern">Pattern</label>
-            <button
-              class="btn btn--ghost btn--xs"
-              type="button"
-              id="detect-pattern-btn"
-              ${showDetect ? "" : "hidden"}
-            >
-              ${icon("zap")}
-              <span>Auto Detect</span>
-            </button>
+            ${aiLocked
+              ? `<span id="detect-pattern-btn-wrap" ${showDetect ? "" : "hidden"}>${renderLockedAiButton({ id: "detect-pattern-btn", label: "Auto Detect", size: "xs" })}</span>`
+              : `<button
+                  class="btn btn--ghost btn--xs"
+                  type="button"
+                  id="detect-pattern-btn"
+                  ${showDetect ? "" : "hidden"}
+                >
+                  ${icon("zap")}
+                  <span>Auto Detect</span>
+                </button>`}
           </div>
           <select class="select" name="pattern" id="problem-pattern">
             <option value="">Select pattern</option>
@@ -256,7 +278,7 @@ function renderForm(problem = null) {
         })}
       </div>
 
-      ${renderSolutionSection(p)}
+      ${renderSolutionSection(p, { aiLocked })}
     </form>
   `;
 }
@@ -264,12 +286,13 @@ function renderForm(problem = null) {
 function getModalHTML(problem = null) {
   const isEdit = Boolean(problem?.id);
   const lcUrl = getProblemLeetcodeUrl(problem);
+  const aiLocked = !canAccessProblemAi(getSessionUser());
 
   return Modal({
     id: MODAL_ID,
     title: isEdit ? "Edit Problem" : "Add New Problem",
     size: "lg",
-    body: renderForm(problem),
+    body: renderForm(problem, { aiLocked }),
     footer: `
       <div class="modal__footer--between" style="display:flex;width:100%;align-items:center;justify-content:space-between">
         <div class="cluster">
@@ -340,7 +363,9 @@ function applyMetadata(host, meta) {
 
 function showDetectPatternBtn(host, show) {
   const btn = host.querySelector("#detect-pattern-btn");
-  if (btn) btn.hidden = !show;
+  const wrap = host.querySelector("#detect-pattern-btn-wrap");
+  if (wrap) wrap.hidden = !show;
+  else if (btn) btn.hidden = !show;
 }
 
 function hidePatternSuggestion(host) {
@@ -384,6 +409,8 @@ function toggleSolutionPanel(host, open) {
 }
 
 function updateAnalyzeButtonState(host) {
+  if (host._aiLocked) return;
+
   const code = host.querySelector("#problem-solution")?.value?.trim();
   const btn = host.querySelector("#analyze-complexity-btn");
   const hint = host.querySelector("#complexity-hint");
@@ -497,6 +524,11 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
 }
 
 async function handleDetectPattern(host) {
+  if (host._aiLocked) {
+    openUpgradeModal();
+    return;
+  }
+
   const btn = host.querySelector("#detect-pattern-btn");
   const form = host.querySelector("#problem-form");
   const title = form?.querySelector("#problem-title")?.value?.trim();
@@ -536,6 +568,11 @@ async function handleDetectPattern(host) {
 }
 
 async function handleAnalyzeComplexity(host) {
+  if (host._aiLocked) {
+    openUpgradeModal();
+    return;
+  }
+
   const btn = host.querySelector("#analyze-complexity-btn");
   const code = host.querySelector("#problem-solution")?.value?.trim();
   const title = host.querySelector("#problem-title")?.value?.trim();
@@ -587,6 +624,13 @@ function bindLeetcodeHandlers(host) {
 }
 
 function bindAiHandlers(host) {
+  host.querySelectorAll('[data-action="upgrade-ai"]').forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      openUpgradeModal();
+    });
+  });
+
   host.querySelector("#detect-pattern-btn")?.addEventListener("click", () => handleDetectPattern(host));
 
   host.querySelector("#pattern-accept-btn")?.addEventListener("click", () => {
@@ -654,6 +698,7 @@ function ensureModalContainer() {
 export function openProblemModal(problemId = null) {
   const host = ensureModalContainer();
   const problem = problemId ? getProblem(problemId) : null;
+  host._aiLocked = !canAccessProblemAi(getSessionUser());
   host.innerHTML = getModalHTML(problem);
   initModals(host);
   bindLeetcodeHandlers(host);

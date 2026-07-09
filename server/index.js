@@ -24,7 +24,7 @@ import {
   requireAdmin,
   extractBearer,
 } from "./auth.js";
-import { canAccessTeachTopic } from "./roadmap-access.js";
+import { canAccessProblemAi, canAccessTeachTopic, canAccessTeachTopicById } from "./roadmap-access.js";
 import {
   LessonStoreError,
   getCachedLesson,
@@ -356,6 +356,19 @@ app.post("/api/activities", requireAuth, async (req, res) => {
 
 app.post("/api/problem/detect-pattern", requireAuth, async (req, res) => {
   try {
+    const token = extractBearer(req);
+    const user = await getCurrentUser(token);
+
+    if (!canAccessProblemAi(user)) {
+      res.status(403).json({
+        error: {
+          message: "Upgrade to Premium to unlock AI pattern detection.",
+          code: "AI_LOCKED",
+        },
+      });
+      return;
+    }
+
     const { title, difficulty, topic, topicTags } = req.body ?? {};
     const result = await detectProblemPattern({ title, difficulty, topic, topicTags });
     res.json(result);
@@ -371,6 +384,19 @@ app.post("/api/problem/detect-pattern", requireAuth, async (req, res) => {
 
 app.post("/api/problem/analyze-complexity", requireAuth, async (req, res) => {
   try {
+    const token = extractBearer(req);
+    const user = await getCurrentUser(token);
+
+    if (!canAccessProblemAi(user)) {
+      res.status(403).json({
+        error: {
+          message: "Upgrade to Premium to unlock AI complexity analysis.",
+          code: "AI_LOCKED",
+        },
+      });
+      return;
+    }
+
     const { code, title } = req.body ?? {};
     const result = await analyzeSolutionComplexity({ code, title });
     res.json(result);
@@ -386,6 +412,19 @@ app.post("/api/problem/analyze-complexity", requireAuth, async (req, res) => {
 
 app.get("/api/teach/lesson/:topicId", requireAuth, async (req, res) => {
   try {
+    const token = extractBearer(req);
+    const user = await getCurrentUser(token);
+
+    if (!canAccessTeachTopicById(user, req.params.topicId)) {
+      res.status(403).json({
+        error: {
+          message: "Subscribe to unlock AI lessons for this topic.",
+          code: "ROADMAP_LOCKED",
+        },
+      });
+      return;
+    }
+
     const lesson = await getCachedLesson(req.params.topicId);
     if (!lesson) {
       res.status(404).json({ error: { message: "Lesson not cached yet.", code: "NOT_FOUND" } });

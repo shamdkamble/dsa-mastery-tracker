@@ -7,8 +7,8 @@ import { getSessionUser } from "./session.js";
 /** Free tier: Phase 1, Step 1 only (Week 1 intro topics). */
 export const FREE_ACCESS = { phase: 1, step: 1 };
 
-/** Trial & standard: AI lessons limited to the Phase 1 Step 1 topic pair. */
-export const TRIAL_AI_TOPIC_IDS = new Set(["cpp-toolchain", "dsa-complexity"]);
+/** Standard: AI lessons limited to the Phase 1 Step 1 topic pair. */
+export const STANDARD_AI_TOPIC_IDS = new Set(["cpp-toolchain", "dsa-complexity"]);
 
 /**
  * @param {Object | null | undefined} [user]
@@ -75,8 +75,20 @@ export function canAccessAiLesson(user, topic) {
   if (!user || !topic) return false;
   if (user.role === "admin") return true;
   if (user.accessLevel === "premium") return true;
+  if (user.accessLevel === "trial") return false;
   const topicId = topic.id ?? topic.topicId;
-  return TRIAL_AI_TOPIC_IDS.has(topicId);
+  return user.accessLevel === "standard" && STANDARD_AI_TOPIC_IDS.has(topicId);
+}
+
+/**
+ * Problem-modal AI helpers (pattern detection, complexity analysis).
+ * @param {Object | null | undefined} user
+ * @returns {boolean}
+ */
+export function canAccessProblemAi(user = getSessionUser()) {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  return user.accessLevel === "premium";
 }
 
 /**
@@ -85,6 +97,6 @@ export function canAccessAiLesson(user, topic) {
  */
 export function getRoadmapAccessHint(user = getSessionUser()) {
   if (hasFullRoadmapAccess(user)) return "Full access";
-  if (hasTrialAccess(user)) return "Trial: Phase 1 · AI on 2 topics";
+  if (hasTrialAccess(user)) return "Trial: Phase 1 · AI locked";
   return "Free preview: Week 1 · Step 1";
 }

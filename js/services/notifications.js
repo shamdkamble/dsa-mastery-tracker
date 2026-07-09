@@ -48,7 +48,7 @@ export function buildNotificationItems() {
     items.push({
       id: "roadmap-unlock",
       title: "Unlock full roadmap",
-      text: "Week 1 is free. Subscribe to unlock all phases and AI lessons.",
+      text: "Step 1 includes 2 free topics with AI lessons. Subscribe to unlock the full roadmap.",
       variant: "accent",
       time: "Upgrade",
       href: "#/roadmap",
@@ -59,7 +59,7 @@ export function buildNotificationItems() {
     items.push({
       id: "trial-upgrade",
       title: "Upgrade to Premium",
-      text: "Your trial includes Phase 1. Upgrade for all phases and unlimited AI lessons.",
+      text: "Your trial includes all Phase 1 lessons. Upgrade to Premium for AI features and full roadmap access.",
       variant: "accent",
       time: "Upgrade",
       href: "#/roadmap",

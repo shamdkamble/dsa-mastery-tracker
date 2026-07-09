@@ -91,8 +91,8 @@ function learnButton(topic, { locked = false, aiLocked = false, step } = {}) {
 
   if (locked || aiLocked) {
     const lockTitle = aiLocked && !locked
-      ? "Upgrade to Premium for AI lessons on this topic"
-      : "Subscribe to unlock AI lessons";
+      ? "Upgrade to Premium to unlock AI lessons"
+      : "Subscribe to unlock this content";
     return `
       <button
         class="btn btn--sm btn--ghost roadmap-topic__learn roadmap-topic__learn--locked"
