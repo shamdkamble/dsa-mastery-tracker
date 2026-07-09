@@ -3,25 +3,26 @@
    Overrides --color-accent* via data-subscription
    ═══════════════════════════════════════════ */
 
+/* Trial — sky blue: distinct from default indigo & premium gold */
 [data-subscription="trial"] {
-  --color-accent: #14b8a6;
-  --color-accent-hover: #0d9488;
-  --color-accent-active: #0f766e;
-  --color-accent-muted: rgba(20, 184, 166, 0.14);
-  --color-accent-subtle: rgba(20, 184, 166, 0.07);
-  --color-text-link: #14b8a6;
-  --shadow-glow: 0 0 20px rgba(20, 184, 166, 0.28);
-  --subscription-ring: rgba(20, 184, 166, 0.45);
+  --color-accent: #0ea5e9;
+  --color-accent-hover: #0284c7;
+  --color-accent-active: #0369a1;
+  --color-accent-muted: rgba(14, 165, 233, 0.16);
+  --color-accent-subtle: rgba(14, 165, 233, 0.08);
+  --color-text-link: #0284c7;
+  --shadow-glow: 0 0 22px rgba(14, 165, 233, 0.32);
+  --subscription-ring: rgba(14, 165, 233, 0.5);
 }
 
 [data-theme="dark"][data-subscription="trial"] {
-  --color-accent: #2dd4bf;
-  --color-accent-hover: #14b8a6;
-  --color-accent-active: #0d9488;
-  --color-accent-muted: rgba(45, 212, 191, 0.16);
-  --color-accent-subtle: rgba(45, 212, 191, 0.08);
-  --color-text-link: #2dd4bf;
-  --shadow-glow: 0 0 22px rgba(45, 212, 191, 0.22);
+  --color-accent: #38bdf8;
+  --color-accent-hover: #0ea5e9;
+  --color-accent-active: #0284c7;
+  --color-accent-muted: rgba(56, 189, 248, 0.18);
+  --color-accent-subtle: rgba(56, 189, 248, 0.09);
+  --color-text-link: #38bdf8;
+  --shadow-glow: 0 0 24px rgba(56, 189, 248, 0.28);
 }
 
 [data-subscription="premium"] {
@@ -78,15 +79,37 @@
 }
 
 .subscription-badge--trial {
-  color: #0f766e;
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.18), rgba(20, 184, 166, 0.08));
-  border: 1px solid rgba(20, 184, 166, 0.35);
-  box-shadow: 0 0 12px rgba(20, 184, 166, 0.15);
+  color: #0369a1;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.22), rgba(56, 189, 248, 0.1));
+  border: 1px solid rgba(14, 165, 233, 0.45);
+  box-shadow: 0 0 14px rgba(14, 165, 233, 0.22);
+}
+
+.subscription-badge--trial::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: #0ea5e9;
+  box-shadow: 0 0 6px rgba(14, 165, 233, 0.8);
+  animation: trial-active-pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
 }
 
 [data-theme="dark"] .subscription-badge--trial {
-  color: #5eead4;
-  border-color: rgba(45, 212, 191, 0.4);
+  color: #bae6fd;
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.2);
+}
+
+[data-theme="dark"] .subscription-badge--trial::before {
+  background: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.85);
+}
+
+@keyframes trial-active-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
 }
 
 .subscription-badge--premium {
@@ -170,7 +193,7 @@
 }
 
 [data-subscription="trial"] .sidebar__user-avatar {
-  box-shadow: 0 0 0 2px var(--color-bg-sidebar), 0 0 0 3px rgba(20, 184, 166, 0.35);
+  box-shadow: 0 0 0 2px var(--color-bg-sidebar), 0 0 0 3px rgba(14, 165, 233, 0.45), 0 0 12px rgba(14, 165, 233, 0.2);
 }
 
 [data-subscription="premium"] .sidebar__logo-icon {
@@ -190,8 +213,9 @@
 }
 
 .subscription-status--trial {
-  border-color: rgba(20, 184, 166, 0.3);
-  background: linear-gradient(160deg, rgba(20, 184, 166, 0.08), var(--color-bg-secondary));
+  border-color: rgba(14, 165, 233, 0.35);
+  background: linear-gradient(160deg, rgba(14, 165, 233, 0.1), var(--color-bg-secondary));
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.08);
 }
 
 .subscription-status--premium {
@@ -263,17 +287,22 @@
 /* ── Roadmap tier banners ── */
 
 .roadmap-tier-banner--trial {
-  border-color: rgba(20, 184, 166, 0.3);
+  border-color: rgba(14, 165, 233, 0.35);
   background: linear-gradient(
     135deg,
-    rgba(20, 184, 166, 0.1),
-    color-mix(in srgb, var(--color-accent) 6%, transparent)
+    rgba(14, 165, 233, 0.12),
+    color-mix(in srgb, var(--color-accent) 8%, transparent)
   );
+  box-shadow: 0 0 18px rgba(14, 165, 233, 0.1);
 }
 
 .roadmap-tier-banner--trial .roadmap-tier-banner__icon {
-  color: #14b8a6;
-  background: rgba(20, 184, 166, 0.14);
+  color: #0284c7;
+  background: rgba(14, 165, 233, 0.16);
+}
+
+[data-theme="dark"] .roadmap-tier-banner--trial .roadmap-tier-banner__icon {
+  color: #38bdf8;
 }
 
 .roadmap-tier-banner--premium {
@@ -294,18 +323,18 @@
 /* ── Locked indicators (tier-tinted) ── */
 
 [data-subscription="trial"] .access-lock-badge {
-  color: #0f766e;
-  background: rgba(20, 184, 166, 0.14);
-  border-color: rgba(20, 184, 166, 0.3);
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.16);
+  border-color: rgba(14, 165, 233, 0.35);
 }
 
 [data-theme="dark"][data-subscription="trial"] .access-lock-badge {
-  color: #5eead4;
+  color: #7dd3fc;
 }
 
 [data-subscription="trial"] .access-locked-btn:hover {
-  color: #14b8a6;
-  background: rgba(20, 184, 166, 0.12);
+  color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.14);
 }
 
 [data-subscription="premium"] .roadmap-access-hint {
@@ -314,12 +343,12 @@
 }
 
 [data-subscription="trial"] .roadmap-access-hint {
-  color: #0d9488;
-  font-weight: var(--font-medium);
+  color: #0284c7;
+  font-weight: var(--font-semibold);
 }
 
 [data-theme="dark"][data-subscription="trial"] .roadmap-access-hint {
-  color: #2dd4bf;
+  color: #38bdf8;
 }
 
 /* Upgrade modal hero uses accent glow */
@@ -330,7 +359,7 @@
 [data-subscription="trial"] .upgrade-modal__glow {
   background: radial-gradient(
     ellipse at center top,
-    rgba(20, 184, 166, 0.32),
+    rgba(14, 165, 233, 0.36),
     transparent 70%
   );
 }
@@ -349,8 +378,9 @@
 }
 
 [data-subscription="trial"] .upgrade-modal__icon {
-  color: #14b8a6;
-  border-color: rgba(20, 184, 166, 0.35);
+  color: #0ea5e9;
+  border-color: rgba(14, 165, 233, 0.4);
+  box-shadow: 0 0 16px rgba(14, 165, 233, 0.2);
 }
 
 /* Dashboard continue tier hint */
@@ -364,5 +394,14 @@
 }
 
 [data-subscription="trial"] .dash-continue--hero .dash-continue__glow {
-  background: radial-gradient(ellipse at 30% 20%, rgba(20, 184, 166, 0.18), transparent 55%);
+  background: radial-gradient(ellipse at 30% 20%, rgba(14, 165, 233, 0.22), transparent 55%);
+}
+
+/* Trial primary buttons — crisp white on sky blue */
+[data-subscription="trial"] .btn--primary {
+  box-shadow: 0 0 14px rgba(14, 165, 233, 0.28);
+}
+
+[data-subscription="trial"] .btn--primary:hover:not(:disabled) {
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.38);
 }

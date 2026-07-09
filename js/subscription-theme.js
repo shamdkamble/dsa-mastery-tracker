@@ -1,5 +1,5 @@
 /**
- * Subscription-tier visual theme — teal (trial), gold (premium)
+ * Subscription-tier visual theme — sky blue (trial), gold (premium)
  */
 
 import { getSessionUser } from "./auth/session.js";
