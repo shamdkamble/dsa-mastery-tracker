@@ -10,6 +10,7 @@ import { setState } from "../state.js";
 import { getInitials } from "../storage/helpers.js";
 import { dispatch } from "../utils.js";
 import { switchUserContext } from "../storage/db.js";
+import { loadRoadmapProgress, resetRoadmapProgress } from "../storage/roadmap-progress.js";
 
 export const PUBLIC_ROUTES = new Set(["login", "register"]);
 export const ADMIN_ROUTES = new Set(["admin"]);
@@ -22,12 +23,14 @@ let lastSyncedUserId = null;
 
 export function resetAuthSyncState() {
   lastSyncedUserId = null;
+  resetRoadmapProgress();
 }
 
 export async function syncAuthState(user) {
   if (!user) return;
 
   await switchUserContext(user);
+  await loadRoadmapProgress();
 
   const userId = user.id || user.email || null;
   const userChanged = userId !== lastSyncedUserId;

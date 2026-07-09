@@ -1,9 +1,15 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
 import { Badge, DifficultyBadge, ProgressBar, StatCard } from "../components/ui/index.js";
-import { ROADMAP_PHASES } from "../data/roadmap.js";
+import { ROADMAP_PHASES, ROADMAP_TOPICS } from "../data/roadmap.js";
 import { bindTeachTopicHandlers } from "../components/teach-modal.js";
 import { openUpgradeModal } from "../components/upgrade-modal.js";
+import {
+  countCompletedInPhase,
+  isTopicCompleted,
+  loadRoadmapProgress,
+} from "../storage/roadmap-progress.js";
+import { refreshPage } from "../controllers/page-controller.js";
 import {
   canAccessPhase,
   canAccessRoadmapStep,
@@ -94,9 +100,11 @@ function learnButton(topic, { locked = false, step } = {}) {
     `;
   }
 
+  const completed = isTopicCompleted(topic.id);
+
   return `
     <button
-      class="btn btn--sm btn--primary roadmap-topic__learn"
+      class="btn btn--sm btn--primary roadmap-topic__learn${completed ? " is-completed" : ""}"
       type="button"
       data-action="teach-topic"
       data-topic-id="${escapeAttr(topic.id)}"
@@ -107,8 +115,8 @@ function learnButton(topic, { locked = false, step } = {}) {
       data-topic-track="${escapeAttr(track)}"
       title="Get an AI lesson on ${escapeAttr(topic.name)}"
     >
-      ${icon("zap")}
-      <span>Learn</span>
+      ${icon(completed ? "check" : "zap")}
+      <span>${completed ? "Review" : "Learn"}</span>
     </button>
   `;
 }
@@ -132,7 +140,10 @@ function topicCard(topic, { locked = false, step } = {}) {
         <span class="roadmap-topic__track">${trackLabel}</span>
         ${locked ? lockBadge() : DifficultyBadge(topic.difficulty)}
       </div>
-      <h4 class="roadmap-topic__title">${topic.name}</h4>
+      <h4 class="roadmap-topic__title">
+        ${topic.name}
+        ${isTopicCompleted(topic.id) ? `<span class="roadmap-topic__done" title="Completed">${icon("check")}</span>` : ""}
+      </h4>
       <div class="roadmap-topic__footer">
         ${learnButton(topic, { locked, step })}
       </div>
@@ -234,7 +245,10 @@ function renderPhaseTopicsGrid(phase, user) {
 function phaseSection(phaseData, user, { isOpen = false } = {}) {
   const meta = PHASE_META[phaseData.id];
   const panelId = `roadmap-phase-panel-${phaseData.id}`;
-  const progress = 0;
+  const completedInPhase = countCompletedInPhase(phaseData.id, phaseData.topics);
+  const progress = phaseData.topics.length
+    ? Math.round((completedInPhase / phaseData.topics.length) * 100)
+    : 0;
   const phaseLocked = !canAccessPhase(user, phaseData.id);
   const panelContent = phaseData.id === 1
     ? renderPhase1Content(phaseData, user)
@@ -264,7 +278,7 @@ function phaseSection(phaseData, user, { isOpen = false } = {}) {
           <div class="roadmap-phase__meta">
             <span class="roadmap-phase__eyebrow">Phase ${phaseData.id}</span>
             ${Badge({ label: meta.duration, variant: "default", size: "sm" })}
-            ${Badge({ label: "0% complete", variant: "default", size: "sm" })}
+            ${Badge({ label: `${progress}% complete`, variant: progress === 100 ? "success" : "default", size: "sm" })}
             ${Badge({ label: `${phaseData.topics.length} topics`, variant: "accent", size: "sm" })}
             ${phaseLocked && phaseData.id !== 1 ? lockBadge() : ""}
           </div>
@@ -353,9 +367,12 @@ export default {
   title: "FAANG Mastery Roadmap",
   render() {
     const user = getSessionUser();
-    const overallProgress = 0;
-    const completedPhases = 0;
-    const totalTopics = ROADMAP_PHASES.reduce((sum, p) => sum + p.topics.length, 0);
+    const totalTopics = ROADMAP_TOPICS.length;
+    const completedTopics = ROADMAP_TOPICS.filter((t) => isTopicCompleted(t.id)).length;
+    const overallProgress = totalTopics ? Math.round((completedTopics / totalTopics) * 100) : 0;
+    const completedPhases = ROADMAP_PHASES.filter(
+      (p) => countCompletedInPhase(p.id, p.topics) === p.topics.length,
+    ).length;
     const accessHint = hasFullRoadmapAccess(user)
       ? "Full access"
       : "Free preview: Week 1 · Step 1";
@@ -428,5 +445,11 @@ export default {
     bindPhaseAccordion(container);
     bindLockedContentHandlers(container);
     bindTeachTopicHandlers(container);
+
+    if (!container.dataset.roadmapProgressBound) {
+      container.dataset.roadmapProgressBound = "true";
+      document.addEventListener("roadmap:progress", () => refreshPage());
+    }
+    void loadRoadmapProgress().then(() => refreshPage());
   },
 };

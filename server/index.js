@@ -8,7 +8,7 @@ import "./env.js";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { teachTopic, TeachApiError, resolveApiKey, resolveModel } from "./gemini.js";
+import { TeachApiError, resolveApiKey, resolveModel } from "./gemini.js";
 import { detectProblemPattern, analyzeSolutionComplexity } from "./problem-ai.js";
 import { fetchLeetcodeProblem, LeetcodeApiError, parseLeetcodeSlug } from "./leetcode.js";
 import {
@@ -25,6 +25,14 @@ import {
   extractBearer,
 } from "./auth.js";
 import { canAccessTeachTopic } from "./roadmap-access.js";
+import {
+  LessonStoreError,
+  getCachedLesson,
+  getOrCreateStandardLesson,
+  getOrCreateSimplerLesson,
+  getUserRoadmapProgress,
+  markTopicComplete,
+} from "./lesson-store.js";
 import {
   UserDataError,
   getUserData,
@@ -165,6 +173,14 @@ function handleAuthError(res, err) {
 
 function handleUserDataError(res, err) {
   if (err instanceof UserDataError) {
+    res.status(err.status).json({ error: { message: err.message, code: err.code } });
+    return true;
+  }
+  return false;
+}
+
+function handleLessonStoreError(res, err) {
+  if (err instanceof LessonStoreError) {
     res.status(err.status).json({ error: { message: err.message, code: err.code } });
     return true;
   }
@@ -368,9 +384,54 @@ app.post("/api/problem/analyze-complexity", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/teach/lesson/:topicId", requireAuth, async (req, res) => {
+  try {
+    const lesson = await getCachedLesson(req.params.topicId);
+    if (!lesson) {
+      res.status(404).json({ error: { message: "Lesson not cached yet.", code: "NOT_FOUND" } });
+      return;
+    }
+    res.json({
+      topicId: lesson.topicId,
+      standard: lesson.standard?.content ? lesson.standard : null,
+      simpler: lesson.simpler?.content ? lesson.simpler : null,
+      cached: true,
+    });
+  } catch (err) {
+    console.error("[/api/teach/lesson/:topicId]", err);
+    res.status(500).json({ error: { message: "Failed to load lesson.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/roadmap/progress", requireAuth, async (req, res) => {
+  try {
+    const progress = await getUserRoadmapProgress(req.auth.sub);
+    res.json(progress);
+  } catch (err) {
+    console.error("[/api/roadmap/progress]", err);
+    res.status(500).json({ error: { message: "Failed to load progress.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/roadmap/progress/complete", requireAuth, async (req, res) => {
+  try {
+    const { topicId } = req.body ?? {};
+    if (!topicId) {
+      res.status(400).json({ error: { message: "topicId is required.", code: "INVALID_INPUT" } });
+      return;
+    }
+    const progress = await markTopicComplete(req.auth.sub, topicId);
+    res.json({ progress, topicId, completed: true });
+  } catch (err) {
+    if (handleLessonStoreError(res, err)) return;
+    console.error("[/api/roadmap/progress/complete]", err);
+    res.status(500).json({ error: { message: "Failed to update progress.", code: "SERVER_ERROR" } });
+  }
+});
+
 app.post("/api/teach", requireAuth, async (req, res) => {
   try {
-    const { topic } = req.body ?? {};
+    const { topic, variant = "standard" } = req.body ?? {};
     const token = extractBearer(req);
     const user = await getCurrentUser(token);
 
@@ -384,8 +445,20 @@ app.post("/api/teach", requireAuth, async (req, res) => {
       return;
     }
 
-    const result = await teachTopic(topic);
-    res.json(result);
+    const result = variant === "simpler"
+      ? await getOrCreateSimplerLesson(topic)
+      : await getOrCreateStandardLesson(topic);
+
+    res.json({
+      content: result.content,
+      simplerContent: result.simplerContent || null,
+      model: result.model,
+      usage: result.usage,
+      cached: result.cached,
+      hasSimpler: result.hasSimpler,
+      variant,
+      topicId: result.topicId || topic?.id,
+    });
   } catch (err) {
     if (err instanceof TeachApiError) {
       res.status(err.status).json({
@@ -393,6 +466,7 @@ app.post("/api/teach", requireAuth, async (req, res) => {
       });
       return;
     }
+    if (handleLessonStoreError(res, err)) return;
 
     console.error("[/api/teach]", err);
     res.status(500).json({

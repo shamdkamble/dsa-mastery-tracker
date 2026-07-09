@@ -1,22 +1,41 @@
 /**
- * Premium AI tutor modal — structured lessons from /api/teach (Gemini)
+ * AI tutor modal — cached lessons, simpler variant, roadmap progress
  */
 
 import { icon } from "./icons.js";
 import { Badge, DifficultyBadge } from "./ui/index.js";
 import { openModal, closeModal, initModals } from "./ui/interactions.js";
-import { teachTopic, TeachApiError } from "../api/geminiApi.js";
+import { TeachApiError } from "../api/geminiApi.js";
+import { fetchCachedLesson, fetchLesson } from "../api/teachApi.js";
 import { canAccessTopic } from "../auth/access.js";
 import { getSessionUser } from "../auth/session.js";
 import { openUpgradeModal } from "./upgrade-modal.js";
+import {
+  getNextRoadmapTopic,
+  topicTrackFromId,
+} from "../data/roadmap.js";
+import {
+  isTopicCompleted,
+  markTopicComplete,
+} from "../storage/roadmap-progress.js";
+import { refreshPage } from "../controllers/page-controller.js";
 
 const MODAL_ID = "teach";
-
 const SECTION_ICONS = ["clock", "layers", "zap", "database"];
 
 let shellReady = false;
 let activeRequest = null;
 let loadingTimer = null;
+let currentTopic = null;
+
+/** @type {{ standard: string, simpler: string, activeVariant: 'standard' | 'simpler', hasSimpler: boolean, cached: boolean }} */
+let lessonState = {
+  standard: "",
+  simpler: "",
+  activeVariant: "standard",
+  hasSimpler: false,
+  cached: false,
+};
 
 function escapeHtml(str) {
   return String(str)
@@ -145,19 +164,25 @@ function renderLoadingSteps(activeIndex = 0) {
   `).join("");
 }
 
-function renderLoading(topicName) {
+function renderLoading(topicName, { cachedHint = false } = {}) {
   return `
     <div class="teach-loading">
       <div class="teach-loading__hero">
         <div class="teach-loading__ring" aria-hidden="true">
           <div class="teach-loading__spinner">${icon("loader")}</div>
         </div>
-        <p class="teach-loading__title">Generating your lesson</p>
-        <p class="teach-loading__sub">Building a structured guide for <strong>${escapeHtml(topicName)}</strong></p>
+        <p class="teach-loading__title">${cachedHint ? "Loading saved lesson" : "Generating your lesson"}</p>
+        <p class="teach-loading__sub">
+          ${cachedHint
+            ? `Fetching <strong>${escapeHtml(topicName)}</strong> from your lesson library`
+            : `Building a structured guide for <strong>${escapeHtml(topicName)}</strong>`}
+        </p>
+        ${cachedHint ? "" : `
         <div class="teach-loading__steps" id="teach-loading-steps">
           ${renderLoadingSteps(0)}
-        </div>
+        </div>`}
       </div>
+      ${cachedHint ? "" : `
       <div class="teach-loading__skeletons" aria-hidden="true">
         ${Array.from({ length: 4 }, (_, i) => `
           <div class="teach-skeleton" style="animation-delay: ${i * 100}ms">
@@ -167,7 +192,7 @@ function renderLoading(topicName) {
             <div class="teach-skeleton__line teach-skeleton__line--medium"></div>
           </div>
         `).join("")}
-      </div>
+      </div>`}
     </div>
   `;
 }
@@ -179,6 +204,56 @@ function renderError(message) {
       <h3 class="teach-error__title">Couldn't load lesson</h3>
       <p class="teach-error__text">${escapeHtml(message)}</p>
     </div>
+  `;
+}
+
+function renderCacheBadge() {
+  return `<span class="teach-cache-badge">${icon("database")} Saved lesson</span>`;
+}
+
+function renderFooter() {
+  const hasSimpler = Boolean(lessonState.simpler);
+  const isStandard = lessonState.activeVariant === "standard";
+  const isSimpler = lessonState.activeVariant === "simpler";
+  const completed = currentTopic?.id && isTopicCompleted(currentTopic.id);
+
+  return `
+    <div class="teach-modal__toolbar">
+      <div class="teach-variant-tabs" role="tablist" aria-label="Lesson version">
+        <button
+          type="button"
+          class="teach-variant-tab${isStandard ? " is-active" : ""}"
+          data-variant="standard"
+          role="tab"
+          aria-selected="${isStandard}"
+        >Standard</button>
+        <button
+          type="button"
+          class="teach-variant-tab${isSimpler ? " is-active" : ""}${hasSimpler ? "" : " is-disabled"}"
+          data-variant="simpler"
+          role="tab"
+          aria-selected="${isSimpler}"
+          ${hasSimpler ? "" : "disabled"}
+        >Simpler</button>
+      </div>
+      <button
+        type="button"
+        class="btn btn--ghost btn--sm"
+        id="teach-simpler-btn"
+        ${hasSimpler ? "hidden" : ""}
+      >
+        ${icon("layers")}
+        <span>Explain in Simpler Words</span>
+      </button>
+    </div>
+    <button
+      type="button"
+      class="btn btn--primary btn--lg teach-complete-btn"
+      id="teach-complete-btn"
+    >
+      ${icon("check")}
+      <span>${completed ? "Continue to Next Topic" : "Mark Complete & Continue"}</span>
+    </button>
   `;
 }
 
@@ -199,6 +274,7 @@ function renderModalShell() {
         <div class="modal__body teach-modal__body" id="${MODAL_ID}-body">
           ${renderLoading("Topic")}
         </div>
+        <div class="teach-modal__footer" id="${MODAL_ID}-footer" hidden></div>
       </div>
     </div>
   `;
@@ -209,10 +285,11 @@ function getElements() {
     titleEl: document.getElementById(`${MODAL_ID}-title`),
     metaEl: document.getElementById(`${MODAL_ID}-meta`),
     bodyEl: document.getElementById(`${MODAL_ID}-body`),
+    footerEl: document.getElementById(`${MODAL_ID}-footer`),
   };
 }
 
-function renderMeta(topic) {
+function renderMeta(topic, { cached = false } = {}) {
   const parts = [];
   if (topic.phase) parts.push(Badge({ label: `Phase ${topic.phase}`, variant: "accent", size: "sm" }));
   if (topic.difficulty) parts.push(DifficultyBadge(topic.difficulty));
@@ -220,14 +297,42 @@ function renderMeta(topic) {
     const variant = topic.track === "cpp" ? "accent" : topic.track === "dsa" ? "success" : "default";
     parts.push(Badge({ label: topic.track.toUpperCase(), variant, size: "sm" }));
   }
+  if (cached) parts.push(renderCacheBadge());
+  if (topic.id && isTopicCompleted(topic.id)) {
+    parts.push(Badge({ label: "Completed", variant: "success", size: "sm" }));
+  }
   return parts.join("");
 }
 
-function setModalState({ title, metaHtml, bodyHtml }) {
+function setFooterVisible(show) {
+  const { footerEl } = getElements();
+  if (footerEl) {
+    footerEl.hidden = !show;
+    if (show) footerEl.innerHTML = renderFooter();
+  }
+}
+
+function setModalState({ title, metaHtml, bodyHtml, showFooter = false }) {
   const { titleEl, metaEl, bodyEl } = getElements();
   if (titleEl) titleEl.textContent = title;
   if (metaEl && metaHtml !== undefined) metaEl.innerHTML = metaHtml;
   if (bodyEl) bodyEl.innerHTML = bodyHtml;
+  setFooterVisible(showFooter);
+}
+
+function activeContent() {
+  return lessonState.activeVariant === "simpler" && lessonState.simpler
+    ? lessonState.simpler
+    : lessonState.standard;
+}
+
+function renderLessonView() {
+  setModalState({
+    title: currentTopic?.name || "Topic",
+    metaHtml: renderMeta(currentTopic, { cached: lessonState.cached }),
+    bodyHtml: renderLesson(activeContent()),
+    showFooter: true,
+  });
 }
 
 function startLoadingAnimation() {
@@ -248,35 +353,169 @@ function stopLoadingAnimation() {
   }
 }
 
+function normalizeTopic(topic) {
+  const track = topic.track || topicTrackFromId(topic.id);
+  return { ...topic, track };
+}
+
+async function tryLoadCachedLesson(topicId) {
+  try {
+    const data = await fetchCachedLesson(topicId);
+    if (!data?.standard?.content) return false;
+
+    lessonState.standard = data.standard.content;
+    lessonState.simpler = data.simpler?.content || "";
+    lessonState.hasSimpler = Boolean(lessonState.simpler);
+    lessonState.cached = true;
+    lessonState.activeVariant = "standard";
+    return true;
+  } catch (err) {
+    if (err instanceof TeachApiError && err.code === "NOT_FOUND") return false;
+    console.warn("[teach-modal] cache lookup failed", err);
+    return false;
+  }
+}
+
+async function loadStandardLesson(topic, signal) {
+  const result = await fetchLesson(topic, { variant: "standard", signal, timeoutMs: 120_000 });
+  lessonState.standard = result.content;
+  lessonState.cached = Boolean(result.cached);
+  if (result.simplerContent) {
+    lessonState.simpler = result.simplerContent;
+    lessonState.hasSimpler = true;
+  } else {
+    lessonState.hasSimpler = Boolean(result.hasSimpler) || Boolean(lessonState.simpler);
+  }
+  lessonState.activeVariant = "standard";
+  return result;
+}
+
+async function loadSimplerLesson(topic, signal) {
+  const result = await fetchLesson(topic, { variant: "simpler", signal, timeoutMs: 120_000 });
+  lessonState.simpler = result.content;
+  lessonState.hasSimpler = true;
+  lessonState.activeVariant = "simpler";
+  return result;
+}
+
+function switchVariant(variant) {
+  if (variant === "simpler" && !lessonState.simpler) return;
+  lessonState.activeVariant = variant;
+  renderLessonView();
+}
+
+async function handleSimplerWords() {
+  if (!currentTopic || lessonState.simpler) {
+    switchVariant("simpler");
+    return;
+  }
+
+  const btn = document.getElementById("teach-simpler-btn");
+  btn?.classList.add("is-loading");
+  btn?.setAttribute("disabled", "true");
+
+  activeRequest?.abort();
+  const controller = new AbortController();
+  activeRequest = controller;
+
+  try {
+    await loadSimplerLesson(currentTopic, controller.signal);
+    if (controller.signal.aborted) return;
+    renderLessonView();
+  } catch (err) {
+    if (controller.signal.aborted) return;
+    const message = err instanceof TeachApiError ? err.message : "Could not simplify lesson.";
+    setModalState({
+      title: currentTopic.name,
+      metaHtml: renderMeta(currentTopic),
+      bodyHtml: `${renderLesson(activeContent())}<div class="teach-inline-error">${escapeHtml(message)}</div>`,
+      showFooter: true,
+    });
+  } finally {
+    btn?.classList.remove("is-loading");
+    btn?.removeAttribute("disabled");
+    if (activeRequest === controller) activeRequest = null;
+  }
+}
+
+async function handleMarkComplete() {
+  if (!currentTopic?.id) return;
+
+  const btn = document.getElementById("teach-complete-btn");
+  btn?.setAttribute("disabled", "true");
+
+  try {
+    if (!isTopicCompleted(currentTopic.id)) {
+      await markTopicComplete(currentTopic.id);
+    }
+
+    refreshPage();
+
+    const next = getNextRoadmapTopic(currentTopic.id);
+    const user = getSessionUser();
+
+    if (next && canAccessTopic(user, next, next.step)) {
+      const nextTopic = normalizeTopic({
+        id: next.id,
+        name: next.name,
+        phase: next.phase,
+        difficulty: next.difficulty,
+        step: next.step,
+        track: topicTrackFromId(next.id),
+      });
+      await openTeachLesson(nextTopic);
+      return;
+    }
+
+    closeTeachModal();
+  } catch (err) {
+    console.error("[teach-modal] complete failed", err);
+    btn?.removeAttribute("disabled");
+  }
+}
+
+
+
 export function parseTopicFromButton(btn) {
   const stepRaw = btn.dataset.topicStep;
-  return {
+  return normalizeTopic({
     id: btn.dataset.topicId || "",
     name: btn.dataset.topicName || btn.dataset.topicTitle || "Topic",
     phase: btn.dataset.topicPhase ? Number(btn.dataset.topicPhase) : undefined,
     step: stepRaw ? Number(stepRaw) : undefined,
     difficulty: btn.dataset.topicDifficulty || "",
     track: btn.dataset.topicTrack || "",
-  };
+  });
 }
 
 /**
- * Open the teach modal and fetch a lesson from /api/teach.
+ * Open the teach modal — loads cached lesson or generates once.
  * @param {Object} topic
  * @param {HTMLButtonElement} [triggerBtn]
  */
 export async function openTeachLesson(topic, triggerBtn) {
   ensureTeachModalShell();
 
-  const name = topic.name || "Topic";
+  currentTopic = normalizeTopic(topic);
+  lessonState = {
+    standard: "",
+    simpler: "",
+    activeVariant: "standard",
+    hasSimpler: false,
+    cached: false,
+  };
+
+  const name = currentTopic.name || "Topic";
+  const footer = document.getElementById(`${MODAL_ID}-footer`);
+  if (footer) footer.hidden = true;
 
   setModalState({
     title: name,
-    metaHtml: renderMeta(topic),
+    metaHtml: renderMeta(currentTopic),
     bodyHtml: renderLoading(name),
+    showFooter: false,
   });
   openModal(MODAL_ID);
-  startLoadingAnimation();
 
   if (triggerBtn) {
     triggerBtn.disabled = true;
@@ -288,22 +527,37 @@ export async function openTeachLesson(topic, triggerBtn) {
   activeRequest = controller;
 
   try {
-    const result = await teachTopic({
-      id: topic.id,
-      name: topic.name,
-      phase: topic.phase,
-      difficulty: topic.difficulty,
-      track: topic.track,
-    }, { signal: controller.signal, timeoutMs: 120_000 });
+    let fromCache = false;
 
+    if (currentTopic.id) {
+      setModalState({
+        title: name,
+        metaHtml: renderMeta(currentTopic),
+        bodyHtml: renderLoading(name, { cachedHint: true }),
+        showFooter: false,
+      });
+      fromCache = await tryLoadCachedLesson(currentTopic.id);
+    }
+
+    if (fromCache) {
+      stopLoadingAnimation();
+      renderLessonView();
+      return;
+    }
+
+    setModalState({
+      title: name,
+      metaHtml: renderMeta(currentTopic),
+      bodyHtml: renderLoading(name),
+      showFooter: false,
+    });
+    startLoadingAnimation();
+
+    await loadStandardLesson(currentTopic, controller.signal);
     if (controller.signal.aborted) return;
 
     stopLoadingAnimation();
-    setModalState({
-      title: name,
-      metaHtml: renderMeta(topic),
-      bodyHtml: renderLesson(result.content),
-    });
+    renderLessonView();
   } catch (err) {
     if (controller.signal.aborted) return;
 
@@ -314,8 +568,9 @@ export async function openTeachLesson(topic, triggerBtn) {
 
     setModalState({
       title: name,
-      metaHtml: renderMeta(topic),
+      metaHtml: renderMeta(currentTopic),
       bodyHtml: renderError(message),
+      showFooter: false,
     });
   } finally {
     if (triggerBtn) {
@@ -341,13 +596,9 @@ function onTeachButtonClick(e) {
     return;
   }
 
-  openTeachLesson(topic, btn);
+  void openTeachLesson(topic, btn);
 }
 
-/**
- * Wire Learn buttons inside a page container (call from roadmap onMount).
- * @param {HTMLElement} root
- */
 export function bindTeachTopicHandlers(root) {
   if (!root || root.dataset.teachHandlersBound === "true") return;
   root.dataset.teachHandlersBound = "true";
@@ -360,6 +611,21 @@ function ensureTeachModalShell() {
 
   document.body.insertAdjacentHTML("beforeend", renderModalShell());
   initModals(document);
+
+  document.getElementById(`${MODAL_ID}-footer`)?.addEventListener("click", (e) => {
+    const variantBtn = e.target.closest("[data-variant]");
+    if (variantBtn && !variantBtn.disabled) {
+      switchVariant(variantBtn.dataset.variant);
+      return;
+    }
+    if (e.target.closest("#teach-simpler-btn")) {
+      void handleSimplerWords();
+      return;
+    }
+    if (e.target.closest("#teach-complete-btn")) {
+      void handleMarkComplete();
+    }
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {

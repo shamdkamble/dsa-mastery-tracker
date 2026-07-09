@@ -189,3 +189,48 @@ export function getTopicById(id) {
 export function getPhaseById(phase) {
   return ROADMAP_PHASES.find((p) => p.id === phase);
 }
+
+/**
+ * Flat ordered topic list matching the roadmap UI (Phase 1 interleaved C++/DSA pairs).
+ * @returns {Array<RoadmapTopic & { step?: number }>}
+ */
+export function getOrderedRoadmapTopics() {
+  const ordered = [];
+
+  for (const phase of ROADMAP_PHASES) {
+    if (phase.id === 1) {
+      for (let i = 0; i < phase.topics.length; i += 2) {
+        const step = i / 2 + 1;
+        if (phase.topics[i]) ordered.push({ ...phase.topics[i], step });
+        if (phase.topics[i + 1]) ordered.push({ ...phase.topics[i + 1], step });
+      }
+    } else {
+      for (const topic of phase.topics) {
+        ordered.push({ ...topic });
+      }
+    }
+  }
+
+  return ordered;
+}
+
+/**
+ * @param {string} topicId
+ * @returns {(RoadmapTopic & { step?: number }) | null}
+ */
+export function getNextRoadmapTopic(topicId) {
+  const ordered = getOrderedRoadmapTopics();
+  const index = ordered.findIndex((t) => t.id === topicId);
+  if (index < 0 || index >= ordered.length - 1) return null;
+  return ordered[index + 1];
+}
+
+/**
+ * @param {string} topicId
+ * @returns {string}
+ */
+export function topicTrackFromId(topicId) {
+  if (topicId?.startsWith("cpp-")) return "cpp";
+  if (topicId?.startsWith("dsa-")) return "dsa";
+  return "";
+}

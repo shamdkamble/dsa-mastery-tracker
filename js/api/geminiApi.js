@@ -112,51 +112,22 @@ export async function teachTopic(topic, options = {}) {
     throw new TeachApiError("topic is required.", { code: "INVALID_INPUT" });
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const { fetchLesson } = await import("./teachApi.js");
+  const variant = options.variant || "standard";
+  const data = await fetchLesson(topic, { variant, signal: options.signal, timeoutMs: options.timeoutMs });
 
-  try {
-    const headers = { "Content-Type": "application/json", Accept: "application/json" };
-    const token = getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-
-    const res = await fetch(`${resolveBaseUrl()}/api/teach`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ topic }),
-      signal: options.signal ?? controller.signal,
-    });
-
-    const data = await parseJsonSafe(res);
-
-    if (!res.ok) {
-      throw errorFromResponse(res.status, data);
-    }
-
-    if (!data?.content?.trim()) {
-      throw new TeachApiError("Empty response from tutor.", { code: "EMPTY_RESPONSE", details: data });
-    }
-
-    return {
-      content: data.content.trim(),
-      usage: data.usage,
-      id: data.id,
-      model: data.model,
-    };
-  } catch (err) {
-    if (err instanceof TeachApiError) throw err;
-
-    if (err?.name === "AbortError") {
-      throw new TeachApiError("Request timed out.", { code: "TIMEOUT" });
-    }
-
-    if (err?.message?.includes("Failed to fetch") || err?.message?.includes("NetworkError")) {
-      throw new TeachApiError(
-        "Cannot reach /api/teach. Run the Node server with npm start (not the Python static server).",
-        { code: "NETWORK_ERROR" },
-      );
-    }
-
-    throw new TeachApiError(err?.message || "Unexpected error.", { code: "UNKNOWN", details: err });
+  if (!data?.content?.trim()) {
+    throw new TeachApiError("Empty response from tutor.", { code: "EMPTY_RESPONSE", details: data });
   }
+
+  return {
+    content: data.content.trim(),
+    usage: data.usage,
+    id: data.id,
+    model: data.model,
+    cached: data.cached,
+    hasSimpler: data.hasSimpler,
+    variant: data.variant,
+    topicId: data.topicId,
+  };
 }

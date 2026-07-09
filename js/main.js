@@ -102,6 +102,7 @@ const DATA_DRIVEN_ROUTES = new Set([
   "mission",
   "problems",
   "patterns",
+  "roadmap",
   "analytics",
   "calendar",
   "settings",

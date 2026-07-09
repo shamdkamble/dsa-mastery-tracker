@@ -74,6 +74,23 @@ Rules:
 - Connect to LeetCode/interview patterns when relevant.
 - Tone: encouraging, precise, practical. No filler.`;
 
+export const SIMPLER_TEACHING_SYSTEM_PROMPT = `You are a patient CS tutor rewriting lessons for beginners in the DSA Mastery Tracker app.
+
+You MUST keep EXACTLY these four markdown section headings (include the numbers):
+
+## 1. History & Problem it Solved
+## 2. Real Life Analogy
+## 3. Technical Explanation & Complexity
+## 4. C++ Code Examples
+
+Rules:
+- Use plain language, short sentences, and everyday vocabulary.
+- Explain jargon when you must use it.
+- Keep the same technical accuracy but make it easier to follow.
+- Section 2: use a very concrete, memorable analogy.
+- Section 4: keep \`\`\`cpp examples with extra brief comments.
+- Tone: warm, encouraging, never condescending.`;
+
 export class TeachApiError extends Error {
   constructor(message, { status = 500, code = "SERVER_ERROR", details } = {}) {
     super(message);
@@ -461,6 +478,18 @@ export async function generateContent({ systemPrompt = null, userPrompt, options
   }
 }
 
+function buildSimplerUserPrompt(topic, standardContent) {
+  const name = topicName(topic) || "this topic";
+  return [
+    `Rewrite the lesson below for **${name}** in simpler, beginner-friendly words.`,
+    "Keep the same four numbered section headings and structure.",
+    "Do not omit sections or code examples.",
+    "",
+    "Original lesson:",
+    standardContent.trim(),
+  ].join("\n");
+}
+
 export async function teachTopic(topic, options = {}) {
   validateTopic(topic);
 
@@ -476,6 +505,38 @@ export async function teachTopic(topic, options = {}) {
       options,
       signal: controller.signal,
       onSuccess: (model) => console.log(`[gemini] lesson generated with ${model}`),
+    });
+  } catch (err) {
+    if (err instanceof TeachApiError) throw err;
+    if (err?.name === "AbortError") {
+      throw new TeachApiError("Request timed out.", { status: 504, code: "TIMEOUT" });
+    }
+    throw new TeachApiError(err?.message || "Unexpected error calling Gemini.", { status: 500, code: "UNKNOWN" });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function teachTopicSimpler(topic, standardContent, options = {}) {
+  validateTopic(topic);
+
+  if (!standardContent?.trim()) {
+    throw new TeachApiError("Standard lesson content is required to simplify.", { status: 400, code: "INVALID_INPUT" });
+  }
+
+  const apiKey = resolveApiKey();
+  const userPrompt = buildSimplerUserPrompt(topic, standardContent);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+
+  try {
+    return await generateWithModelFallback({
+      apiKey,
+      userPrompt,
+      options: { ...options, temperature: options.temperature ?? 0.5 },
+      systemPrompt: SIMPLER_TEACHING_SYSTEM_PROMPT,
+      signal: controller.signal,
+      onSuccess: (model) => console.log(`[gemini] simpler lesson generated with ${model}`),
     });
   } catch (err) {
     if (err instanceof TeachApiError) throw err;

@@ -1943,6 +1943,23 @@
   margin-left: auto;
 }
 
+.roadmap-topic__done {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-2);
+  color: var(--color-success);
+  vertical-align: middle;
+}
+
+.roadmap-topic__done svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.roadmap-topic__learn.is-completed {
+  border-color: var(--color-success-muted, var(--color-border-subtle));
+}
+
 .roadmap-topic__learn svg {
   width: 0.875rem;
   height: 0.875rem;
