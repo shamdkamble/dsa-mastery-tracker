@@ -12,13 +12,11 @@ import {
 import { formatGreeting, formatLongDate } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 import { bindTeachTopicHandlers } from "../components/teach-modal.js";
-import { leetcodeIconLink } from "../components/leetcode-actions.js";
-import { buildLeetcodeUrl } from "../services/leetcode.js";
 import { getOrderedRoadmapTopics, getPhaseById } from "../data/roadmap.js";
 import { isTopicCompleted } from "../storage/roadmap-progress.js";
 
-const ACTIVITY_PREVIEW_LIMIT = 5;
-const MISSION_PREVIEW_LIMIT = 5;
+const ACTIVITY_PREVIEW_LIMIT = 8;
+const MISSION_PREVIEW_LIMIT = 4;
 
 function escapeHtml(str) {
   return String(str)
@@ -43,19 +41,18 @@ function getContinueLearningTopic() {
   return ordered.find((t) => !isTopicCompleted(t.id)) ?? ordered[0] ?? null;
 }
 
-function missionPreviewItem(item) {
+function missionChip(item) {
   return `
-    <div class="mission-item">
-      <div class="mission-item__check${item.done ? " is-done" : ""}" aria-hidden="true">
+    <article class="dash-mission-chip${item.done ? " is-done" : ""}">
+      <div class="dash-mission-chip__check${item.done ? " is-done" : ""}" aria-hidden="true">
         ${item.done ? icon("check") : ""}
       </div>
-      <div class="mission-item__body">
-        <div class="mission-item__title">${escapeHtml(item.title)}</div>
-        <div class="mission-item__meta">${escapeHtml(item.topic)}</div>
+      <div class="dash-mission-chip__body">
+        <span class="dash-mission-chip__title">${escapeHtml(item.title)}</span>
+        <span class="dash-mission-chip__meta">${escapeHtml(item.topic)}</span>
       </div>
-      ${leetcodeIconLink(item.leetcodeUrl || buildLeetcodeUrl(item.leetcodeSlug))}
-      <span class="mission-item__time">${escapeHtml(item.time)}</span>
-    </div>
+      <span class="dash-mission-chip__time">${escapeHtml(item.time)}</span>
+    </article>
   `;
 }
 
@@ -77,16 +74,19 @@ function activityItem(item) {
   `;
 }
 
-function renderContinueLearningCard(topic) {
+function renderContinueLearningHero(topic) {
   if (!topic) {
-    return EmptyState({
-      title: "Roadmap ready",
-      text: "Open the FAANG Mastery Roadmap to start your learning path.",
-      iconName: "target",
-      compact: true,
-      flat: true,
-      actions: '<a href="#/roadmap" class="btn btn--primary btn--sm">View Roadmap</a>',
-    });
+    return `
+      <section class="dash-continue dash-continue--hero dash-continue--empty">
+        <div class="dash-continue__glow" aria-hidden="true"></div>
+        <div class="dash-continue__inner">
+          <span class="dash-continue__eyebrow">Continue Learning</span>
+          <h2 class="dash-continue__headline">Start your roadmap</h2>
+          <p class="dash-continue__text">Open the FAANG Mastery Roadmap and begin your first AI lesson.</p>
+          <a href="#/roadmap" class="btn btn--primary dash-continue__cta-main">View Roadmap</a>
+        </div>
+      </section>
+    `;
   }
 
   const phase = getPhaseById(topic.phase);
@@ -95,56 +95,50 @@ function renderContinueLearningCard(topic) {
   const phaseLabel = phase?.title ? `Phase ${topic.phase} · ${phase.title}` : `Phase ${topic.phase}`;
 
   return `
-    <article class="dash-continue">
-      <div class="dash-continue__badge" aria-hidden="true">${icon("zap")}</div>
-      <div class="dash-continue__body">
+    <section class="dash-continue dash-continue--hero">
+      <div class="dash-continue__glow" aria-hidden="true"></div>
+      <div class="dash-continue__inner">
+        <div class="dash-continue__icon" aria-hidden="true">${icon("target")}</div>
         <span class="dash-continue__eyebrow">Continue Learning</span>
-        <h3 class="dash-continue__title">${escapeHtml(topic.name)}</h3>
+        <h2 class="dash-continue__headline">${escapeHtml(topic.name)}</h2>
         <div class="dash-continue__meta">
           <span>${escapeHtml(phaseLabel)}</span>
           ${DifficultyBadge(topic.difficulty)}
         </div>
         <p class="dash-continue__text">
           ${completed
-            ? "Review this topic or keep momentum with the next lesson on your roadmap."
-            : "Your next recommended lesson — pick up right where the roadmap leads you."}
+            ? "You're on track. Review this lesson or keep moving through the roadmap."
+            : "Your next recommended step — one focused lesson to keep momentum going."}
         </p>
-        <div class="dash-continue__actions">
-          <button
-            class="btn btn--primary btn--sm"
-            type="button"
-            data-action="teach-topic"
-            data-topic-id="${escapeAttr(topic.id)}"
-            data-topic-name="${escapeAttr(topic.name)}"
-            data-topic-phase="${topic.phase}"
-            data-topic-step="${topic.step ?? ""}"
-            data-topic-difficulty="${escapeAttr(topic.difficulty)}"
-            data-topic-track="${escapeAttr(track)}"
-          >
-            ${icon(completed ? "check" : "zap")}
-            <span>${completed ? "Review Lesson" : "Start Lesson"}</span>
-          </button>
-          <a href="#/roadmap" class="btn btn--secondary btn--sm">View Roadmap</a>
-        </div>
+        <button
+          class="btn btn--primary dash-continue__cta-main"
+          type="button"
+          data-action="teach-topic"
+          data-topic-id="${escapeAttr(topic.id)}"
+          data-topic-name="${escapeAttr(topic.name)}"
+          data-topic-phase="${topic.phase}"
+          data-topic-step="${topic.step ?? ""}"
+          data-topic-difficulty="${escapeAttr(topic.difficulty)}"
+          data-topic-track="${escapeAttr(track)}"
+        >
+          ${icon(completed ? "check" : "zap")}
+          <span>${completed ? "Review Lesson" : "Start Lesson"}</span>
+        </button>
+        <a href="#/roadmap" class="dash-continue__link">Browse full roadmap →</a>
       </div>
-    </article>
+    </section>
   `;
 }
 
-function renderMissionSection(mission, missionPercent, doneCount) {
+function renderMissionCompact(mission, missionPercent, doneCount) {
   if (!mission.length) {
     return `
-      <section class="dash-mission">
-        ${EmptyState({
-          title: "No missions today",
-          text: "Add problems and check \"Add to today's mission\" to build your daily plan.",
-          iconName: "mission",
-          compact: true,
-          actions: `
-            <a href="#/mission" class="btn btn--secondary">Open Mission</a>
-            <button class="btn btn--primary" data-action="add-problem" type="button">Add Problem</button>
-          `,
-        })}
+      <section class="dash-mission-compact dash-mission-compact--empty">
+        <div class="dash-mission-compact__head">
+          <h2 class="dash-mission-compact__title">Today's Mission</h2>
+          <a href="#/mission" class="page-section__link">Set up →</a>
+        </div>
+        <p class="dash-mission-compact__empty">No missions yet — add problems to today's mission to build your plan.</p>
       </section>
     `;
   }
@@ -153,38 +147,28 @@ function renderMissionSection(mission, missionPercent, doneCount) {
   const remaining = mission.length - preview.length;
 
   return `
-    <section class="dash-mission">
-      <div class="dash-mission__shell">
-        <div class="dash-mission__header">
-          <div class="dash-mission__intro">
-            <span class="dash-mission__eyebrow">${icon("mission")} Daily Focus</span>
-            <h2 class="dash-mission__title">Today's Mission</h2>
-            <p class="dash-mission__subtitle">
-              ${doneCount === mission.length
-                ? "All done for today — great work. Keep the streak alive tomorrow."
-                : `${doneCount} of ${mission.length} complete — finish strong today.`}
-            </p>
-          </div>
-          <a href="#/mission" class="btn btn--primary dash-mission__cta">Open Mission</a>
+    <section class="dash-mission-compact">
+      <div class="dash-mission-compact__head">
+        <div class="dash-mission-compact__intro">
+          <h2 class="dash-mission-compact__title">Today's Mission</h2>
+          <span class="dash-mission-compact__stat">${doneCount}/${mission.length} done · ${missionPercent}%</span>
         </div>
-
-        <div class="dash-mission__progress">
-          ${ProgressBar({
-            label: "Daily progress",
-            value: missionPercent,
-            variant: missionPercent === 100 ? "success" : "",
-            size: "lg",
-          })}
-        </div>
-
-        <div class="dash-mission__list">
-          ${preview.map(missionPreviewItem).join("")}
-        </div>
-
+        <a href="#/mission" class="page-section__link">View all →</a>
+      </div>
+      <div class="dash-mission-compact__progress">
+        ${ProgressBar({
+          value: missionPercent,
+          variant: missionPercent === 100 ? "success" : "",
+          showValue: false,
+        })}
+      </div>
+      <div class="dash-mission-compact__track">
+        ${preview.map(missionChip).join("")}
         ${remaining > 0 ? `
-          <div class="dash-mission__footer">
-            <a href="#/mission" class="page-section__link">+${remaining} more on your mission →</a>
-          </div>
+          <a href="#/mission" class="dash-mission-chip dash-mission-chip--more">
+            <span class="dash-mission-chip__title">+${remaining} more</span>
+            <span class="dash-mission-chip__meta">View mission</span>
+          </a>
         ` : ""}
       </div>
     </section>
@@ -217,8 +201,8 @@ export default {
             <h1 class="page-greeting__title">${formatGreeting()}, ${escapeHtml(firstName)}</h1>
             <p class="page-greeting__subtitle">
               ${stats.currentStreak > 0
-                ? `${stats.currentStreak}-day streak — stay consistent and the results follow.`
-                : "Small daily wins compound into interview-ready confidence."}
+                ? `${stats.currentStreak}-day streak — keep showing up.`
+                : "Consistency beats intensity. One step today is enough."}
             </p>
             <div class="page-greeting__meta">
               ${icon("calendar")} ${formatLongDate()}
@@ -241,11 +225,11 @@ export default {
           ${StatCard({ label: "Accuracy Rate", value: `${stats.accuracy}%`, change: `Avg ${stats.avgTime} per solve`, icon: icon("analytics") })}
         </div>
 
-        ${renderMissionSection(mission, missionPercent, doneCount)}
+        <div class="dash-body">
+          <div class="dash-body__main">
+            ${renderMissionCompact(mission, missionPercent, doneCount)}
 
-        <div class="dash-layout">
-          <div class="dash-layout__main">
-            <section class="page-section page-section--flush">
+            <section class="page-section page-section--flush dash-topics-section">
               <div class="page-section__header">
                 <h2 class="page-section__title">Topic Mastery</h2>
                 <a href="#/patterns" class="page-section__link">All patterns →</a>
@@ -268,8 +252,8 @@ export default {
             </section>
           </div>
 
-          <aside class="dash-layout__side">
-            ${renderContinueLearningCard(continueTopic)}
+          <aside class="dash-body__aside">
+            ${renderContinueLearningHero(continueTopic)}
 
             <section class="page-section page-section--flush dash-activity">
               <div class="page-section__header">
@@ -278,7 +262,8 @@ export default {
               </div>
               ${activity.length ? Card({
                 variant: "compact",
-                body: `<div class="dash-activity__list">${activity.map(activityItem).join("")}</div>`,
+                className: "dash-activity__card",
+                body: `<div class="dash-activity__scroll">${activity.map(activityItem).join("")}</div>`,
               }) : EmptyState({
                 title: "No activity yet",
                 text: "Solve problems and your activity will appear here.",
