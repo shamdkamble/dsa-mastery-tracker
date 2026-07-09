@@ -1,0 +1,204 @@
+.product-tour[hidden] {
+  display: none !important;
+}
+
+.product-tour {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-tour);
+  pointer-events: none;
+}
+
+.product-tour__backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--color-bg-inverse, #0f172a) 55%, transparent);
+  pointer-events: auto;
+  animation: product-tour-fade-in var(--duration-normal) var(--ease-out);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.product-tour__spotlight {
+  position: fixed;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 9999px color-mix(in srgb, var(--color-bg-inverse, #0f172a) 55%, transparent);
+  pointer-events: none;
+  transition:
+    top var(--duration-fast) var(--ease-out),
+    left var(--duration-fast) var(--ease-out),
+    width var(--duration-fast) var(--ease-out),
+    height var(--duration-fast) var(--ease-out);
+  z-index: 1;
+}
+
+.product-tour__target {
+  position: relative;
+  z-index: calc(var(--z-tour) + 1) !important;
+}
+
+.product-tour__card {
+  position: fixed;
+  z-index: 2;
+  width: min(380px, calc(100vw - var(--space-8)));
+  padding: var(--space-5);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  pointer-events: auto;
+  animation: product-tour-slide-up var(--duration-normal) var(--ease-out);
+}
+
+.product-tour__card--center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-name: product-tour-scale-in;
+}
+
+.product-tour__card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.product-tour__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.product-tour__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.product-tour__close {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--color-text-tertiary);
+}
+
+.product-tour__close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.product-tour__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.product-tour__progress-track {
+  flex: 1;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-hover);
+  overflow: hidden;
+}
+
+.product-tour__progress-bar {
+  height: 100%;
+  width: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  transition: width var(--duration-normal) var(--ease-out);
+}
+
+.product-tour__progress-text {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+.product-tour__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  line-height: var(--leading-tight);
+}
+
+.product-tour__body {
+  margin: 0 0 var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+.product-tour__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.product-tour__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+body.tour-active {
+  overflow: hidden;
+}
+
+body.tour-active .navbar,
+body.tour-active .sidebar {
+  pointer-events: auto;
+}
+
+@keyframes product-tour-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes product-tour-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes product-tour-scale-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .product-tour__card {
+    width: min(340px, calc(100vw - var(--space-6)));
+    padding: var(--space-4);
+  }
+
+  .product-tour__card--bottom,
+  .product-tour__card--top,
+  .product-tour__card--left,
+  .product-tour__card--right {
+    left: var(--space-4) !important;
+    right: var(--space-4);
+    width: auto;
+    transform: none !important;
+  }
+}

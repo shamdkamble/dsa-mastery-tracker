@@ -49,6 +49,10 @@ function defaultDB() {
       longestStreak: 0,
       calendarMonth: { year: new Date().getFullYear(), month: new Date().getMonth() },
       readNotificationIds: [],
+      tour: {
+        completed: false,
+        dismissed: false,
+      },
     },
   };
 }
@@ -663,6 +667,23 @@ export function markNotificationRead(id) {
     touch({ silent: true });
     dispatch("notifications:change");
   }
+}
+
+export function getTourState() {
+  const db = load();
+  if (!db.meta.tour) {
+    db.meta.tour = { completed: false, dismissed: false };
+  }
+  return { ...db.meta.tour };
+}
+
+export function updateTourState(updates) {
+  const db = load();
+  if (!db.meta.tour) {
+    db.meta.tour = { completed: false, dismissed: false };
+  }
+  db.meta.tour = { ...db.meta.tour, ...updates };
+  touch({ silent: true });
 }
 
 export function markAllNotificationsRead(ids) {

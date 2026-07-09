@@ -101,7 +101,7 @@ function renderSidebar(state) {
       </button>
     </div>
 
-    <nav class="sidebar__nav" aria-label="Primary">
+    <nav class="sidebar__nav" aria-label="Primary" data-tour="sidebar-nav">
       ${sections}
     </nav>
   `;

@@ -17,7 +17,7 @@ export function createPage({ title, description, iconName, children = "", hideHe
   ` : "";
 
   return `
-    <div class="content-inner">
+    <div class="content-inner" data-tour="page-main">
       ${header}
       ${children || createPlaceholder(title || "Page", iconName)}
     </div>

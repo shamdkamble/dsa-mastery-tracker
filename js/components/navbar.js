@@ -19,6 +19,7 @@ import { $, debounce } from "../utils.js";
 import { getSessionUser } from "../auth/session.js";
 import { renderSubscriptionBadge, getSubscriptionTier } from "../subscription-theme.js";
 import { BRAND } from "../constants/branding.js";
+import { startTour } from "./product-tour.js";
 
 const ROUTE_TITLES = {
   dashboard: "Dashboard",
@@ -118,7 +119,7 @@ function renderNavbar(state) {
     </div>
 
     <div class="navbar__center"${currentRoute === "dashboard" ? " hidden" : ""}>
-      <div class="search-input-wrapper">
+      <div class="search-input-wrapper" data-tour="search">
         <span class="search-icon" aria-hidden="true">${icon("search")}</span>
         <input
           type="search"
@@ -138,6 +139,7 @@ function renderNavbar(state) {
         class="btn btn--primary btn--sm navbar__new-btn"
         type="button"
         data-action="add-problem"
+        data-tour="add-problem"
         aria-label="Add new problem"
       >
         ${icon("plus")}
@@ -172,14 +174,40 @@ function renderNavbar(state) {
           ${renderNotificationPanel()}
         </div>
 
-        <button
-          class="navbar__action navbar__action--help"
-          type="button"
-          aria-label="Help and info"
-          title="Help"
-        >
-          ${icon("help")}
-        </button>
+        <div class="navbar__help-wrap" data-tour="help">
+          <button
+            class="navbar__action navbar__action--help"
+            type="button"
+            id="navbar-help-btn"
+            aria-label="Help and info"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-controls="navbar-help-menu"
+            title="Help"
+          >
+            ${icon("help")}
+          </button>
+          <div class="navbar-help-menu" id="navbar-help-menu" role="menu" hidden>
+            <button
+              type="button"
+              class="navbar-help-menu__item"
+              role="menuitem"
+              data-help-action="guide"
+            >
+              ${icon("mission")}
+              <span>Guide me</span>
+            </button>
+            <button
+              type="button"
+              class="navbar-help-menu__item"
+              role="menuitem"
+              data-help-action="shortcuts"
+            >
+              ${icon("zap")}
+              <span>Keyboard shortcuts</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="navbar__profile-wrap">
@@ -226,6 +254,24 @@ function renderNavbar(state) {
   `;
 }
 
+function closeHelpMenu(container) {
+  const btn = $("#navbar-help-btn", container);
+  const menu = $("#navbar-help-menu", container);
+  menu?.setAttribute("hidden", "");
+  btn?.setAttribute("aria-expanded", "false");
+  container.classList.remove("navbar--help-open");
+}
+
+function openHelpMenu(container) {
+  closeNotificationPanel(container);
+  closeProfileMenu(container);
+  const btn = $("#navbar-help-btn", container);
+  const menu = $("#navbar-help-menu", container);
+  menu?.removeAttribute("hidden");
+  btn?.setAttribute("aria-expanded", "true");
+  container.classList.add("navbar--help-open");
+}
+
 function closeProfileMenu(container) {
   const btn = $("#navbar-profile-btn", container);
   const menu = $("#navbar-profile-menu", container);
@@ -235,6 +281,7 @@ function closeProfileMenu(container) {
 }
 
 function openProfileMenu(container) {
+  closeHelpMenu(container);
   closeNotificationPanel(container);
   const btn = $("#navbar-profile-btn", container);
   const menu = $("#navbar-profile-menu", container);
@@ -398,6 +445,26 @@ function bindEvents(container) {
 
   bindNotificationPanelEvents(container);
 
+  const helpBtn = $("#navbar-help-btn", container);
+  helpBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const menu = $("#navbar-help-menu", container);
+    const isOpen = menu && !menu.hasAttribute("hidden");
+    if (isOpen) closeHelpMenu(container);
+    else openHelpMenu(container);
+  });
+
+  $("#navbar-help-menu", container)?.addEventListener("click", (e) => {
+    const action = e.target.closest("[data-help-action]")?.dataset.helpAction;
+    if (!action) return;
+    closeHelpMenu(container);
+    if (action === "guide") {
+      void startTour({ fromStep: 0 });
+    } else if (action === "shortcuts") {
+      window.alert("Keyboard shortcuts:\n\nCtrl+K or ⌘K — Focus search\nEsc — Close panels and menus");
+    }
+  });
+
   const profileBtn = $("#navbar-profile-btn", container);
   profileBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -433,6 +500,7 @@ function bindEvents(container) {
       if (navbar) {
         closeNotificationPanel(navbar);
         closeProfileMenu(navbar);
+        closeHelpMenu(navbar);
       }
     });
     document.addEventListener("click", (e) => {
@@ -440,6 +508,12 @@ function bindEvents(container) {
       if (!navbar?.classList.contains("navbar--profile-open")) return;
       if (e.target.closest(".navbar__profile-wrap")) return;
       closeProfileMenu(navbar);
+    });
+    document.addEventListener("click", (e) => {
+      const navbar = $(".navbar");
+      if (!navbar?.classList.contains("navbar--help-open")) return;
+      if (e.target.closest(".navbar__help-wrap")) return;
+      closeHelpMenu(navbar);
     });
   }
 
@@ -499,6 +573,7 @@ export function initNavbar(container) {
   document.addEventListener("route:change", () => {
     closeNotificationPanel(container);
     closeProfileMenu(container);
+    closeHelpMenu(container);
   });
 
   document.addEventListener("data:change", debounce(() => refreshProfileChrome(container), 150));

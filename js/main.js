@@ -26,6 +26,7 @@ import {
   resetLiveNotificationState,
 } from "./services/live-notifications.js";
 import { hydrateServerNotifications } from "./services/notifications.js";
+import { initProductTour, maybeAutoStartTour } from "./components/product-tour.js";
 
 import dashboard from "./pages/dashboard.js";
 import mission from "./pages/mission.js";
@@ -167,12 +168,14 @@ async function init() {
   initTeachModal();
   initRecommendProblemsModal();
   initDataRefresh();
+  initProductTour();
   initRouter(content);
 
   if (sessionUser) {
     void hydrateServerNotifications().then(() => {
       startLiveNotificationPolling();
     });
+    maybeAutoStartTour();
   }
 }
 

@@ -211,7 +211,7 @@ export default {
           </div>
         </div>
 
-        <div class="dash-stats stagger-children">
+        <div class="dash-stats stagger-children" data-tour="dash-stats">
           ${StatCard({ label: "Today's Revisions", value: String(stats.todaysRevisions), change: `${stats.revisionsDue} due total`, icon: icon("repeat") })}
           ${StatCard({ label: "Current Streak", value: `${stats.currentStreak}d`, change: `Best: ${stats.longestStreak} days`, changeType: stats.currentStreak > 0 ? "up" : undefined, icon: icon("flame") })}
           ${StatCard({ label: "Problems Solved", value: String(stats.problemsSolved), change: `+${stats.weeklySolved} this week`, changeType: stats.weeklySolved > 0 ? "up" : undefined, icon: icon("problems") })}
@@ -220,7 +220,9 @@ export default {
 
         <div class="dash-body">
           <div class="dash-body__main">
-            ${renderContinueLearningHero(continueTopic, sessionUser)}
+            <div data-tour="dash-continue">
+              ${renderContinueLearningHero(continueTopic, sessionUser)}
+            </div>
 
             <section class="page-section page-section--flush dash-topics-section">
               <div class="page-section__header">
