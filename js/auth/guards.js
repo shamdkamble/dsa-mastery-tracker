@@ -24,10 +24,10 @@ export function resetAuthSyncState() {
   lastSyncedUserId = null;
 }
 
-export function syncAuthState(user) {
+export async function syncAuthState(user) {
   if (!user) return;
 
-  switchUserContext(user);
+  await switchUserContext(user);
 
   const userId = user.id || user.email || null;
   const userChanged = userId !== lastSyncedUserId;
@@ -62,7 +62,7 @@ export async function resolveAuthSession() {
 
   try {
     const user = await fetchMe();
-    syncAuthState(user);
+    await syncAuthState(user);
     return user;
   } catch {
     clearSession();

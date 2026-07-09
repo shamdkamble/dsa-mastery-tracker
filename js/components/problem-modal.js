@@ -680,7 +680,7 @@ export function openProblemModal(problemId = null) {
   const saveBtn = host.querySelector("#problem-save-btn");
   const deleteBtn = host.querySelector("#problem-delete-btn");
 
-  saveBtn?.addEventListener("click", () => {
+  saveBtn?.addEventListener("click", async () => {
     if (!form.reportValidity()) return;
     const data = readForm(form);
 
@@ -691,23 +691,39 @@ export function openProblemModal(problemId = null) {
       data.leetcodeUrl = buildLeetcodeUrl(data.leetcodeSlug);
     }
 
-    if (data.id) {
-      updateProblem(data.id, data);
-    } else {
-      createProblem(data);
-    }
-    closeModal();
-    host.innerHTML = "";
-    refreshPage();
-  });
-
-  deleteBtn?.addEventListener("click", () => {
-    const data = readForm(form);
-    if (data.id && confirm(`Delete "${data.title}"? This cannot be undone.`)) {
-      deleteProblem(data.id);
+    saveBtn.disabled = true;
+    try {
+      if (data.id) {
+        await updateProblem(data.id, data);
+      } else {
+        await createProblem(data);
+      }
       closeModal();
       host.innerHTML = "";
       refreshPage();
+    } catch (err) {
+      console.error("[problem-modal] save failed", err);
+      setStatus(host, err?.message || "Failed to save problem. Try again.", "error");
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  deleteBtn?.addEventListener("click", async () => {
+    const data = readForm(form);
+    if (data.id && confirm(`Delete "${data.title}"? This cannot be undone.`)) {
+      deleteBtn.disabled = true;
+      try {
+        await deleteProblem(data.id);
+        closeModal();
+        host.innerHTML = "";
+        refreshPage();
+      } catch (err) {
+        console.error("[problem-modal] delete failed", err);
+        setStatus(host, err?.message || "Failed to delete problem.", "error");
+      } finally {
+        deleteBtn.disabled = false;
+      }
     }
   });
 

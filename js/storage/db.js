@@ -1,9 +1,19 @@
 /**
- * localStorage data layer — full CRUD
+ * User data layer — problems & activities in MongoDB when logged in;
+ * settings, notes, and meta remain in localStorage per device.
  */
 
 import { dispatch } from "../utils.js";
 import { generateId, todayKey } from "./helpers.js";
+import { getToken } from "../auth/session.js";
+import {
+  fetchUserData,
+  migrateUserData as apiMigrateUserData,
+  apiCreateProblem,
+  apiUpdateProblem,
+  apiDeleteProblem,
+  apiCreateActivity,
+} from "../api/userDataApi.js";
 
 const STORAGE_KEY_LEGACY = "dsa-tracker-db";
 const STORAGE_KEY_PREFIX = "dsa-tracker-db";
@@ -42,6 +52,12 @@ function defaultDB() {
 }
 
 let cache = null;
+let useRemoteStore = false;
+let remoteSyncReady = false;
+
+function isRemoteMode() {
+  return useRemoteStore && Boolean(activeUserId) && Boolean(getToken());
+}
 
 function resolveUserId(user) {
   if (!user) return null;
@@ -118,7 +134,10 @@ function load() {
 function persist({ silent = false } = {}) {
   if (!cache) return;
   try {
-    localStorage.setItem(getStorageKey(), JSON.stringify(cache));
+    const payload = useRemoteStore
+      ? { ...cache, problems: [], activities: [] }
+      : cache;
+    localStorage.setItem(getStorageKey(), JSON.stringify(payload));
     if (!silent) {
       dispatch("data:change", { db: cache });
     }
@@ -127,15 +146,63 @@ function persist({ silent = false } = {}) {
   }
 }
 
+function readLocalSnapshot(userId) {
+  const key = userId ? `${STORAGE_KEY_PREFIX}:${userId}` : `${STORAGE_KEY_PREFIX}:guest`;
+  try {
+    const raw = readStorageRaw(key);
+    if (raw) return mergeStoredData(JSON.parse(raw));
+  } catch (e) {
+    console.warn("Failed to read local snapshot", e);
+  }
+  return null;
+}
+
+async function loadRemoteUserData(userId) {
+  const remote = await fetchUserData();
+  cache.problems = Array.isArray(remote.problems) ? remote.problems : [];
+  cache.activities = Array.isArray(remote.activities) ? remote.activities : [];
+
+  const local = readLocalSnapshot(userId);
+  if (!cache.problems.length && local?.problems?.length) {
+    try {
+      const migrated = await apiMigrateUserData({
+        problems: local.problems,
+        activities: local.activities || [],
+      });
+      cache.problems = migrated.problems || [];
+      cache.activities = migrated.activities || [];
+
+      local.problems = [];
+      local.activities = [];
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}:${userId}`, JSON.stringify(local));
+      console.info(`[db] Migrated ${migrated.migratedProblems ?? cache.problems.length} problems to cloud storage.`);
+    } catch (err) {
+      if (err?.code === "ALREADY_MIGRATED") return;
+      console.warn("[db] Cloud migration failed, using local problems temporarily.", err);
+      cache.problems = local.problems;
+      cache.activities = local.activities || [];
+    }
+  }
+}
+
+async function syncActivityRemote(activity) {
+  if (!isRemoteMode()) return;
+  try {
+    await apiCreateActivity(activity);
+  } catch (err) {
+    console.warn("[db] Failed to sync activity", err);
+  }
+}
+
 /**
  * Switch the in-memory store to the given authenticated user (or guest).
- * Each account gets its own localStorage key so progress is isolated per user.
+ * Logged-in users load problems & activities from MongoDB.
  * @param {Object | null | undefined} authUser
  */
-export function switchUserContext(authUser) {
+export async function switchUserContext(authUser) {
   const nextId = resolveUserId(authUser);
 
-  if (nextId === activeUserId && cache) {
+  if (nextId === activeUserId && cache && remoteSyncReady) {
     if (authUser) applyAuthProfile(cache, authUser);
     return cache;
   }
@@ -146,26 +213,47 @@ export function switchUserContext(authUser) {
 
   activeUserId = nextId;
   cache = null;
+  remoteSyncReady = false;
+  useRemoteStore = Boolean(nextId && getToken());
 
-  const db = load();
+  const local = readLocalSnapshot(nextId);
+  cache = local ? { ...local, problems: [], activities: [] } : defaultDB();
+
   if (authUser) {
-    applyAuthProfile(db, authUser);
-    persist({ silent: true });
+    applyAuthProfile(cache, authUser);
   }
 
-  dispatch("data:change", { db });
-  return db;
+  if (useRemoteStore) {
+    try {
+      await loadRemoteUserData(nextId);
+    } catch (err) {
+      console.warn("[db] Failed to load cloud data, falling back to local cache.", err);
+      if (local) {
+        cache.problems = local.problems || [];
+        cache.activities = local.activities || [];
+      }
+    }
+  } else if (local) {
+    cache.problems = local.problems || [];
+    cache.activities = local.activities || [];
+  }
+
+  remoteSyncReady = true;
+  persist({ silent: true });
+  dispatch("data:change", { db: cache });
+  return cache;
 }
 
 export function getActiveUserId() {
   return activeUserId;
 }
 
-export function initDB(authUser = null) {
+export async function initDB(authUser = null) {
   if (authUser) {
     return switchUserContext(authUser);
   }
   load();
+  remoteSyncReady = true;
   return cache;
 }
 
@@ -211,15 +299,17 @@ export function updateNotificationSetting(key, value, options) {
 
 export function logActivity({ action, problemId = null, problemTitle = "", topic = "" }) {
   const db = load();
-  db.activities.unshift({
+  const activity = {
     id: generateId(),
     action,
     problemId,
     problemTitle,
     topic,
     timestamp: new Date().toISOString(),
-  });
+  };
+  db.activities.unshift(activity);
   if (db.activities.length > 200) db.activities = db.activities.slice(0, 200);
+  return activity;
 }
 
 export function getActivities() {
@@ -236,7 +326,7 @@ export function getProblem(id) {
   return load().problems.find((p) => p.id === id) || null;
 }
 
-export function createProblem(data) {
+export async function createProblem(data) {
   const db = load();
   const now = new Date().toISOString();
   const today = todayKey();
@@ -269,12 +359,23 @@ export function createProblem(data) {
   };
 
   db.problems.unshift(problem);
-  logActivity({ action: "Added", problemId: problem.id, problemTitle: problem.title, topic: problem.topic });
+  const activity = logActivity({
+    action: "Added",
+    problemId: problem.id,
+    problemTitle: problem.title,
+    topic: problem.topic,
+  });
+
+  if (isRemoteMode()) {
+    await apiCreateProblem(problem);
+    await syncActivityRemote(activity);
+  }
+
   touch();
   return problem;
 }
 
-export function updateProblem(id, updates, { silent = false } = {}) {
+export async function updateProblem(id, updates, { silent = false } = {}) {
   const db = load();
   const idx = db.problems.findIndex((p) => p.id === id);
   if (idx === -1) return null;
@@ -301,21 +402,43 @@ export function updateProblem(id, updates, { silent = false } = {}) {
   }
 
   db.problems[idx] = updated;
+  let activity = null;
   if (!silent) {
-    logActivity({ action: "Updated", problemId: id, problemTitle: updated.title, topic: updated.topic });
+    activity = logActivity({
+      action: "Updated",
+      problemId: id,
+      problemTitle: updated.title,
+      topic: updated.topic,
+    });
   }
+
+  if (isRemoteMode()) {
+    await apiUpdateProblem(id, updated);
+    if (activity) await syncActivityRemote(activity);
+  }
+
   touch();
   return updated;
 }
 
-export function deleteProblem(id) {
+export async function deleteProblem(id) {
   const db = load();
   const problem = db.problems.find((p) => p.id === id);
   if (!problem) return false;
 
   db.problems = db.problems.filter((p) => p.id !== id);
   db.notes = db.notes.filter((n) => n.problemId !== id);
-  logActivity({ action: "Deleted", problemTitle: problem.title, topic: problem.topic });
+  const activity = logActivity({
+    action: "Deleted",
+    problemTitle: problem.title,
+    topic: problem.topic,
+  });
+
+  if (isRemoteMode()) {
+    await apiDeleteProblem(id);
+    await syncActivityRemote(activity);
+  }
+
   touch();
   return true;
 }
@@ -327,7 +450,7 @@ export function getTodaysMissionProblems() {
   return load().problems.filter((p) => p.inMission && p.missionDate === today);
 }
 
-export function addToMission(id, missionType = "new") {
+export async function addToMission(id, missionType = "new") {
   const today = todayKey();
   return updateProblem(id, {
     inMission: true,
@@ -337,7 +460,7 @@ export function addToMission(id, missionType = "new") {
   });
 }
 
-export function removeFromMission(id) {
+export async function removeFromMission(id) {
   return updateProblem(id, {
     inMission: false,
     missionDate: null,
@@ -346,7 +469,7 @@ export function removeFromMission(id) {
   });
 }
 
-export function toggleMissionDone(id) {
+export async function toggleMissionDone(id) {
   const problem = getProblem(id);
   if (!problem) return null;
 
@@ -357,40 +480,57 @@ export function toggleMissionDone(id) {
     updates.lastReviewAt = new Date().toISOString();
     updates.attempts = (problem.attempts || 0) + 1;
     if (problem.status === "todo") updates.status = "learning";
-    logActivity({
+    const activity = logActivity({
       action: problem.missionType === "revision" ? "Reviewed" : "Solved",
       problemId: id,
       problemTitle: problem.title,
       topic: problem.topic,
     });
+    const result = await updateProblem(id, updates, { silent: true });
+    if (isRemoteMode()) await syncActivityRemote(activity);
+    return result;
   }
 
   return updateProblem(id, updates, { silent: true });
 }
 
-export function markProblemSolved(id) {
+export async function markProblemSolved(id) {
   const problem = getProblem(id);
   if (!problem) return null;
 
-  logActivity({ action: "Solved", problemId: id, problemTitle: problem.title, topic: problem.topic });
-  return updateProblem(id, {
+  const activity = logActivity({
+    action: "Solved",
+    problemId: id,
+    problemTitle: problem.title,
+    topic: problem.topic,
+  });
+  const result = await updateProblem(id, {
     status: "mastered",
     missionDone: true,
     lastReviewAt: new Date().toISOString(),
     attempts: (problem.attempts || 0) + 1,
     nextReviewAt: new Date(Date.now() + 7 * 86400000).toISOString(),
   }, { silent: true });
+  if (isRemoteMode()) await syncActivityRemote(activity);
+  return result;
 }
 
-export function recordFailedAttempt(id) {
+export async function recordFailedAttempt(id) {
   const problem = getProblem(id);
   if (!problem) return null;
 
-  logActivity({ action: "Failed attempt", problemId: id, problemTitle: problem.title, topic: problem.topic });
-  return updateProblem(id, {
+  const activity = logActivity({
+    action: "Failed attempt",
+    problemId: id,
+    problemTitle: problem.title,
+    topic: problem.topic,
+  });
+  const result = await updateProblem(id, {
     status: "struggling",
     attempts: (problem.attempts || 0) + 1,
   }, { silent: true });
+  if (isRemoteMode()) await syncActivityRemote(activity);
+  return result;
 }
 
 /* ── Notes CRUD ── */

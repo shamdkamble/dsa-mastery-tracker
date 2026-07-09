@@ -133,7 +133,7 @@ async function init() {
   setAuthGuard(enforceRouteAccess);
 
   const sessionUser = await resolveAuthSession();
-  initDB(sessionUser || getSessionUser());
+  await initDB(sessionUser || getSessionUser());
   syncUserFromDB();
 
   initSidebar($("#sidebar"));

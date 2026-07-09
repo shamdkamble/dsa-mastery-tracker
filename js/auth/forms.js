@@ -38,7 +38,7 @@ async function handleLogin(form) {
 
   try {
     const result = await login({ identifier, password });
-    syncAuthState(result.user);
+    await syncAuthState(result.user);
     navigate(result.user.role === "admin" ? "admin" : "dashboard");
   } catch (err) {
     const message = err instanceof AuthApiError

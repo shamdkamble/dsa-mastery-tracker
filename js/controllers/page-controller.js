@@ -46,15 +46,23 @@ export function bindMissionHandlers(root) {
   root.addEventListener("click", (e) => {
     const doneBtn = e.target.closest("[data-action='toggle-mission']");
     if (doneBtn) {
-      toggleMissionDone(doneBtn.dataset.id);
-      refreshPage();
+      void toggleMissionDone(doneBtn.dataset.id)
+        .then(() => refreshPage())
+        .catch((err) => {
+          console.error("[mission] toggle failed", err);
+          showToast(Toast({ title: "Update failed", text: err?.message || "Could not update mission.", variant: "danger" }));
+        });
       return;
     }
 
     const solveBtn = e.target.closest("[data-action='mark-solved']");
     if (solveBtn) {
-      markProblemSolved(solveBtn.dataset.id);
-      refreshPage();
+      void markProblemSolved(solveBtn.dataset.id)
+        .then(() => refreshPage())
+        .catch((err) => {
+          console.error("[mission] solve failed", err);
+          showToast(Toast({ title: "Update failed", text: err?.message || "Could not mark solved.", variant: "danger" }));
+        });
       return;
     }
 
@@ -62,8 +70,9 @@ export function bindMissionHandlers(root) {
     if (startBtn) {
       const next = root.querySelector(".mission-card:not(.is-done) [data-action='toggle-mission']");
       if (next) {
-        toggleMissionDone(next.dataset.id);
-        refreshPage();
+        void toggleMissionDone(next.dataset.id)
+          .then(() => refreshPage())
+          .catch((err) => console.error("[mission] start-next failed", err));
       } else {
         showToast(Toast({ title: "All done!", text: "You've completed today's mission.", variant: "success" }));
       }
@@ -71,9 +80,15 @@ export function bindMissionHandlers(root) {
 
     const addMissionBtn = e.target.closest("[data-action='add-to-mission']");
     if (addMissionBtn) {
-      addToMission(addMissionBtn.dataset.id, addMissionBtn.dataset.type || "new");
-      showToast(Toast({ title: "Added to mission", variant: "success" }));
-      refreshPage();
+      void addToMission(addMissionBtn.dataset.id, addMissionBtn.dataset.type || "new")
+        .then(() => {
+          showToast(Toast({ title: "Added to mission", variant: "success" }));
+          refreshPage();
+        })
+        .catch((err) => {
+          console.error("[mission] add failed", err);
+          showToast(Toast({ title: "Failed", text: err?.message || "Could not add to mission.", variant: "danger" }));
+        });
     }
   });
 }

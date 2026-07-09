@@ -26,6 +26,15 @@ import {
 } from "./auth.js";
 import { canAccessTeachTopic } from "./roadmap-access.js";
 import {
+  UserDataError,
+  getUserData,
+  createProblem as createProblemRecord,
+  updateProblemRecord,
+  deleteProblemRecord,
+  createActivity as createActivityRecord,
+  migrateUserData,
+} from "./user-data-store.js";
+import {
   connectDB,
   formatMongoError,
   getLastMongoError,
@@ -88,6 +97,7 @@ app.get("/api/health", async (_req, res) => {
     provider: "gemini",
     model: resolveModel(),
     userStore: "mongodb-atlas",
+    problemStore: dbOk ? "mongodb-atlas" : "unavailable",
     userStorePersistent: dbOk,
     mongodb: diagnostics.status,
     mongo: {
@@ -147,6 +157,14 @@ initDatabase();
 
 function handleAuthError(res, err) {
   if (err instanceof AuthError) {
+    res.status(err.status).json({ error: { message: err.message, code: err.code } });
+    return true;
+  }
+  return false;
+}
+
+function handleUserDataError(res, err) {
+  if (err instanceof UserDataError) {
     res.status(err.status).json({ error: { message: err.message, code: err.code } });
     return true;
   }
@@ -245,6 +263,78 @@ app.patch("/api/auth/admin/users/:userId", requireAdmin, async (req, res) => {
     }
     console.error("[/api/auth/admin/users/:userId]", err);
     res.status(500).json({ error: { message: "Update failed.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/user-data", requireAuth, async (req, res) => {
+  try {
+    const data = await getUserData(req.auth.sub);
+    res.json(data);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/user-data]", err);
+    res.status(500).json({ error: { message: "Failed to load user data.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/user-data/migrate", requireAuth, async (req, res) => {
+  try {
+    const { problems, activities } = req.body ?? {};
+    const result = await migrateUserData(req.auth.sub, { problems, activities });
+    res.json(result);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleUserDataError(res, err)) return;
+    console.error("[/api/user-data/migrate]", err);
+    res.status(500).json({ error: { message: "Migration failed.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/problems", requireAuth, async (req, res) => {
+  try {
+    const problem = await createProblemRecord(req.auth.sub, req.body ?? {});
+    res.status(201).json({ problem });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleUserDataError(res, err)) return;
+    console.error("[/api/problems]", err);
+    res.status(500).json({ error: { message: "Failed to create problem.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.patch("/api/problems/:id", requireAuth, async (req, res) => {
+  try {
+    const problem = await updateProblemRecord(req.auth.sub, req.params.id, req.body ?? {});
+    res.json({ problem });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleUserDataError(res, err)) return;
+    console.error("[/api/problems/:id]", err);
+    res.status(500).json({ error: { message: "Failed to update problem.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.delete("/api/problems/:id", requireAuth, async (req, res) => {
+  try {
+    await deleteProblemRecord(req.auth.sub, req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleUserDataError(res, err)) return;
+    console.error("[/api/problems/:id]", err);
+    res.status(500).json({ error: { message: "Failed to delete problem.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/activities", requireAuth, async (req, res) => {
+  try {
+    const activity = await createActivityRecord(req.auth.sub, req.body ?? {});
+    res.status(201).json({ activity });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleUserDataError(res, err)) return;
+    console.error("[/api/activities]", err);
+    res.status(500).json({ error: { message: "Failed to log activity.", code: "SERVER_ERROR" } });
   }
 });
 

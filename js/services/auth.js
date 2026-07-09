@@ -144,7 +144,7 @@ export async function rejectUser(userId) {
 export function logout() {
   clearSession();
   resetAuthSyncState();
-  switchUserContext(null);
+  void switchUserContext(null);
   setState({
     user: {
       name: "Guest",
