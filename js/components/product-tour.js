@@ -11,8 +11,10 @@ import { isAuthenticated } from "../auth/session.js";
 import { isPublicRoute } from "../auth/guards.js";
 import { $ } from "../utils.js";
 
-const SPOTLIGHT_PAD = 8;
-const CARD_GAP = 16;
+const SPOTLIGHT_PAD = 10;
+const CARD_GAP = 20;
+const VIEWPORT_MARGIN = 16;
+const NAVBAR_CLEARANCE = 72;
 const WAIT_MS = 4000;
 
 let active = false;
@@ -21,6 +23,7 @@ let steps = [];
 let root = null;
 let resizeObserver = null;
 let scrollHandler = null;
+let currentCardMode = "auto";
 
 function ensureRoot() {
   if (root) return root;
@@ -39,30 +42,34 @@ function ensureRoot() {
       aria-labelledby="product-tour-title"
       aria-describedby="product-tour-body"
     >
-      <div class="product-tour__card-head">
-        <div class="product-tour__icon" id="product-tour-icon" aria-hidden="true"></div>
-        <button
-          type="button"
-          class="product-tour__close btn btn--ghost"
-          data-tour-action="skip"
-          aria-label="Close tour"
-        >
-          ${icon("close")}
-        </button>
-      </div>
-      <div class="product-tour__progress">
-        <div class="product-tour__progress-track">
-          <div class="product-tour__progress-bar" id="product-tour-progress"></div>
+      <div class="product-tour__card-inner">
+        <div class="product-tour__card-head">
+          <div class="product-tour__icon" id="product-tour-icon" aria-hidden="true"></div>
+          <div class="product-tour__head-text">
+            <span class="product-tour__progress-text" id="product-tour-progress-text"></span>
+            <h2 class="product-tour__title" id="product-tour-title"></h2>
+          </div>
+          <button
+            type="button"
+            class="product-tour__close btn btn--ghost"
+            data-tour-action="skip"
+            aria-label="Close tour"
+          >
+            ${icon("close")}
+          </button>
         </div>
-        <span class="product-tour__progress-text" id="product-tour-progress-text"></span>
-      </div>
-      <h2 class="product-tour__title" id="product-tour-title"></h2>
-      <p class="product-tour__body" id="product-tour-body"></p>
-      <div class="product-tour__actions">
-        <button type="button" class="btn btn--ghost btn--sm" data-tour-action="skip">Skip tour</button>
-        <div class="product-tour__nav">
-          <button type="button" class="btn btn--secondary btn--sm" data-tour-action="back">Back</button>
-          <button type="button" class="btn btn--primary btn--sm" data-tour-action="next">Next</button>
+        <div class="product-tour__progress">
+          <div class="product-tour__progress-track">
+            <div class="product-tour__progress-bar" id="product-tour-progress"></div>
+          </div>
+        </div>
+        <p class="product-tour__body" id="product-tour-body"></p>
+        <div class="product-tour__actions">
+          <button type="button" class="btn btn--ghost btn--sm" data-tour-action="skip">Skip</button>
+          <div class="product-tour__nav">
+            <button type="button" class="btn btn--secondary btn--sm" data-tour-action="back">Back</button>
+            <button type="button" class="btn btn--primary btn--sm" data-tour-action="next">Next</button>
+          </div>
         </div>
       </div>
     </div>
@@ -83,8 +90,6 @@ function ensureRoot() {
     } else if (action === "skip") {
       e.preventDefault();
       dismissTour();
-    } else if (action === "backdrop") {
-      /* keep tour open on backdrop click */
     }
   });
 
@@ -98,14 +103,14 @@ function wait(ms) {
 function waitForRoute(path) {
   const current = getCurrentPath();
   if (current === path) {
-    return wait(80);
+    return wait(100);
   }
 
   return new Promise((resolve) => {
     const handler = (e) => {
       if (e.detail?.path === path) {
         document.removeEventListener("route:change", handler);
-        wait(120).then(resolve);
+        wait(150).then(resolve);
       }
     };
     document.addEventListener("route:change", handler);
@@ -113,15 +118,29 @@ function waitForRoute(path) {
   });
 }
 
-async function waitForElement(selector, timeout = WAIT_MS) {
-  if (!selector) return null;
+function parseSelectors(target) {
+  if (!target) return [];
+  if (Array.isArray(target)) return target;
+  return target.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+async function resolveTarget(step) {
+  const selectors = parseSelectors(step.target);
+  if (!selectors.length) return null;
+
   const start = Date.now();
-  while (Date.now() - start < timeout) {
-    const el = document.querySelector(selector);
-    if (el) return el;
+  while (Date.now() - start < WAIT_MS) {
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
     await wait(50);
   }
   return null;
+}
+
+function getScrollContainer() {
+  return document.querySelector("#content") || document.documentElement;
 }
 
 function prepareSidebar(step) {
@@ -138,15 +157,23 @@ function prepareSidebar(step) {
   }
 }
 
-function getSpotlightRect(target, placement) {
-  if (!target || placement === "center") return null;
+function getSpotlightRect(target, step) {
+  if (!target || step.placement === "center") return null;
 
   const rect = target.getBoundingClientRect();
+  const pad = step.spotlightPad ?? SPOTLIGHT_PAD;
+  let height = rect.height + pad * 2;
+  const maxHeight = window.innerHeight * (step.maxSpotlightRatio ?? 0.42);
+
+  if (step.compactSpotlight && height > maxHeight) {
+    height = maxHeight;
+  }
+
   return {
-    top: Math.max(0, rect.top - SPOTLIGHT_PAD),
-    left: Math.max(0, rect.left - SPOTLIGHT_PAD),
-    width: rect.width + SPOTLIGHT_PAD * 2,
-    height: rect.height + SPOTLIGHT_PAD * 2,
+    top: Math.max(VIEWPORT_MARGIN, rect.top - pad),
+    left: Math.max(VIEWPORT_MARGIN, rect.left - pad),
+    width: Math.min(rect.width + pad * 2, window.innerWidth - VIEWPORT_MARGIN * 2),
+    height,
   };
 }
 
@@ -165,43 +192,43 @@ function positionSpotlight(spotlightEl, backdropEl, rect) {
   spotlightEl.style.height = `${rect.height}px`;
 }
 
-function positionCard(cardEl, rect, placement) {
-  const margin = 12;
+function getDockReserve(cardEl) {
+  if (!cardEl) return 200;
+  return cardEl.getBoundingClientRect().height + 28;
+}
+
+function positionCardDocked(cardEl) {
+  cardEl.classList.add("product-tour__card--dock");
+  cardEl.style.top = "auto";
+  cardEl.style.bottom = "";
+  cardEl.style.left = "50%";
+  cardEl.style.right = "auto";
+  cardEl.style.transform = "translateX(-50%)";
+  cardEl.style.width = `min(440px, calc(100vw - ${VIEWPORT_MARGIN * 2}px))`;
+}
+
+function positionCardAnchored(cardEl, rect, placement) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-
-  cardEl.classList.remove(
-    "product-tour__card--center",
-    "product-tour__card--top",
-    "product-tour__card--bottom",
-    "product-tour__card--left",
-    "product-tour__card--right",
-  );
-
-  if (!rect || placement === "center") {
-    cardEl.classList.add("product-tour__card--center");
-    cardEl.style.top = "";
-    cardEl.style.left = "";
-    cardEl.style.right = "";
-    cardEl.style.bottom = "";
-    cardEl.style.transform = "";
-    return;
-  }
-
   const cardRect = cardEl.getBoundingClientRect();
   let top = 0;
   let left = 0;
   let resolvedPlacement = placement;
 
-  const fitsBelow = rect.top + rect.height + CARD_GAP + cardRect.height < vh - margin;
-  const fitsAbove = rect.top - CARD_GAP - cardRect.height > margin;
-  const fitsRight = rect.left + rect.width + CARD_GAP + cardRect.width < vw - margin;
-  const fitsLeft = rect.left - CARD_GAP - cardRect.width > margin;
+  const fitsBelow = rect.top + rect.height + CARD_GAP + cardRect.height < vh - VIEWPORT_MARGIN;
+  const fitsAbove = rect.top - CARD_GAP - cardRect.height > NAVBAR_CLEARANCE;
+  const fitsRight = rect.left + rect.width + CARD_GAP + cardRect.width < vw - VIEWPORT_MARGIN;
+  const fitsLeft = rect.left - CARD_GAP - cardRect.width > VIEWPORT_MARGIN;
 
   if (placement === "bottom" && !fitsBelow && fitsAbove) resolvedPlacement = "top";
   if (placement === "top" && !fitsAbove && fitsBelow) resolvedPlacement = "bottom";
   if (placement === "right" && !fitsRight && fitsLeft) resolvedPlacement = "left";
   if (placement === "left" && !fitsLeft && fitsRight) resolvedPlacement = "right";
+
+  if (!fitsBelow && !fitsAbove && !fitsRight && !fitsLeft) {
+    positionCardDocked(cardEl);
+    return "dock";
+  }
 
   if (resolvedPlacement === "bottom") {
     top = rect.top + rect.height + CARD_GAP;
@@ -221,19 +248,85 @@ function positionCard(cardEl, rect, placement) {
     cardEl.classList.add("product-tour__card--left");
   }
 
-  left = Math.max(margin, Math.min(left, vw - cardRect.width - margin));
-  top = Math.max(margin, Math.min(top, vh - cardRect.height - margin));
+  left = Math.max(VIEWPORT_MARGIN, Math.min(left, vw - cardRect.width - VIEWPORT_MARGIN));
+  top = Math.max(NAVBAR_CLEARANCE, Math.min(top, vh - cardRect.height - VIEWPORT_MARGIN));
 
   cardEl.style.top = `${top}px`;
   cardEl.style.left = `${left}px`;
+  cardEl.style.bottom = "auto";
+  cardEl.style.right = "auto";
+  cardEl.style.transform = "";
+  cardEl.style.width = "";
+
+  return resolvedPlacement;
+}
+
+function positionCard(cardEl, rect, step) {
+  cardEl.classList.remove(
+    "product-tour__card--center",
+    "product-tour__card--top",
+    "product-tour__card--bottom",
+    "product-tour__card--left",
+    "product-tour__card--right",
+    "product-tour__card--dock",
+  );
+
+  cardEl.style.top = "";
+  cardEl.style.left = "";
   cardEl.style.right = "";
   cardEl.style.bottom = "";
   cardEl.style.transform = "";
+  cardEl.style.width = "";
+
+  const cardMode = step.cardMode || "auto";
+
+  if (!rect || step.placement === "center") {
+    cardEl.classList.add("product-tour__card--center");
+    currentCardMode = "center";
+    return;
+  }
+
+  if (cardMode === "dock" || window.innerWidth <= 768) {
+    positionCardDocked(cardEl);
+    currentCardMode = "dock";
+    return;
+  }
+
+  const result = positionCardAnchored(cardEl, rect, step.placement);
+  currentCardMode = result === "dock" ? "dock" : "anchored";
 }
 
-function scrollTargetIntoView(target) {
+async function scrollTargetIntoView(target, step) {
   if (!target) return;
-  target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+
+  const container = getScrollContainer();
+  const cardMode = step.cardMode === "dock" || window.innerWidth <= 768 ? "dock" : step.cardMode;
+  const cardEl = $(".product-tour__card", root);
+
+  target.scrollIntoView({ block: "start", inline: "nearest", behavior: "auto" });
+
+  await wait(16);
+
+  const dockReserve = cardMode === "dock" ? getDockReserve(cardEl) : 32;
+  const rect = target.getBoundingClientRect();
+  const idealTop = NAVBAR_CLEARANCE;
+  const maxBottom = window.innerHeight - dockReserve;
+
+  let scrollDelta = 0;
+  if (rect.top < idealTop) {
+    scrollDelta = rect.top - idealTop;
+  } else if (rect.bottom > maxBottom) {
+    scrollDelta = rect.bottom - maxBottom;
+  }
+
+  if (Math.abs(scrollDelta) > 6) {
+    if (container === document.documentElement) {
+      window.scrollBy({ top: scrollDelta, behavior: "smooth" });
+    } else {
+      container.scrollBy({ top: scrollDelta, behavior: "smooth" });
+      await wait(280);
+    }
+  }
 }
 
 function bindReposition(target, step) {
@@ -245,18 +338,20 @@ function bindReposition(target, step) {
     const backdropEl = $(".product-tour__backdrop", root);
     const cardEl = $(".product-tour__card", root);
     if (!spotlightEl || !cardEl) return;
-    const rect = getSpotlightRect(target, step.placement);
+    const rect = getSpotlightRect(target, step);
     positionSpotlight(spotlightEl, backdropEl, rect);
-    positionCard(cardEl, rect, step.placement);
+    positionCard(cardEl, rect, step);
   };
 
   scrollHandler = reposition;
   window.addEventListener("resize", reposition);
   window.addEventListener("scroll", reposition, true);
 
-  if (target && typeof ResizeObserver !== "undefined") {
+  const cardEl = $(".product-tour__card", root);
+  if (typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(reposition);
-    resizeObserver.observe(target);
+    if (target) resizeObserver.observe(target);
+    if (cardEl) resizeObserver.observe(cardEl);
   }
 
   reposition();
@@ -295,6 +390,7 @@ function renderStepUI(step, index) {
   }
 
   root?.setAttribute("aria-label", `Tour: ${step.title}`);
+  root.dataset.cardMode = step.cardMode || "auto";
 }
 
 async function showStep(index) {
@@ -308,36 +404,36 @@ async function showStep(index) {
     await waitForRoute(step.route);
   }
 
-  let target = null;
-  if (step.target) {
-    target = await waitForElement(step.target);
-    if (target) {
-      scrollTargetIntoView(target);
-      await wait(80);
-    }
-  }
+  const target = await resolveTarget(step);
 
   renderStepUI(step, index);
+
+  if (target) {
+    await scrollTargetIntoView(target, step);
+  }
 
   const spotlightEl = $(".product-tour__spotlight", root);
   const backdropEl = $(".product-tour__backdrop", root);
   const cardEl = $(".product-tour__card", root);
-  const rect = getSpotlightRect(target, step.placement);
+  const rect = getSpotlightRect(target, step);
 
   positionSpotlight(spotlightEl, backdropEl, rect);
-  positionCard(cardEl, rect, step.placement);
+  positionCard(cardEl, rect, step);
 
   requestAnimationFrame(() => {
-    positionCard(cardEl, getSpotlightRect(target, step.placement), step.placement);
+    positionCard(cardEl, getSpotlightRect(target, step), step);
     bindReposition(target, step);
   });
 
+  clearTargetHighlight();
   if (target) {
     target.classList.add("product-tour__target");
     root.dataset.tourTarget = step.id;
   } else {
     root.dataset.tourTarget = step.placement === "center" ? "center" : "missing";
   }
+
+  document.body.dataset.tourCardMode = currentCardMode;
 }
 
 function clearTargetHighlight() {
@@ -358,6 +454,7 @@ function closeTourUI() {
   clearTargetHighlight();
   root?.setAttribute("hidden", "");
   document.body.classList.remove("tour-active");
+  delete document.body.dataset.tourCardMode;
   active = false;
 
   if (window.innerWidth <= 768) {
@@ -401,13 +498,11 @@ async function goNext() {
     completeTour();
     return;
   }
-  clearTargetHighlight();
   await showStep(stepIndex + 1);
 }
 
 async function goBack() {
   if (stepIndex <= 0) return;
-  clearTargetHighlight();
   await showStep(stepIndex - 1);
 }
 

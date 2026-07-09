@@ -80,7 +80,7 @@ export default {
       title: "Today's Mission",
       description: "Your personalized daily plan — revisions, new problems, and optional challenges.",
       children: `
-        <div class="mission-hero animate-fade-in-up">
+        <div class="mission-hero animate-fade-in-up" data-tour="mission-hero">
           <div class="mission-hero__progress">
             ${ProgressCircle({ value: percent })}
           </div>
