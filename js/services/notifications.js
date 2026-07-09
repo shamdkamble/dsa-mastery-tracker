@@ -55,6 +55,17 @@ export function buildNotificationItems() {
     });
   }
 
+  if (user?.status === "approved" && user?.accessLevel === "trial" && user?.role !== "admin") {
+    items.push({
+      id: "trial-upgrade",
+      title: "Upgrade to Premium",
+      text: "Your trial includes Phase 1. Upgrade for all phases and unlimited AI lessons.",
+      variant: "accent",
+      time: "Upgrade",
+      href: "#/roadmap",
+    });
+  }
+
   const stats = computeStats();
 
   if (stats.revisionsDue > 0) {

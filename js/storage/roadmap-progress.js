@@ -11,6 +11,7 @@ import { getToken } from "../auth/session.js";
 
 let completedIds = new Set();
 let loadPromise = null;
+let progressLoaded = false;
 
 function isRemoteMode() {
   return Boolean(getToken());
@@ -34,17 +35,21 @@ export function countCompletedInPhase(phaseId, topics) {
   return topics.filter((t) => completedIds.has(t.id)).length;
 }
 
-export async function loadRoadmapProgress() {
+export async function loadRoadmapProgress({ force = false } = {}) {
   if (!isRemoteMode()) {
     completedIds = new Set();
+    progressLoaded = true;
     return getRoadmapCompletionStats();
   }
+
+  if (progressLoaded && !force) return getRoadmapCompletionStats();
 
   if (loadPromise) return loadPromise;
 
   loadPromise = fetchRoadmapProgress()
     .then((data) => {
       completedIds = new Set(data.completedTopicIds || []);
+      progressLoaded = true;
       dispatch("roadmap:progress", { completedTopicIds: getCompletedTopicIds() });
       return getRoadmapCompletionStats();
     })
@@ -62,6 +67,7 @@ export async function loadRoadmapProgress() {
 export function resetRoadmapProgress() {
   completedIds = new Set();
   loadPromise = null;
+  progressLoaded = false;
 }
 
 export async function markTopicComplete(topicId) {

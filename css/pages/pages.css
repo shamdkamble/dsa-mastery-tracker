@@ -1968,6 +1968,7 @@
 
 .roadmap-phase__content {
   overflow: hidden;
+  min-height: 0;
   padding: 0 var(--space-5) 0 calc(var(--space-5) + 3.5rem + var(--space-4));
   border-top: var(--border-width) solid transparent;
   transition: border-color var(--duration-fast) var(--ease-out),

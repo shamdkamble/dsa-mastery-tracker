@@ -7,7 +7,7 @@ import { Badge, DifficultyBadge } from "./ui/index.js";
 import { openModal, closeModal, initModals } from "./ui/interactions.js";
 import { TeachApiError } from "../api/geminiApi.js";
 import { fetchCachedLesson, fetchLesson } from "../api/teachApi.js";
-import { canAccessTopic } from "../auth/access.js";
+import { canAccessAiLesson } from "../auth/access.js";
 import { getSessionUser } from "../auth/session.js";
 import { openUpgradeModal } from "./upgrade-modal.js";
 import {
@@ -469,7 +469,7 @@ async function handleMarkComplete() {
     const next = getNextRoadmapTopic(currentTopic.id);
     const user = getSessionUser();
 
-    if (next && canAccessTopic(user, next, next.step)) {
+    if (next && canAccessAiLesson(user, next)) {
       const nextTopic = normalizeTopic({
         id: next.id,
         name: next.name,
@@ -606,7 +606,7 @@ function onTeachButtonClick(e) {
   const topic = parseTopicFromButton(btn);
   const user = getSessionUser();
 
-  if (!canAccessTopic(user, topic, topic.step)) {
+  if (!canAccessAiLesson(user, topic)) {
     openUpgradeModal();
     return;
   }
