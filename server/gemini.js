@@ -55,41 +55,78 @@ export function resolveModel() {
 }
 const DEFAULT_TIMEOUT_MS = 120_000;
 
-export const TEACHING_SYSTEM_PROMPT = `You are an expert computer science tutor in the DSA Mastery Tracker app. Your student is preparing for FAANG-level technical interviews.
+export const MIN_LESSON_SECTIONS = 4;
 
-You MUST structure every lesson using EXACTLY these four markdown section headings (include the numbers):
+export const BANNED_LESSON_PHRASES = [
+  "hello there",
+  "hey there",
+  "welcome to",
+  "let's get started",
+  "let's dive",
+  "let us dive",
+  "sure, let",
+  "absolutely critical",
+  "absolutely crucial",
+  "in this section",
+  "in conclusion",
+  "to summarize",
+  "it's worth noting",
+  "it is worth noting",
+  "great question",
+  "i'd be happy to",
+  "i would be happy to",
+];
 
-## 1. History & Problem it Solved
-## 2. Real Life Analogy
-## 3. Technical Explanation & Complexity
-## 4. C++ Code Examples
+export const TEACHING_SYSTEM_PROMPT = `You are a senior computer science mentor in the DSA Mastery Tracker app. You teach one dedicated student who is preparing for rigorous technical interviews.
 
-Rules:
-- Write clear, engaging prose under each section — no skipping sections.
-- Section 1: historical context, why this concept exists, what problem it solves.
-- Section 2: one concrete, memorable real-world analogy.
-- Section 3: technical depth, how it works, time/space complexity where relevant, edge cases. Focus on C++ implementation details.
-- Section 4: clean, interview-ready C++ code in fenced \`\`\`cpp blocks with brief comments.
-- Prefer C++ STL (vector, unordered_map, string, algorithm) for examples.
-- Connect to LeetCode/interview patterns when relevant.
-- Tone: encouraging, precise, practical. No filler.`;
+Voice and tone:
+- Sound like a patient, experienced teacher — direct, professional, and warm.
+- Address the student as "you". Occasional first-person is fine ("What I want you to grasp here is…").
+- Teach immediately. Your first line must be a \`##\` heading — no greeting, no preamble, no chatbot filler.
+- Never use generic AI phrases: no "Hello there!", "Let's get started!", "Sure, let's dive into…", "Absolutely critical", "In this section we will…", "It's worth noting", or similar filler.
 
-export const SIMPLER_TEACHING_SYSTEM_PROMPT = `You are a patient CS tutor rewriting lessons for beginners in the DSA Mastery Tracker app.
+Structure — exactly four markdown sections with descriptive, topic-specific headings:
+- Format each heading as \`## Your Heading Here\`.
+- Do NOT number sections (no "Section 1", no "1.", no "SECTION 2").
+- Choose four clear, meaningful headings tailored to this topic. Match this style (adapt wording to the topic):
+  - Why the concept matters / the problem it solves (e.g. "Why Time & Space Complexity Matters", "The Problem Binary Search Solves")
+  - The core idea / how it works (e.g. "The Core Idea", "How Recursion Unwinds")
+  - A vivid real-world analogy (e.g. "Think of It Like Sorting Mail", "A Library Catalog Analogy")
+  - C++ practice (e.g. "C++ in Interview Context", "Putting It Into Practice")
 
-You MUST keep EXACTLY these four markdown section headings (include the numbers):
+Content under each heading:
+1. First heading — why this concept exists, what problem it solves, where it fits in a programmer's toolkit.
+2. Second heading — the core technical idea explained clearly; build intuition before details.
+3. Third heading — one concrete, memorable real-world analogy.
+4. Fourth heading — interview-ready C++ in fenced \`\`\`cpp blocks with brief comments. Prefer STL (vector, unordered_map, string, algorithm). Tie to LeetCode/interview patterns when relevant.
 
-## 1. History & Problem it Solved
-## 2. Real Life Analogy
-## 3. Technical Explanation & Complexity
-## 4. C++ Code Examples
+Quality rules:
+- Every section needs multiple paragraphs of substance — never a single sentence.
+- Include time/space complexity where relevant, plus edge cases in the technical sections.
+- No filler, no repetition across sections.
+- High quality, human, and engaging — like a mentor who respects the student's time.`;
 
-Rules:
+export const SIMPLER_TEACHING_SYSTEM_PROMPT = `You are a patient senior mentor rewriting a lesson for a beginner in the DSA Mastery Tracker app.
+
+You receive a complete standard lesson. Rewrite the ENTIRE lesson — every section, every paragraph — in simpler words while preserving the mentor voice.
+
+Voice and tone:
+- Same mentor: direct, warm, professional — never condescending.
+- No generic AI phrases (no greetings, no "Let's dive in", no filler).
+- Start directly with the first \`##\` heading — no intro before it.
+
+Structure:
+- Output exactly four \`##\` sections.
+- Keep the same four section headings from the original lesson (same wording).
+- Do NOT number sections (no "Section 1", no "1.").
+
+Rewrite rules:
+- Rewrite every paragraph under each heading — same facts, same code, simpler words.
 - Use plain language, short sentences, and everyday vocabulary.
 - Explain jargon when you must use it.
 - Keep the same technical accuracy but make it easier to follow.
-- Section 2: use a very concrete, memorable analogy.
-- Section 4: keep \`\`\`cpp examples with extra brief comments.
-- Tone: warm, encouraging, never condescending.`;
+- Keep all \`\`\`cpp code examples; add extra brief comments so beginners can follow.
+- Never skip, merge, or shorten a section to just one sentence.`;
 
 export class TeachApiError extends Error {
   constructor(message, { status = 500, code = "SERVER_ERROR", details } = {}) {
@@ -132,9 +169,9 @@ function topicName(topic) {
 function buildUserPrompt(topic) {
   if (typeof topic === "string") {
     return [
-      `Create a structured lesson for: **${topic.trim()}**`,
+      `Teach **${topic.trim()}** as a personalized mentor lesson.`,
       "",
-      "Follow the four required sections from your system instructions.",
+      "Use four descriptive ## headings tailored to this topic. Start with the first heading — no preamble.",
     ].join("\n");
   }
 
@@ -146,12 +183,12 @@ function buildUserPrompt(topic) {
     const meta = [phase, difficulty, track].filter(Boolean).join(" · ");
 
     return [
-      `Create a structured lesson for: **${name}**`,
+      `Teach **${name}** as a personalized mentor lesson.`,
       meta && `Context: ${meta}`,
       topic.description?.trim() && `Notes: ${topic.description.trim()}`,
       "",
-      "Follow the four required sections from your system instructions.",
-      "Make the lesson appropriately challenging for the stated difficulty.",
+      "Use four descriptive ## headings tailored to this topic. Start with the first heading — no preamble.",
+      "Match depth to the stated difficulty.",
     ].filter(Boolean).join("\n");
   }
 
@@ -350,7 +387,7 @@ export async function generateWithModelFallback({
           };
         } catch (validationErr) {
           const retryable = validationErr instanceof TeachApiError
-            && ["PARSE_ERROR", "EMPTY_RESPONSE"].includes(validationErr.code);
+            && ["PARSE_ERROR", "EMPTY_RESPONSE", "INVALID_STRUCTURE"].includes(validationErr.code);
 
           if (retryable) {
             console.warn(`[gemini] model ${model} returned unparseable response — trying next...`);
@@ -478,12 +515,108 @@ export async function generateContent({ systemPrompt = null, userPrompt, options
   }
 }
 
+export function extractLessonHeadings(content) {
+  const matches = content.match(/^##\s+(.+)$/gm) || [];
+  return matches.map((heading) => heading.replace(/^##\s+/, "").trim());
+}
+
+const LEGACY_TEMPLATE_HEADINGS = new Set([
+  "history & problem it solved",
+  "real life analogy",
+  "technical explanation & complexity",
+  "c++ code examples",
+]);
+
+function hasGenericHeading(headings) {
+  return headings.some((heading) => (
+    /^section\s*\d+/i.test(heading)
+    || /^\d+\.\s/.test(heading)
+    || LEGACY_TEMPLATE_HEADINGS.has(heading.toLowerCase())
+  ));
+}
+
+function hasBannedPhrases(content) {
+  const sample = content.slice(0, 600).toLowerCase();
+  return BANNED_LESSON_PHRASES.some((phrase) => sample.includes(phrase));
+}
+
+function hasSignificantPreamble(content) {
+  const firstHeading = content.search(/^##\s+/m);
+  if (firstHeading <= 0) return false;
+  return content.slice(0, firstHeading).trim().length > 30;
+}
+
+export function isCompleteLesson(content) {
+  if (!content?.trim()) return false;
+
+  const headings = extractLessonHeadings(content);
+  if (headings.length < MIN_LESSON_SECTIONS) return false;
+  if (!/```(?:cpp|c\+\+)?[\s\S]*?```/i.test(content)) return false;
+  if (hasGenericHeading(headings)) return false;
+  if (hasSignificantPreamble(content)) return false;
+
+  return true;
+}
+
+function validateLessonStructure(content) {
+  if (!content?.trim()) {
+    throw new TeachApiError("Gemini returned an empty response.", {
+      status: 502,
+      code: "EMPTY_RESPONSE",
+    });
+  }
+
+  const headings = extractLessonHeadings(content);
+
+  if (headings.length < MIN_LESSON_SECTIONS) {
+    throw new TeachApiError(
+      `Lesson needs at least ${MIN_LESSON_SECTIONS} ## sections (found ${headings.length}).`,
+      { status: 502, code: "INVALID_STRUCTURE" },
+    );
+  }
+
+  if (!/```(?:cpp|c\+\+)?[\s\S]*?```/i.test(content)) {
+    throw new TeachApiError("Lesson is missing a C++ code block.", {
+      status: 502,
+      code: "INVALID_STRUCTURE",
+    });
+  }
+
+  if (hasGenericHeading(headings)) {
+    throw new TeachApiError("Lesson uses generic numbered section headings.", {
+      status: 502,
+      code: "INVALID_STRUCTURE",
+    });
+  }
+
+  if (hasSignificantPreamble(content)) {
+    throw new TeachApiError("Lesson must start with the first section heading — no preamble.", {
+      status: 502,
+      code: "INVALID_STRUCTURE",
+    });
+  }
+
+  if (hasBannedPhrases(content)) {
+    throw new TeachApiError("Lesson contains generic AI filler phrases.", {
+      status: 502,
+      code: "INVALID_STRUCTURE",
+    });
+  }
+}
+
 function buildSimplerUserPrompt(topic, standardContent) {
   const name = topicName(topic) || "this topic";
+  const headings = extractLessonHeadings(standardContent);
+  const headingList = headings.length
+    ? headings.map((heading) => `- ${heading}`).join("\n")
+    : "- (use four descriptive ## headings from the original)";
+
   return [
-    `Rewrite the lesson below for **${name}** in simpler, beginner-friendly words.`,
-    "Keep the same four numbered section headings and structure.",
-    "Do not omit sections or code examples.",
+    `Rewrite the ENTIRE lesson below for **${name}** in simpler, beginner-friendly words.`,
+    "Keep these exact section headings:",
+    headingList,
+    "Rewrite every paragraph under each heading — do not write only a short introduction.",
+    "Keep all C++ code examples; add brief comments so beginners can follow.",
     "",
     "Original lesson:",
     standardContent.trim(),
@@ -502,8 +635,12 @@ export async function teachTopic(topic, options = {}) {
     return await generateWithModelFallback({
       apiKey,
       userPrompt,
-      options,
+      options: {
+        ...options,
+        maxTokens: options.maxTokens ?? 4096,
+      },
       signal: controller.signal,
+      validateResponse: validateLessonStructure,
       onSuccess: (model) => console.log(`[gemini] lesson generated with ${model}`),
     });
   } catch (err) {
@@ -533,9 +670,14 @@ export async function teachTopicSimpler(topic, standardContent, options = {}) {
     return await generateWithModelFallback({
       apiKey,
       userPrompt,
-      options: { ...options, temperature: options.temperature ?? 0.5 },
+      options: {
+        ...options,
+        temperature: options.temperature ?? 0.5,
+        maxTokens: options.maxTokens ?? 4096,
+      },
       systemPrompt: SIMPLER_TEACHING_SYSTEM_PROMPT,
       signal: controller.signal,
+      validateResponse: validateLessonStructure,
       onSuccess: (model) => console.log(`[gemini] simpler lesson generated with ${model}`),
     });
   } catch (err) {

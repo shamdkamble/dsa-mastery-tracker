@@ -155,6 +155,16 @@ async function runMigrations() {
   } catch (err) {
     console.warn(`${LOG_PREFIX} Legacy migration skipped:`, err.message);
   }
+
+  try {
+    const { flushLessonsForMentorPromptRefresh } = await import("./migrate-flush-lessons.js");
+    const flushResult = await flushLessonsForMentorPromptRefresh();
+    if (!flushResult.skipped && flushResult.flushed > 0) {
+      console.log(`${LOG_PREFIX} Flushed ${flushResult.flushed} cached lesson(s) for mentor prompt refresh`);
+    }
+  } catch (err) {
+    console.warn(`${LOG_PREFIX} Lesson flush migration skipped:`, err.message);
+  }
 }
 
 export async function connectDB() {

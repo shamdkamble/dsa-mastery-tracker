@@ -4,7 +4,12 @@
 
 import { Lesson, toLessonDto } from "./models/Lesson.js";
 import { RoadmapProgress, toProgressDto } from "./models/RoadmapProgress.js";
-import { teachTopic, teachTopicSimpler, TeachApiError } from "./gemini.js";
+import {
+  teachTopic,
+  teachTopicSimpler,
+  TeachApiError,
+  isCompleteLesson,
+} from "./gemini.js";
 
 export class LessonStoreError extends Error {
   constructor(message, { status = 400, code = "LESSON_ERROR" } = {}) {
@@ -33,6 +38,10 @@ function variantPayload(result) {
   };
 }
 
+function hasCompleteLessonSections(content) {
+  return isCompleteLesson(content);
+}
+
 export async function getCachedLesson(topicId) {
   const doc = await Lesson.findOne({ topicId }).lean();
   if (!doc) return null;
@@ -45,13 +54,14 @@ export async function getOrCreateStandardLesson(topic) {
   }
 
   const existing = await Lesson.findOne({ topicId: topic.id });
-  if (existing?.standard?.content) {
+  if (existing?.standard?.content && hasCompleteLessonSections(existing.standard.content)) {
+    const simplerContent = existing.simpler?.content || null;
     return {
       content: existing.standard.content,
-      simplerContent: existing.simpler?.content || null,
+      simplerContent: hasCompleteLessonSections(simplerContent) ? simplerContent : null,
       model: existing.standard.model,
       cached: true,
-      hasSimpler: Boolean(existing.simpler?.content),
+      hasSimpler: hasCompleteLessonSections(simplerContent),
       topicId: topic.id,
     };
   }
@@ -87,7 +97,7 @@ export async function getOrCreateSimplerLesson(topic) {
 
   let doc = await Lesson.findOne({ topicId: topic.id });
 
-  if (doc?.simpler?.content) {
+  if (doc?.simpler?.content && hasCompleteLessonSections(doc.simpler.content)) {
     return {
       content: doc.simpler.content,
       model: doc.simpler.model,

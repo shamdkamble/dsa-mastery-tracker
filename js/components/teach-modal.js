@@ -102,20 +102,21 @@ function parseSections(content) {
 
   if (chunks.length <= 1) {
     return [{
-      number: 1,
       title: "Lesson",
       body: formatMarkdown(content),
     }];
   }
 
-  return chunks.map((chunk, i) => {
+  return chunks.map((chunk) => {
     const newline = chunk.indexOf("\n");
     const rawTitle = newline === -1 ? chunk : chunk.slice(0, newline);
     const body = newline === -1 ? "" : chunk.slice(newline + 1);
-    const title = rawTitle.replace(/^\d+\.\s*/, "").trim();
+    const title = rawTitle
+      .replace(/^section\s*\d+\s*[:.\-–—]?\s*/i, "")
+      .replace(/^\d+\.\s*/, "")
+      .trim();
 
     return {
-      number: i + 1,
       title,
       body: formatMarkdown(body),
     };
@@ -130,7 +131,6 @@ function renderSectionCard(section, index) {
       <div class="teach-section__head">
         <div class="teach-section__icon" aria-hidden="true">${icon(iconName)}</div>
         <div>
-          <span class="teach-section__num">Section ${section.number}</span>
           <h3 class="teach-section__title">${escapeHtml(section.title)}</h3>
         </div>
       </div>
@@ -150,10 +150,10 @@ function renderLesson(content) {
 
 function renderLoadingSteps(activeIndex = 0) {
   const steps = [
-    "History & Problem",
-    "Real Life Analogy",
-    "Technical Deep Dive",
-    "C++ Examples",
+    "Why it matters",
+    "The core idea",
+    "Real-world connection",
+    "C++ practice",
   ];
 
   return steps.map((label, i) => `
@@ -171,11 +171,11 @@ function renderLoading(topicName, { cachedHint = false } = {}) {
         <div class="teach-loading__ring" aria-hidden="true">
           <div class="teach-loading__spinner">${icon("loader")}</div>
         </div>
-        <p class="teach-loading__title">${cachedHint ? "Loading saved lesson" : "Generating your lesson"}</p>
+        <p class="teach-loading__title">${cachedHint ? "Loading your lesson" : "Preparing your lesson"}</p>
         <p class="teach-loading__sub">
           ${cachedHint
             ? `Fetching <strong>${escapeHtml(topicName)}</strong> from your lesson library`
-            : `Building a structured guide for <strong>${escapeHtml(topicName)}</strong>`}
+            : `Your mentor is building a focused lesson on <strong>${escapeHtml(topicName)}</strong>`}
         </p>
         ${cachedHint ? "" : `
         <div class="teach-loading__steps" id="teach-loading-steps">
