@@ -11,6 +11,7 @@ import {
 import { refreshPage } from "../controllers/page-controller.js";
 import { getCurrentPath } from "../router.js";
 import { renderAiLockBadge } from "../components/access-ui.js";
+import { getTierBannerClass } from "../subscription-theme.js";
 import {
   canAccessAiGeneration,
   canAccessPhase,
@@ -176,7 +177,7 @@ function renderTierBanner(user) {
   }
 
   return `
-    <div class="roadmap-tier-banner animate-fade-in-up">
+    <div class="roadmap-tier-banner ${getTierBannerClass(user)} animate-fade-in-up">
       <div class="roadmap-tier-banner__icon" aria-hidden="true">${icon(hasTrialAccess(user) ? "clock" : "lock")}</div>
       <div class="roadmap-tier-banner__body">
         <p class="roadmap-tier-banner__title">${title}</p>

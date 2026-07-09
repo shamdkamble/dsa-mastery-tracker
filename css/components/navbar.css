@@ -73,6 +73,10 @@
   flex-shrink: 0;
 }
 
+.navbar__subscription {
+  margin-right: var(--space-1);
+}
+
 .navbar__action {
   position: relative;
   display: flex;

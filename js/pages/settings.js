@@ -6,9 +6,12 @@ import { computeStats } from "../storage/computed.js";
 import { getInitials } from "../storage/helpers.js";
 import { getTheme } from "../theme.js";
 import { getState } from "../state.js";
+import { getSessionUser } from "../auth/session.js";
+import { renderSubscriptionStatusCard } from "../subscription-theme.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 
 const SETTINGS_NAV = [
+  { id: "subscription", label: "Subscription", icon: "zap" },
   { id: "profile", label: "Profile", icon: "user" },
   { id: "appearance", label: "Appearance", icon: "palette" },
   { id: "notifications", label: "Notifications", icon: "bell" },
@@ -38,6 +41,7 @@ export default {
       : "Recently";
     const isDark = getTheme() === "dark";
     const { sidebarCollapsed } = getState();
+    const sessionUser = getSessionUser();
 
     return createPage({
       title: "Settings",
@@ -54,6 +58,12 @@ export default {
           </nav>
 
           <div class="settings-panel">
+            <div id="subscription" class="settings-group settings-group--subscription">
+              <h2 class="settings-group__title">Subscription</h2>
+              <p class="settings-group__desc">Your plan controls roadmap access and AI features.</p>
+              ${renderSubscriptionStatusCard(sessionUser)}
+            </div>
+
             <div class="settings-profile">
               ${Avatar({ initials: getInitials(user.name || "Learner"), size: "xl" })}
               <div class="settings-profile__info">

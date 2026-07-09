@@ -10,6 +10,8 @@ import { addSearchRecent } from "../storage/db.js";
 import { markNotificationRead, markAllNotificationsRead } from "../storage/db.js";
 import { getNotifications, getUnreadNotificationCount } from "../services/notifications.js";
 import { $, debounce } from "../utils.js";
+import { getSessionUser } from "../auth/session.js";
+import { renderSubscriptionBadge, getSubscriptionTier } from "../subscription-theme.js";
 
 const ROUTE_TITLES = {
   dashboard: "Dashboard",
@@ -92,6 +94,9 @@ function renderNavbar(state) {
   const badge = notifications > 0
     ? `<span class="navbar__notification-badge" aria-hidden="true">${notifications > 9 ? "9+" : notifications}</span>`
     : "";
+  const subBadge = renderSubscriptionBadge();
+  const tier = user.subscriptionTier || getSubscriptionTier(getSessionUser());
+  const isPremium = tier === "premium";
 
   return `
     <div class="navbar__left">
@@ -152,7 +157,9 @@ function renderNavbar(state) {
         ${icon("help")}
       </button>
 
-      <button class="navbar__profile" type="button" aria-label="User profile menu" aria-haspopup="true">
+      <div class="navbar__subscription" data-subscription-badge ${subBadge ? "" : "hidden"}>${subBadge}</div>
+
+      <button class="navbar__profile${isPremium ? " navbar__profile--premium" : ""}" type="button" aria-label="User profile menu" aria-haspopup="true">
         <span class="navbar__profile-avatar" aria-hidden="true">${user.initials}</span>
         <span class="navbar__profile-name">${user.name}</span>
         <span class="navbar__profile-chevron" aria-hidden="true">${icon("chevronDown")}</span>
@@ -361,11 +368,8 @@ export function initNavbar(container) {
 
   document.addEventListener("auth:change", () => {
     closeNotificationPanel(container);
-    const { user } = getState();
-    const avatar = $(".navbar__profile-avatar", container);
-    const nameEl = $(".navbar__profile-name", container);
-    if (avatar) avatar.textContent = user.initials;
-    if (nameEl) nameEl.textContent = user.name;
+    container.innerHTML = renderNavbar(getState());
+    bindEvents(container);
     refreshNotificationUI(container);
   });
 }

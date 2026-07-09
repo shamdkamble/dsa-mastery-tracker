@@ -14,6 +14,7 @@ import { bindPageHandlers } from "./controllers/page-controller.js";
 import { initDB, getUser } from "./storage/db.js";
 import { getInitials } from "./storage/helpers.js";
 import { getSessionUser } from "./auth/session.js";
+import { getSubscriptionTier, syncSubscriptionPresentation } from "./subscription-theme.js";
 import { initProblemModalTriggers } from "./components/problem-modal.js";
 import { initLeetcodeLinks } from "./components/leetcode-actions.js";
 import { initTeachModal } from "./components/teach-modal.js";
@@ -58,8 +59,11 @@ function syncUserFromDB() {
         role: sessionUser.role === "admin" ? "Administrator" : "DSA Learner",
         authRole: sessionUser.role,
         status: sessionUser.status,
+        accessLevel: sessionUser.accessLevel,
+        subscriptionTier: getSubscriptionTier(sessionUser),
       },
     });
+    syncSubscriptionPresentation(sessionUser);
     return;
   }
 
@@ -69,8 +73,10 @@ function syncUserFromDB() {
       name: user.name || "Learner",
       initials: getInitials(user.name || "Learner"),
       role: "DSA Learner",
+      subscriptionTier: "standard",
     },
   });
+  syncSubscriptionPresentation(null);
 }
 
 function initAppShell() {
@@ -114,7 +120,10 @@ function initDataRefresh() {
   const content = $("#content");
 
   document.addEventListener("auth:change", (e) => {
-    if (!e.detail?.user) return;
+    if (!e.detail?.user) {
+      syncSubscriptionPresentation(null);
+      return;
+    }
     syncUserFromDB();
     const path = getCurrentPath();
     if (DATA_DRIVEN_ROUTES.has(path)) {
@@ -137,6 +146,7 @@ async function init() {
   const sessionUser = await resolveAuthSession();
   await initDB(sessionUser || getSessionUser());
   syncUserFromDB();
+  syncSubscriptionPresentation(sessionUser || getSessionUser());
 
   initSidebar($("#sidebar"));
   initNavbar($("#navbar"));

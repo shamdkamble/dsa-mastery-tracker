@@ -11,6 +11,7 @@ import { getProblems } from "../storage/db.js";
 import { computeTodaysMission } from "../storage/computed.js";
 import { isAdmin } from "../auth/session.js";
 import { logout } from "../services/auth.js";
+import { renderSubscriptionBadge } from "../subscription-theme.js";
 
 function getNavSections() {
   const problemCount = getProblems().length;
@@ -67,6 +68,8 @@ function renderNavLink(item, currentRoute) {
 
 function renderSidebar(state) {
   const { currentRoute, user } = state;
+  const subBadge = renderSubscriptionBadge();
+
   const sections = getNavSections().map(
     (section) => `
       <div class="sidebar__section">
@@ -112,6 +115,7 @@ function renderSidebar(state) {
         <div class="sidebar__user-info">
           <div class="sidebar__user-name">${user.name}</div>
           <div class="sidebar__user-role">${user.role}</div>
+          <div class="sidebar__user-tier" data-subscription-badge ${subBadge ? "" : "hidden"}>${subBadge}</div>
         </div>
       </div>
       <button class="btn btn--ghost btn--sm sidebar__logout" type="button" id="sidebar-logout">
