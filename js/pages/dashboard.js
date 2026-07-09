@@ -144,10 +144,8 @@ function renderMissionSide(mission, missionPercent, doneCount) {
         <div class="dash-mission-side__head">
           <h2 class="dash-mission-side__title">${icon("mission")} Today's Mission</h2>
         </div>
-        <p class="dash-mission-side__empty-text">Build a daily plan by adding problems to your mission.</p>
-        <button class="btn btn--primary btn--sm dash-mission-side__cta" data-action="add-problem" type="button">
-          ${icon("plus")}<span>Add Your First Mission</span>
-        </button>
+        <p class="dash-mission-side__empty-text">Build a daily plan from Today's Mission.</p>
+        <a href="#/mission" class="btn btn--primary btn--sm dash-mission-side__cta">Go to Mission</a>
       </section>
     `;
   }
@@ -205,16 +203,11 @@ export default {
                 : "Consistency beats intensity. One step today is enough."}
             </p>
             <div class="page-greeting__meta">
-              ${icon("calendar")} ${formatLongDate()}
+              ${formatLongDate()}
               <span aria-hidden="true">·</span>
-              ${icon("clock")} ${stats.studyTimeToday} studied
+              ${stats.studyTimeToday} studied
               ${accountLabel ? `<span aria-hidden="true">·</span> ${accountLabel}` : ""}
             </div>
-          </div>
-          <div class="page-greeting__actions">
-            <button class="btn btn--secondary" data-action="add-problem" type="button">
-              ${icon("plus")}<span>Add Problem</span>
-            </button>
           </div>
         </div>
 

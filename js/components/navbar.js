@@ -117,7 +117,7 @@ function renderNavbar(state) {
       </nav>
     </div>
 
-    <div class="navbar__center">
+    <div class="navbar__center"${currentRoute === "dashboard" ? " hidden" : ""}>
       <div class="search-input-wrapper">
         <span class="search-icon" aria-hidden="true">${icon("search")}</span>
         <input
@@ -449,6 +449,11 @@ function updateBreadcrumb(container, currentRoute) {
   if (breadcrumb) {
     breadcrumb.textContent = ROUTE_TITLES[currentRoute] || "Dashboard";
   }
+
+  const searchCenter = $(".navbar__center", container);
+  if (searchCenter) {
+    searchCenter.toggleAttribute("hidden", currentRoute === "dashboard");
+  }
 }
 
 export function refreshNavbarNotifications() {
@@ -460,6 +465,7 @@ export function initNavbar(container) {
   setState({ notifications: getUnreadNotificationCount() });
   container.innerHTML = renderNavbar(getState());
   bindEvents(container);
+  updateBreadcrumb(container, getState().currentRoute);
 
   subscribe(({ updates, state }) => {
     if (updates.currentRoute !== undefined) {
