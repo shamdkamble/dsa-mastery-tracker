@@ -134,39 +134,56 @@ function renderNavbar(state) {
     </div>
 
     <div class="navbar__right">
-      <button class="btn btn--primary btn--sm" type="button" data-action="add-problem" aria-label="Add new problem">
+      <button
+        class="btn btn--primary btn--sm navbar__new-btn"
+        type="button"
+        data-action="add-problem"
+        aria-label="Add new problem"
+      >
         ${icon("plus")}
         <span>New</span>
       </button>
 
-      <button class="navbar__action" type="button" aria-label="Toggle theme" title="Toggle theme" id="navbar-theme-toggle">
-        <span class="icon-theme-light" aria-hidden="true">${icon("sun")}</span>
-        <span class="icon-theme-dark" aria-hidden="true">${icon("moon")}</span>
-      </button>
-
-      <div class="navbar__notif-wrap">
+      <div class="navbar__tool-group" role="group" aria-label="Quick actions">
         <button
-          class="navbar__action navbar__action--notifications"
+          class="navbar__action"
           type="button"
-          id="navbar-notif-btn"
-          aria-label="Notifications (${notifications} unread)"
-          aria-expanded="false"
-          aria-controls="navbar-notif-panel"
-          title="Notifications"
+          aria-label="Toggle theme"
+          title="Toggle theme"
+          id="navbar-theme-toggle"
         >
-          ${icon("bell")}
-          ${badge}
+          <span class="icon-theme-light" aria-hidden="true">${icon("sun")}</span>
+          <span class="icon-theme-dark" aria-hidden="true">${icon("moon")}</span>
         </button>
-        ${renderNotificationPanel()}
+
+        <div class="navbar__notif-wrap">
+          <button
+            class="navbar__action navbar__action--notifications"
+            type="button"
+            id="navbar-notif-btn"
+            aria-label="Notifications (${notifications} unread)"
+            aria-expanded="false"
+            aria-controls="navbar-notif-panel"
+            title="Notifications"
+          >
+            ${icon("bell")}
+            ${badge}
+          </button>
+          ${renderNotificationPanel()}
+        </div>
+
+        <button
+          class="navbar__action navbar__action--help"
+          type="button"
+          aria-label="Help and info"
+          title="Help"
+        >
+          ${icon("help")}
+        </button>
       </div>
 
-      <button class="navbar__action" type="button" aria-label="Help" title="Help">
-        ${icon("help")}
-      </button>
-
-      <div class="navbar__subscription" data-subscription-badge ${subBadge ? "" : "hidden"}>${subBadge}</div>
-
       <div class="navbar__profile-wrap">
+        ${subBadge ? `<div class="navbar__profile-badge" data-subscription-badge>${subBadge}</div>` : ""}
         <button
           class="navbar__profile${isPremium ? " navbar__profile--premium" : ""}"
           type="button"
@@ -451,9 +468,11 @@ function updateBreadcrumb(container, currentRoute) {
   }
 
   const searchCenter = $(".navbar__center", container);
+  const hideSearch = currentRoute === "dashboard";
   if (searchCenter) {
-    searchCenter.toggleAttribute("hidden", currentRoute === "dashboard");
+    searchCenter.toggleAttribute("hidden", hideSearch);
   }
+  container.classList.toggle("navbar--no-search", hideSearch);
 }
 
 export function refreshNavbarNotifications() {

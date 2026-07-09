@@ -167,13 +167,13 @@
 
 /* ── Shell placement ── */
 
-.navbar__subscription {
+.navbar__profile-badge {
   display: flex;
   align-items: center;
 }
 
-.navbar__subscription[hidden] {
-  display: none;
+.navbar__profile-badge[hidden] {
+  display: none !important;
 }
 
 .navbar__profile--premium .navbar__profile-avatar {
