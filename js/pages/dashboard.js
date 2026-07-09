@@ -11,7 +11,14 @@ import {
 } from "../storage/computed.js";
 import { formatGreeting, formatLongDate } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
+import { renderAiLockBadge } from "../components/access-ui.js";
 import { bindTeachTopicHandlers } from "../components/teach-modal.js";
+import {
+  canAccessAiGeneration,
+  canOpenLesson,
+  getRoadmapAccessHint,
+  hasFullRoadmapAccess,
+} from "../auth/access.js";
 import { getOrderedRoadmapTopics, getPhaseById } from "../data/roadmap.js";
 import { isTopicCompleted } from "../storage/roadmap-progress.js";
 
@@ -36,9 +43,11 @@ function topicTrack(topic) {
   return "";
 }
 
-function getContinueLearningTopic() {
+function getContinueLearningTopic(user) {
   const ordered = getOrderedRoadmapTopics();
-  return ordered.find((t) => !isTopicCompleted(t.id)) ?? ordered[0] ?? null;
+  return ordered.find((t) => !isTopicCompleted(t.id) && canOpenLesson(user, t))
+    ?? ordered.find((t) => canOpenLesson(user, t))
+    ?? null;
 }
 
 function missionSideItem(item) {
@@ -73,7 +82,7 @@ function activityItem(item) {
   `;
 }
 
-function renderContinueLearningHero(topic) {
+function renderContinueLearningHero(topic, user) {
   if (!topic) {
     return `
       <section class="dash-continue dash-continue--hero dash-continue--main dash-continue--empty">
@@ -91,26 +100,31 @@ function renderContinueLearningHero(topic) {
   const phase = getPhaseById(topic.phase);
   const track = topicTrack(topic);
   const completed = isTopicCompleted(topic.id);
+  const aiLocked = !canAccessAiGeneration(user, topic);
   const phaseLabel = phase?.title ? `Phase ${topic.phase} · ${phase.title}` : `Phase ${topic.phase}`;
+  const accessHint = hasFullRoadmapAccess(user) ? "" : getRoadmapAccessHint(user);
 
   return `
     <section class="dash-continue dash-continue--hero dash-continue--main">
       <div class="dash-continue__glow" aria-hidden="true"></div>
       <div class="dash-continue__inner">
         <div class="dash-continue__icon" aria-hidden="true">${icon("target")}</div>
-        <span class="dash-continue__eyebrow">Continue Learning</span>
+        <span class="dash-continue__eyebrow">Continue Learning${accessHint ? ` · <span class="dash-continue__tier">${escapeHtml(accessHint)}</span>` : ""}</span>
         <h2 class="dash-continue__headline">${escapeHtml(topic.name)}</h2>
         <div class="dash-continue__meta">
           <span>${escapeHtml(phaseLabel)}</span>
           ${DifficultyBadge(topic.difficulty)}
+          ${aiLocked ? renderAiLockBadge() : ""}
         </div>
         <p class="dash-continue__text">
-          ${completed
-            ? "You're on track. Review this lesson or keep moving through the roadmap."
-            : "Your next recommended step — one focused lesson to keep momentum going."}
+          ${aiLocked
+            ? "Open this topic to continue. AI lesson generation requires Premium."
+            : completed
+              ? "You're on track. Review this lesson or keep moving through the roadmap."
+              : "Your next recommended step — one focused lesson to keep momentum going."}
         </p>
         <button
-          class="btn btn--primary dash-continue__cta-main"
+          class="btn ${aiLocked ? "btn--secondary" : "btn--primary"} dash-continue__cta-main${aiLocked ? " dash-continue__cta--ai-locked" : ""}"
           type="button"
           data-action="teach-topic"
           data-topic-id="${escapeAttr(topic.id)}"
@@ -120,7 +134,7 @@ function renderContinueLearningHero(topic) {
           data-topic-difficulty="${escapeAttr(topic.difficulty)}"
           data-topic-track="${escapeAttr(track)}"
         >
-          ${icon(completed ? "check" : "zap")}
+          ${icon(completed ? "check" : aiLocked ? "topics" : "zap")}
           <span>${completed ? "Review Lesson" : "Start Lesson"}</span>
         </button>
         <a href="#/roadmap" class="dash-continue__link">Browse full roadmap →</a>
@@ -176,7 +190,7 @@ export default {
     const mission = computeTodaysMission();
     const activity = computeRecentActivity(ACTIVITY_PREVIEW_LIMIT);
     const topics = computeTopicProgress();
-    const continueTopic = getContinueLearningTopic();
+    const continueTopic = getContinueLearningTopic(sessionUser);
     const displayName = sessionUser?.name || profile.name || "Learner";
     const firstName = displayName.split(" ")[0] || "there";
     const accountLabel = sessionUser?.email
@@ -219,7 +233,7 @@ export default {
 
         <div class="dash-body">
           <div class="dash-body__main">
-            ${renderContinueLearningHero(continueTopic)}
+            ${renderContinueLearningHero(continueTopic, sessionUser)}
 
             <section class="page-section page-section--flush dash-topics-section">
               <div class="page-section__header">

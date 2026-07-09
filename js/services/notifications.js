@@ -3,6 +3,7 @@
  */
 
 import { getSessionUser } from "../auth/session.js";
+import { getTrialDaysRemaining } from "../auth/access.js";
 import { getActivities, getReadNotificationIds } from "../storage/db.js";
 import { computeStats, computeTodaysMission } from "../storage/computed.js";
 import { formatRelativeTime } from "../storage/helpers.js";
@@ -56,10 +57,12 @@ export function buildNotificationItems() {
   }
 
   if (user?.status === "approved" && user?.accessLevel === "trial" && user?.role !== "admin") {
+    const days = getTrialDaysRemaining(user);
+    const daysLabel = days != null && days > 0 ? `${days} day${days === 1 ? "" : "s"} left · ` : "";
     items.push({
       id: "trial-upgrade",
       title: "Upgrade to Premium",
-      text: "Your trial includes all Phase 1 lessons. Upgrade to Premium for AI features and full roadmap access.",
+      text: `${daysLabel}Phase 1 is unlocked. Upgrade for AI lessons, pattern detection, and all phases.`,
       variant: "accent",
       time: "Upgrade",
       href: "#/roadmap",

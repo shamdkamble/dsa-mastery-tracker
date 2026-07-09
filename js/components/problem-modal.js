@@ -24,6 +24,7 @@ import { canAccessProblemAi } from "../auth/access.js";
 import { getSessionUser } from "../auth/session.js";
 import { debounce } from "../utils.js";
 import { refreshPage } from "../controllers/page-controller.js";
+import { renderLockedAiButton } from "./access-ui.js";
 import { openUpgradeModal } from "./upgrade-modal.js";
 
 const MODAL_ID = "problem-modal";
@@ -98,21 +99,6 @@ function renderComplexityResult(time = "", space = "", explanation = "") {
   `;
 }
 
-function renderLockedAiButton({ id, label, size = "sm" }) {
-  return `
-    <button
-      class="btn btn--ghost btn--${size} problem-ai-btn--locked"
-      type="button"
-      id="${id}"
-      data-action="upgrade-ai"
-      title="Upgrade to Premium to unlock this AI feature"
-    >
-      ${icon("lock")}
-      <span>${label}</span>
-    </button>
-  `;
-}
-
 function renderSolutionSection(p = {}, { aiLocked = false } = {}) {
   const hasSolution = Boolean(p.solution?.trim());
   const isOpen = hasSolution;
@@ -150,7 +136,7 @@ function renderSolutionSection(p = {}, { aiLocked = false } = {}) {
                   ${icon("zap")}
                   <span>Analyze Complexity</span>
                 </button>`}
-            <span class="problem-complexity__hint" id="complexity-hint">${aiLocked ? "Premium unlocks AI complexity analysis" : "Paste code above, then analyze with AI"}</span>
+            <span class="problem-complexity__hint" id="complexity-hint">${aiLocked ? "Upgrade to Premium to unlock AI complexity analysis" : "Paste code above, then analyze with AI"}</span>
           </div>
           <p class="problem-ai-status" id="complexity-ai-status" aria-live="polite"></p>
           <div id="complexity-result-host">
@@ -189,6 +175,13 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
 
   return `
     <form id="problem-form" class="stack stack-md">
+      ${aiLocked ? `
+        <div class="access-inline-notice" role="note">
+          ${icon("lock")}
+          <span>AI pattern detection &amp; complexity analysis require <strong>Premium</strong>.</span>
+          <button type="button" class="access-inline-notice__link" data-action="upgrade-ai">Upgrade</button>
+        </div>
+      ` : ""}
       <input type="hidden" name="id" value="${p.id || ""}">
       <input type="hidden" name="leetcodeSlug" value="${p.leetcodeSlug || ""}">
       <input type="hidden" name="leetcodeId" value="${p.leetcodeId || ""}">
@@ -525,7 +518,7 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
 
 async function handleDetectPattern(host) {
   if (host._aiLocked) {
-    openUpgradeModal();
+    openUpgradeModal("ai-features");
     return;
   }
 
@@ -569,7 +562,7 @@ async function handleDetectPattern(host) {
 
 async function handleAnalyzeComplexity(host) {
   if (host._aiLocked) {
-    openUpgradeModal();
+    openUpgradeModal("ai-features");
     return;
   }
 
@@ -627,7 +620,7 @@ function bindAiHandlers(host) {
   host.querySelectorAll('[data-action="upgrade-ai"]').forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
-      openUpgradeModal();
+      openUpgradeModal("ai-features");
     });
   });
 

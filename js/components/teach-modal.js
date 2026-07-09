@@ -7,8 +7,14 @@ import { Badge, DifficultyBadge } from "./ui/index.js";
 import { openModal, closeModal, initModals } from "./ui/interactions.js";
 import { TeachApiError } from "../api/geminiApi.js";
 import { fetchCachedLesson, fetchLesson } from "../api/teachApi.js";
-import { canAccessAiLesson } from "../auth/access.js";
+import {
+  canAccessAiGeneration,
+  canAccessCachedLesson,
+  canOpenLesson,
+  hasTrialAccess,
+} from "../auth/access.js";
 import { getSessionUser } from "../auth/session.js";
+import { renderAiLockedPanel, renderLockedAiButton } from "./access-ui.js";
 import { openUpgradeModal } from "./upgrade-modal.js";
 import {
   getNextRoadmapTopic,
@@ -214,10 +220,28 @@ function renderCacheBadge() {
 }
 
 function renderFooter() {
+  const user = getSessionUser();
+  const aiLocked = currentTopic && !canAccessAiGeneration(user, currentTopic);
   const hasSimpler = Boolean(lessonState.simpler);
   const isStandard = lessonState.activeVariant === "standard";
   const isSimpler = lessonState.activeVariant === "simpler";
   const completed = currentTopic?.id && isTopicCompleted(currentTopic.id);
+
+  const simplerControl = aiLocked && !hasSimpler
+    ? renderLockedAiButton({
+        id: "teach-simpler-btn",
+        label: "Explain in Simpler Words",
+        title: "Upgrade to Premium to unlock AI lesson tools",
+      })
+    : `<button
+        type="button"
+        class="btn btn--ghost btn--sm"
+        id="teach-simpler-btn"
+        ${hasSimpler ? "hidden" : ""}
+      >
+        ${icon("layers")}
+        <span>Explain in Simpler Words</span>
+      </button>`;
 
   return `
     <div class="teach-modal__toolbar">
@@ -236,17 +260,10 @@ function renderFooter() {
           role="tab"
           aria-selected="${isSimpler}"
           ${hasSimpler ? "" : "disabled"}
+          ${aiLocked && !hasSimpler ? 'title="Upgrade to Premium"' : ""}
         >Simpler</button>
       </div>
-      <button
-        type="button"
-        class="btn btn--ghost btn--sm"
-        id="teach-simpler-btn"
-        ${hasSimpler ? "hidden" : ""}
-      >
-        ${icon("layers")}
-        <span>Explain in Simpler Words</span>
-      </button>
+      ${simplerControl}
     </div>
     <button
       type="button"
@@ -306,11 +323,23 @@ function renderMeta(topic, { cached = false } = {}) {
   return parts.join("");
 }
 
+function bindFooterUpgradeHandlers() {
+  document.getElementById(`${MODAL_ID}-footer`)?.querySelectorAll('[data-action="upgrade-ai"]').forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      openUpgradeModal("ai-lesson");
+    });
+  });
+}
+
 function setFooterVisible(show) {
   const { footerEl } = getElements();
   if (footerEl) {
     footerEl.hidden = !show;
-    if (show) footerEl.innerHTML = renderFooter();
+    if (show) {
+      footerEl.innerHTML = renderFooter();
+      bindFooterUpgradeHandlers();
+    }
   }
 }
 
@@ -406,7 +435,21 @@ function switchVariant(variant) {
   renderLessonView();
 }
 
+function renderAiLockedState(topicName) {
+  return renderAiLockedPanel({
+    title: "AI lesson not available",
+    description: "Your plan includes this topic, but AI lesson generation is a Premium feature. Upgrade to generate personalized lessons on demand.",
+    feature: `Generate an AI lesson for ${topicName}`,
+  });
+}
+
 async function handleSimplerWords() {
+  const user = getSessionUser();
+  if (currentTopic && !canAccessAiGeneration(user, currentTopic)) {
+    openUpgradeModal("ai-lesson");
+    return;
+  }
+
   if (!currentTopic || lessonState.simpler) {
     switchVariant("simpler");
     return;
@@ -469,7 +512,7 @@ async function handleMarkComplete() {
     const next = getNextRoadmapTopic(currentTopic.id);
     const user = getSessionUser();
 
-    if (next && canAccessAiLesson(user, next)) {
+    if (next && canOpenLesson(user, next)) {
       const nextTopic = normalizeTopic({
         id: next.id,
         name: next.name,
@@ -541,10 +584,14 @@ export async function openTeachLesson(topic, triggerBtn) {
   const controller = new AbortController();
   activeRequest = controller;
 
+  const user = getSessionUser();
+  const canGenerate = canAccessAiGeneration(user, currentTopic);
+  const canReadCache = canAccessCachedLesson(user, currentTopic);
+
   try {
     let fromCache = false;
 
-    if (currentTopic.id) {
+    if (currentTopic.id && canReadCache) {
       setModalState({
         title: name,
         metaHtml: renderMeta(currentTopic),
@@ -557,6 +604,22 @@ export async function openTeachLesson(topic, triggerBtn) {
     if (fromCache) {
       stopLoadingAnimation();
       renderLessonView();
+      return;
+    }
+
+    if (!canGenerate) {
+      stopLoadingAnimation();
+      setModalState({
+        title: name,
+        metaHtml: renderMeta(currentTopic),
+        bodyHtml: renderAiLockedState(name),
+        showFooter: false,
+      });
+      document.getElementById(`${MODAL_ID}-body`)?.querySelector('[data-action="upgrade-ai"]')
+        ?.addEventListener("click", (e) => {
+          e.preventDefault();
+          openUpgradeModal("ai-lesson");
+        });
       return;
     }
 
@@ -606,8 +669,8 @@ function onTeachButtonClick(e) {
   const topic = parseTopicFromButton(btn);
   const user = getSessionUser();
 
-  if (!canAccessAiLesson(user, topic)) {
-    openUpgradeModal();
+  if (!canOpenLesson(user, topic)) {
+    openUpgradeModal(hasTrialAccess(user) ? "trial" : "standard");
     return;
   }
 

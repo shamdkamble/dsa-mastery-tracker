@@ -10,12 +10,16 @@ import {
 } from "../storage/roadmap-progress.js";
 import { refreshPage } from "../controllers/page-controller.js";
 import { getCurrentPath } from "../router.js";
+import { renderAiLockBadge } from "../components/access-ui.js";
 import {
-  canAccessAiLesson,
+  canAccessAiGeneration,
   canAccessPhase,
   canAccessRoadmapStep,
+  canOpenLesson,
   getRoadmapAccessHint,
   hasFullRoadmapAccess,
+  hasStandardAccess,
+  hasTrialAccess,
 } from "../auth/access.js";
 import { getSessionUser } from "../auth/session.js";
 
@@ -86,20 +90,17 @@ function topicTrack(topic) {
   return "";
 }
 
-function learnButton(topic, { locked = false, aiLocked = false, step } = {}) {
+function learnButton(topic, { locked = false, aiGenerationLocked = false, step } = {}) {
   const track = topicTrack(topic);
 
-  if (locked || aiLocked) {
-    const lockTitle = aiLocked && !locked
-      ? "Upgrade to Premium to unlock AI lessons"
-      : "Subscribe to unlock this content";
+  if (locked) {
     return `
       <button
         class="btn btn--sm btn--ghost roadmap-topic__learn roadmap-topic__learn--locked"
         type="button"
         data-action="upgrade"
         data-roadmap-locked
-        title="${escapeAttr(lockTitle)}"
+        title="Subscribe to unlock this topic"
       >
         ${icon("lock")}
         <span>Learn</span>
@@ -108,6 +109,30 @@ function learnButton(topic, { locked = false, aiLocked = false, step } = {}) {
   }
 
   const completed = isTopicCompleted(topic.id);
+  const aiTitle = aiGenerationLocked
+    ? "View topic — AI lesson generation requires Premium"
+    : `Get an AI lesson on ${topic.name}`;
+
+  if (aiGenerationLocked) {
+    return `
+      <button
+        class="btn btn--sm btn--secondary roadmap-topic__learn roadmap-topic__learn--ai-locked"
+        type="button"
+        data-action="teach-topic"
+        data-topic-id="${escapeAttr(topic.id)}"
+        data-topic-name="${escapeAttr(topic.name)}"
+        data-topic-phase="${topic.phase}"
+        data-topic-step="${step ?? ""}"
+        data-topic-difficulty="${escapeAttr(topic.difficulty)}"
+        data-topic-track="${escapeAttr(track)}"
+        title="${escapeAttr(aiTitle)}"
+      >
+        ${icon(completed ? "check" : "topics")}
+        <span>${completed ? "Review" : "Learn"}</span>
+        ${renderAiLockBadge()}
+      </button>
+    `;
+  }
 
   return `
     <button
@@ -120,7 +145,7 @@ function learnButton(topic, { locked = false, aiLocked = false, step } = {}) {
       data-topic-step="${step ?? ""}"
       data-topic-difficulty="${escapeAttr(topic.difficulty)}"
       data-topic-track="${escapeAttr(track)}"
-      title="Get an AI lesson on ${escapeAttr(topic.name)}"
+      title="${escapeAttr(aiTitle)}"
     >
       ${icon(completed ? "check" : "zap")}
       <span>${completed ? "Review" : "Learn"}</span>
@@ -132,7 +157,40 @@ function lockBadge() {
   return `<span class="roadmap-lock-badge" title="Subscribe to unlock">${icon("lock")}<span>Locked</span></span>`;
 }
 
-function topicCard(topic, { locked = false, aiLocked = false, step } = {}) {
+function renderTierBanner(user) {
+  if (hasFullRoadmapAccess(user)) return "";
+
+  let title = "Free plan";
+  let text = "You have access to 2 preview topics in Phase 1. Upgrade for the full roadmap and AI tools.";
+  let context = "standard";
+
+  if (hasTrialAccess(user)) {
+    const hint = getRoadmapAccessHint(user);
+    title = "Trial plan";
+    text = `${hint}. All Phase 1 topics are unlocked — AI lesson generation, pattern detection, and complexity analysis require Premium.`;
+    context = "trial";
+  } else if (hasStandardAccess(user)) {
+    title = "Free plan";
+    text = "Step 1 includes 2 topics with AI lessons. Upgrade to unlock all phases and AI problem helpers.";
+    context = "standard";
+  }
+
+  return `
+    <div class="roadmap-tier-banner animate-fade-in-up">
+      <div class="roadmap-tier-banner__icon" aria-hidden="true">${icon(hasTrialAccess(user) ? "clock" : "lock")}</div>
+      <div class="roadmap-tier-banner__body">
+        <p class="roadmap-tier-banner__title">${title}</p>
+        <p class="roadmap-tier-banner__text">${text}</p>
+      </div>
+      <button type="button" class="btn btn--primary btn--sm roadmap-tier-banner__cta" data-action="upgrade-tier" data-upgrade-context="${context}">
+        ${icon("zap")}
+        <span>Upgrade</span>
+      </button>
+    </div>
+  `;
+}
+
+function topicCard(topic, { locked = false, aiGenerationLocked = false, step } = {}) {
   const track = topicTrack(topic);
   const trackLabel = track === "cpp" ? "C++" : track === "dsa" ? "DSA" : "Topic";
   const trackClass = track ? `roadmap-topic--${track}` : "roadmap-topic--general";
@@ -152,7 +210,7 @@ function topicCard(topic, { locked = false, aiLocked = false, step } = {}) {
         ${isTopicCompleted(topic.id) ? `<span class="roadmap-topic__done" title="Completed">${icon("check")}</span>` : ""}
       </h4>
       <div class="roadmap-topic__footer">
-        ${learnButton(topic, { locked, aiLocked, step })}
+        ${learnButton(topic, { locked, aiGenerationLocked, step })}
       </div>
     </div>
   `;
@@ -174,8 +232,8 @@ function buildPhase1Steps(topics) {
 
 function phase1StepRow(entry, user) {
   const stepLocked = !canAccessRoadmapStep(user, 1, entry.step);
-  const cppAiLocked = !stepLocked && !canAccessAiLesson(user, entry.cpp);
-  const dsaAiLocked = !stepLocked && !canAccessAiLesson(user, entry.dsa);
+  const cppAiLocked = !stepLocked && canOpenLesson(user, entry.cpp) && !canAccessAiGeneration(user, entry.cpp);
+  const dsaAiLocked = !stepLocked && canOpenLesson(user, entry.dsa) && !canAccessAiGeneration(user, entry.dsa);
 
   return `
     <div
@@ -189,13 +247,13 @@ function phase1StepRow(entry, user) {
         ${stepLocked ? lockBadge() : ""}
       </div>
       <div class="roadmap-step__grid">
-        ${topicCard(entry.cpp, { locked: stepLocked, aiLocked: cppAiLocked, step: entry.step })}
+        ${topicCard(entry.cpp, { locked: stepLocked, aiGenerationLocked: cppAiLocked, step: entry.step })}
         <div class="roadmap-step__bridge" aria-hidden="true">
           <span class="roadmap-step__bridge-line"></span>
           <span class="roadmap-step__bridge-icon">${stepLocked ? icon("lock") : icon("gitBranch")}</span>
           <span class="roadmap-step__bridge-line"></span>
         </div>
-        ${topicCard(entry.dsa, { locked: stepLocked, aiLocked: dsaAiLocked, step: entry.step })}
+        ${topicCard(entry.dsa, { locked: stepLocked, aiGenerationLocked: dsaAiLocked, step: entry.step })}
       </div>
     </div>
   `;
@@ -331,7 +389,7 @@ function bindPhaseAccordion(container) {
     e.preventDefault();
 
     if (phaseEl.classList.contains("roadmap-phase--locked")) {
-      openUpgradeModal();
+      openUpgradeModal(hasTrialAccess(getSessionUser()) ? "trial" : "content");
       return;
     }
 
@@ -355,11 +413,20 @@ function bindLockedContentHandlers(container) {
   container.addEventListener("click", (e) => {
     if (e.target.closest(".roadmap-phase__toggle")) return;
 
+    const tierUpgradeBtn = e.target.closest('[data-action="upgrade-tier"]');
+    if (tierUpgradeBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      openUpgradeModal(tierUpgradeBtn.dataset.upgradeContext || "auto");
+      return;
+    }
+
     const upgradeBtn = e.target.closest('[data-action="upgrade"]');
     if (upgradeBtn) {
       e.preventDefault();
       e.stopPropagation();
-      openUpgradeModal();
+      const user = getSessionUser();
+      openUpgradeModal(hasTrialAccess(user) ? "trial" : "standard");
       return;
     }
 
@@ -370,7 +437,8 @@ function bindLockedContentHandlers(container) {
 
     e.preventDefault();
     e.stopPropagation();
-    openUpgradeModal();
+    const user = getSessionUser();
+    openUpgradeModal(hasTrialAccess(user) ? "trial" : "standard");
   });
 
   container.addEventListener("keydown", (e) => {
@@ -380,7 +448,8 @@ function bindLockedContentHandlers(container) {
     const locked = e.target.closest("[data-roadmap-locked]");
     if (!locked || e.target.closest('[data-action="teach-topic"]')) return;
     e.preventDefault();
-    openUpgradeModal();
+    const user = getSessionUser();
+    openUpgradeModal(hasTrialAccess(user) ? "trial" : "standard");
   });
 }
 
@@ -453,6 +522,7 @@ export default {
               ${hasFullRoadmapAccess(user) ? "" : ` · <span class="roadmap-access-hint">${accessHint}</span>`}
             </span>
           </div>
+          ${renderTierBanner(user)}
           <div class="roadmap-phase-list" id="roadmap-phases" data-roadmap-accordion>
             ${ROADMAP_PHASES.map((phase) => phaseSection(phase, user, { isOpen: openPhaseIds.has(phase.id) })).join("")}
           </div>
