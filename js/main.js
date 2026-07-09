@@ -20,6 +20,12 @@ import { initLeetcodeLinks } from "./components/leetcode-actions.js";
 import { initTeachModal } from "./components/teach-modal.js";
 import { initRecommendProblemsModal } from "./components/recommend-problems-modal.js";
 import { setContentContainer } from "./controllers/page-controller.js";
+import {
+  startLiveNotificationPolling,
+  stopLiveNotificationPolling,
+  resetLiveNotificationState,
+} from "./services/live-notifications.js";
+import { hydrateServerNotifications } from "./services/notifications.js";
 
 import dashboard from "./pages/dashboard.js";
 import mission from "./pages/mission.js";
@@ -122,9 +128,14 @@ function initDataRefresh() {
   document.addEventListener("auth:change", (e) => {
     if (!e.detail?.user) {
       syncSubscriptionPresentation(null);
+      stopLiveNotificationPolling();
+      resetLiveNotificationState();
       return;
     }
     syncUserFromDB();
+    void hydrateServerNotifications().then(() => {
+      startLiveNotificationPolling();
+    });
     const path = getCurrentPath();
     if (DATA_DRIVEN_ROUTES.has(path)) {
       refreshRouteContent(path, content);
@@ -157,6 +168,12 @@ async function init() {
   initRecommendProblemsModal();
   initDataRefresh();
   initRouter(content);
+
+  if (sessionUser) {
+    void hydrateServerNotifications().then(() => {
+      startLiveNotificationPolling();
+    });
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {

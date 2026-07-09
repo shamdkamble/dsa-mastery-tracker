@@ -19,6 +19,13 @@ import {
   updateUser,
   updateUserStatus,
 } from "./users-db.js";
+import {
+  notifyAccountActivated,
+  notifyAccountApproved,
+  notifyAccountRejected,
+  notifyAccountSuspended,
+  notifyAccessPatch,
+} from "./access-notifications.js";
 
 const scrypt = promisify(crypto.scrypt);
 
@@ -279,16 +286,19 @@ export async function listAllUsers() {
 
 export async function approveUser(userId) {
   const user = await updateUser(userId, { status: "approved" });
+  await notifyAccountApproved(userId);
   return toPublicUser(user);
 }
 
 export async function rejectUser(userId) {
   const user = await updateUser(userId, { status: "rejected" });
+  await notifyAccountRejected(userId);
   return toPublicUser(user);
 }
 
 export async function suspendUser(userId) {
   const user = await updateUser(userId, { status: "suspended" });
+  await notifyAccountSuspended(userId);
   return toPublicUser(user);
 }
 
@@ -296,6 +306,7 @@ export async function activateUser(userId) {
   const existing = await findUserById(userId);
   if (!existing) throw new AuthError("User not found.", { status: 404, code: "NOT_FOUND" });
   const user = await updateUser(userId, { status: "approved" });
+  await notifyAccountActivated(userId);
   return toPublicUser(user);
 }
 
@@ -314,6 +325,9 @@ function parseExpiryDate(value) {
 }
 
 export async function patchUserAdmin(userId, { accessLevel, expiresAt }) {
+  const existing = await findUserById(userId);
+  if (!existing) throw new AuthError("User not found.", { status: 404, code: "NOT_FOUND" });
+
   const patch = {};
 
   if (accessLevel !== undefined) {
@@ -332,6 +346,7 @@ export async function patchUserAdmin(userId, { accessLevel, expiresAt }) {
   }
 
   const user = await updateUser(userId, patch);
+  await notifyAccessPatch(existing, user, patch);
   return toPublicUser(user);
 }
 

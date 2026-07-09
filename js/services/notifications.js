@@ -1,12 +1,42 @@
 /**
- * In-app notifications — derived from activity, mission, and auth state
+ * In-app notifications — server access alerts + local activity/mission feed
  */
 
 import { getSessionUser } from "../auth/session.js";
 import { getTrialDaysRemaining } from "../auth/access.js";
-import { getActivities, getReadNotificationIds } from "../storage/db.js";
+import { getActivities, getReadNotificationIds, markNotificationRead as markLocalNotificationRead } from "../storage/db.js";
 import { computeStats, computeTodaysMission } from "../storage/computed.js";
 import { formatRelativeTime } from "../storage/helpers.js";
+import {
+  fetchServerNotifications,
+  markAllServerNotificationsRead,
+  markServerNotificationRead,
+} from "./notifications-api.js";
+
+/** @type {Array<object>} */
+let serverNotificationsCache = [];
+
+export function setServerNotificationsCache(items = []) {
+  serverNotificationsCache = Array.isArray(items) ? items : [];
+}
+
+export function getServerNotificationsCache() {
+  return serverNotificationsCache;
+}
+
+function mapServerNotification(item) {
+  return {
+    id: `access-${item.id}`,
+    serverId: item.id,
+    source: "server",
+    title: item.title,
+    text: item.text,
+    variant: item.variant || "info",
+    time: formatRelativeTime(item.createdAt),
+    href: item.href || "#/settings",
+    read: Boolean(item.read),
+  };
+}
 
 function variantForAction(action) {
   if (action === "Solved" || action === "Reviewed") return "success";
@@ -15,11 +45,7 @@ function variantForAction(action) {
   return "default";
 }
 
-/**
- * Build the current notification feed (newest contextual items first).
- * @returns {Array<{ id: string, title: string, text: string, variant: string, time: string, href?: string }>}
- */
-export function buildNotificationItems() {
+function buildLocalNotificationItems() {
   const items = [];
   const user = getSessionUser();
 
@@ -132,14 +158,74 @@ export function buildNotificationItems() {
   return items;
 }
 
+/**
+ * Build the current notification feed (newest contextual items first).
+ */
+export function buildNotificationItems() {
+  const serverItems = serverNotificationsCache.map(mapServerNotification);
+  const localItems = buildLocalNotificationItems();
+  return [...serverItems, ...localItems];
+}
+
 export function getNotifications() {
   const readIds = new Set(getReadNotificationIds());
   return buildNotificationItems().map((item) => ({
     ...item,
-    read: item.id === "empty-feed" ? true : readIds.has(item.id),
+    read: item.source === "server"
+      ? item.read
+      : (item.id === "empty-feed" ? true : readIds.has(item.id)),
   }));
 }
 
 export function getUnreadNotificationCount() {
   return getNotifications().filter((n) => !n.read).length;
+}
+
+export async function markNotificationReadById(id) {
+  if (!id || id === "empty-feed") return;
+
+  if (id.startsWith("access-")) {
+    const serverId = id.slice("access-".length);
+    try {
+      await markServerNotificationRead(serverId);
+      serverNotificationsCache = serverNotificationsCache.map((n) => (
+        n.id === serverId ? { ...n, read: true } : n
+      ));
+    } catch (err) {
+      console.warn("[notifications] mark server read failed:", err?.message || err);
+    }
+    return;
+  }
+
+  markLocalNotificationRead(id);
+}
+
+export async function markAllNotificationsReadByIds(ids) {
+  const hasServerUnread = ids.some((id) => id.startsWith("access-"))
+    || serverNotificationsCache.some((n) => !n.read);
+
+  if (hasServerUnread) {
+    try {
+      await markAllServerNotificationsRead();
+      serverNotificationsCache = serverNotificationsCache.map((n) => ({ ...n, read: true }));
+    } catch (err) {
+      console.warn("[notifications] mark all server read failed:", err?.message || err);
+    }
+  }
+
+  const localIds = ids.filter((id) => !id.startsWith("access-"));
+  if (localIds.length) {
+    const { markAllNotificationsRead } = await import("../storage/db.js");
+    markAllNotificationsRead(localIds);
+  }
+}
+
+/** Prime server notifications on login (used if polling has not run yet). */
+export async function hydrateServerNotifications() {
+  try {
+    const items = await fetchServerNotifications();
+    setServerNotificationsCache(items);
+  } catch {
+    setServerNotificationsCache([]);
+  }
 }

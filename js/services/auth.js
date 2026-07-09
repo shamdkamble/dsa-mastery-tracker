@@ -144,6 +144,13 @@ export async function rejectUser(userId) {
 export function logout() {
   clearSession();
   resetAuthSyncState();
+  import("./live-notifications.js").then(({ stopLiveNotificationPolling, resetLiveNotificationState }) => {
+    stopLiveNotificationPolling();
+    resetLiveNotificationState();
+  });
+  import("./notifications.js").then(({ setServerNotificationsCache }) => {
+    setServerNotificationsCache([]);
+  });
   void switchUserContext(null);
   setState({
     user: {

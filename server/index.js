@@ -52,6 +52,11 @@ import {
   initDatabase,
   isMongoConnected,
 } from "./db/mongodb.js";
+import {
+  listUserNotifications,
+  markAllUserNotificationsRead,
+  markUserNotificationRead,
+} from "./notifications-db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -222,6 +227,43 @@ app.get("/api/auth/me", async (req, res) => {
   } catch (err) {
     if (handleAuthError(res, err)) return;
     res.status(401).json({ error: { message: "Unauthorized.", code: "UNAUTHORIZED" } });
+  }
+});
+
+app.get("/api/notifications", requireAuth, async (req, res) => {
+  try {
+    const notifications = await listUserNotifications(req.auth.sub);
+    res.json({ notifications });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/notifications]", err);
+    res.status(500).json({ error: { message: "Failed to load notifications.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/notifications/:notificationId/read", requireAuth, async (req, res) => {
+  try {
+    const notification = await markUserNotificationRead(req.auth.sub, req.params.notificationId);
+    if (!notification) {
+      res.status(404).json({ error: { message: "Notification not found.", code: "NOT_FOUND" } });
+      return;
+    }
+    res.json({ notification });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/notifications/read]", err);
+    res.status(500).json({ error: { message: "Failed to update notification.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/notifications/read-all", requireAuth, async (req, res) => {
+  try {
+    await markAllUserNotificationsRead(req.auth.sub);
+    res.json({ ok: true });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/notifications/read-all]", err);
+    res.status(500).json({ error: { message: "Failed to update notifications.", code: "SERVER_ERROR" } });
   }
 });
 

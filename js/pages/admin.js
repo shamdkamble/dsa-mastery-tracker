@@ -176,14 +176,26 @@ function userRow(user) {
       <td data-label="Status">${statusBadge(user.status)}</td>
       <td class="text-tertiary user-mgmt__date" data-label="Registered">${formatDate(user.createdAt, { dateOnly: true })}</td>
       <td class="user-mgmt__expiry" data-label="Expiry">
-        <input
-          type="date"
-          class="input input--sm user-mgmt__date-input"
-          data-field="expiresAt"
-          data-user-id="${user.id}"
-          value="${toDateInputValue(user.expiresAt)}"
-          aria-label="Expiry date for ${escapeHtml(user.name)}"
-        />
+        <div class="user-mgmt__date-field">
+          <input
+            type="date"
+            class="input input--sm user-mgmt__date-input"
+            data-field="expiresAt"
+            data-user-id="${user.id}"
+            value="${toDateInputValue(user.expiresAt)}"
+            aria-label="Expiry date for ${escapeHtml(user.name)}"
+          />
+          <button
+            type="button"
+            class="user-mgmt__date-trigger btn btn--ghost btn--sm"
+            data-date-trigger
+            data-user-id="${user.id}"
+            aria-label="Open calendar for ${escapeHtml(user.name)}"
+            title="Pick expiry date"
+          >
+            ${icon("calendar")}
+          </button>
+        </div>
         ${expired ? `<span class="user-mgmt__expired-tag">Expired</span>` : ""}
       </td>
       <td data-label="Access">
@@ -238,7 +250,7 @@ function renderTable(users, { search, statusFilter }) {
 
   return `
     <div class="user-mgmt__table-wrap">
-      <table class="table table--interactive user-mgmt__table">
+      <table class="table user-mgmt__table">
         <thead>
           <tr>
             <th>Name</th>
@@ -355,11 +367,32 @@ export default {
       row.classList.toggle("user-mgmt__row--dirty", dirty);
     }
 
+    function openDatePicker(input) {
+      if (!input) return;
+      input.focus();
+      if (typeof input.showPicker === "function") {
+        try {
+          input.showPicker();
+          return;
+        } catch {
+          /* fallback to native click */
+        }
+      }
+      input.click();
+    }
+
     function bindRowEditors() {
       listEl.querySelectorAll(".user-mgmt__row").forEach((row) => {
         row.querySelectorAll("[data-field]").forEach((field) => {
           field.addEventListener("change", () => markRowDirty(row));
           field.addEventListener("input", () => markRowDirty(row));
+
+          if (field.matches('[data-field="expiresAt"]')) {
+            ["click", "mousedown", "pointerdown"].forEach((evt) => {
+              field.addEventListener(evt, (e) => e.stopPropagation());
+            });
+            field.addEventListener("click", () => openDatePicker(field));
+          }
         });
       });
       initDropdowns(listEl);
@@ -460,6 +493,16 @@ export default {
     refreshBtn?.addEventListener("click", loadUsers);
 
     listEl?.addEventListener("click", (e) => {
+      const dateTrigger = e.target.closest("[data-date-trigger]");
+      if (dateTrigger) {
+        e.preventDefault();
+        e.stopPropagation();
+        const row = dateTrigger.closest("tr");
+        const input = row?.querySelector('[data-field="expiresAt"]');
+        openDatePicker(input);
+        return;
+      }
+
       const btn = e.target.closest("[data-action]");
       if (!btn || btn.disabled) return;
 

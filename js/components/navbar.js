@@ -9,8 +9,12 @@ import { navigate } from "../router.js";
 import { addSearchRecent, getUser } from "../storage/db.js";
 import { logout } from "../services/auth.js";
 import { renderProfileAvatar } from "../utils/profile-avatar.js";
-import { markNotificationRead, markAllNotificationsRead } from "../storage/db.js";
-import { getNotifications, getUnreadNotificationCount } from "../services/notifications.js";
+import {
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationReadById,
+  markAllNotificationsReadByIds,
+} from "../services/notifications.js";
 import { $, debounce } from "../utils.js";
 import { getSessionUser } from "../auth/session.js";
 import { renderSubscriptionBadge, getSubscriptionTier } from "../subscription-theme.js";
@@ -313,8 +317,7 @@ function bindNotificationPanelEvents(container) {
     const markAll = e.target.closest("#navbar-notif-mark-all");
     if (markAll) {
       const ids = getNotifications().filter((n) => !n.read).map((n) => n.id);
-      markAllNotificationsRead(ids);
-      refreshNotificationUI(container);
+      void markAllNotificationsReadByIds(ids).then(() => refreshNotificationUI(container));
       return;
     }
 
@@ -323,8 +326,7 @@ function bindNotificationPanelEvents(container) {
 
     const id = item.dataset.notifId;
     const href = item.dataset.notifHref;
-    markNotificationRead(id);
-    refreshNotificationUI(container);
+    void markNotificationReadById(id).then(() => refreshNotificationUI(container));
 
     if (href) {
       closeNotificationPanel(container);

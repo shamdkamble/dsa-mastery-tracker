@@ -11,6 +11,7 @@ import { getInitials } from "../storage/helpers.js";
 import { dispatch } from "../utils.js";
 import { switchUserContext } from "../storage/db.js";
 import { loadRoadmapProgress, resetRoadmapProgress } from "../storage/roadmap-progress.js";
+import { getSubscriptionTier, syncSubscriptionPresentation } from "../subscription-theme.js";
 
 export const PUBLIC_ROUTES = new Set(["login", "register"]);
 export const ADMIN_ROUTES = new Set(["admin"]);
@@ -43,8 +44,13 @@ export async function syncAuthState(user) {
       role: user.role === "admin" ? "Administrator" : "DSA Learner",
       authRole: user.role,
       status: user.status,
+      accessLevel: user.accessLevel,
+      expiresAt: user.expiresAt || null,
+      subscriptionTier: getSubscriptionTier(user),
     },
   });
+
+  syncSubscriptionPresentation(user);
 
   if (userChanged) {
     dispatch("auth:change", { user });
