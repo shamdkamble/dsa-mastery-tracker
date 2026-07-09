@@ -7,6 +7,7 @@ export const BRAND = {
   tagline: "Master DSA. Build Intuition. Land FAANG.",
   credit: "DSAMantra by Sham Kamble",
   author: "Sham Kamble",
+  sidebarSubtitle: "by Sham Kamble",
   description:
     "DSAMantra — Master DSA. Build Intuition. Land FAANG. Track problems, follow the FAANG roadmap, and build real interview intuition.",
   themeColor: "#6366f1",

@@ -93,7 +93,7 @@ function renderSidebar(state) {
         <div class="sidebar__logo-icon" aria-hidden="true">${icon("logo")}</div>
         <div class="sidebar__logo-text">
           <span class="sidebar__logo-title">${BRAND.name}</span>
-          <span class="sidebar__logo-subtitle">${BRAND.tagline}</span>
+          <span class="sidebar__logo-subtitle">${BRAND.sidebarSubtitle}</span>
         </div>
       </a>
       <button class="sidebar__collapse-btn" id="sidebar-collapse" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">
