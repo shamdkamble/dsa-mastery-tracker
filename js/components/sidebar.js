@@ -10,6 +10,15 @@ import { getProblems } from "../storage/db.js";
 import { computeTodaysMission } from "../storage/computed.js";
 import { isAdmin } from "../auth/session.js";
 
+function escapeAttr(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function getNavSections() {
   const problemCount = getProblems().length;
   const missionCount = computeTodaysMission().length;
@@ -55,6 +64,7 @@ function renderNavLink(item, currentRoute) {
       href="#/${item.path}"
       class="sidebar__link${isActive ? " is-active" : ""}"
       data-route="${item.path}"
+      data-tooltip="${escapeAttr(item.label)}"
       aria-current="${isActive ? "page" : "false"}"
     >
       <span class="sidebar__link-icon" aria-hidden="true">${icon(item.icon)}</span>
@@ -78,7 +88,7 @@ function renderSidebar(state) {
 
   return `
     <div class="sidebar__header">
-      <a href="#/dashboard" class="sidebar__logo" data-route="dashboard" aria-label="DSA Mastery Tracker home">
+      <a href="#/dashboard" class="sidebar__logo" data-route="dashboard" data-tooltip="DSA Mastery Tracker" aria-label="DSA Mastery Tracker home">
         <div class="sidebar__logo-icon" aria-hidden="true">${icon("logo")}</div>
         <div class="sidebar__logo-text">
           <span class="sidebar__logo-title">DSA Mastery</span>
@@ -109,11 +119,21 @@ function syncAppClasses(app, state) {
   app.classList.toggle("sidebar-open", state.sidebarOpen);
 }
 
+function updateCollapseButton(container, collapsed) {
+  const btn = $("#sidebar-collapse", container);
+  if (!btn) return;
+  const label = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  btn.setAttribute("aria-label", label);
+  btn.setAttribute("title", label);
+  btn.setAttribute("aria-expanded", String(!collapsed));
+}
+
 export function initSidebar(container) {
   const app = $("#app");
 
   container.innerHTML = renderSidebar(getState());
   syncAppClasses(app, getState());
+  updateCollapseButton(container, getState().sidebarCollapsed);
 
   container.addEventListener("click", (e) => {
     const collapseBtn = e.target.closest("#sidebar-collapse");
@@ -137,6 +157,9 @@ export function initSidebar(container) {
   subscribe(({ updates, state }) => {
     if (updates.sidebarCollapsed !== undefined || updates.sidebarOpen !== undefined) {
       syncAppClasses(app, state);
+      if (updates.sidebarCollapsed !== undefined) {
+        updateCollapseButton(container, state.sidebarCollapsed);
+      }
     }
     if (updates.currentRoute !== undefined) {
       updateActiveLinks(container, state.currentRoute);
@@ -179,6 +202,7 @@ export function initSidebar(container) {
   document.addEventListener("auth:change", () => {
     container.innerHTML = renderSidebar(getState());
     syncAppClasses(app, getState());
+    updateCollapseButton(container, getState().sidebarCollapsed);
     updateActiveLinks(container, getState().currentRoute);
   });
 }
