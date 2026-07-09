@@ -77,55 +77,75 @@ export const BANNED_LESSON_PHRASES = [
   "i would be happy to",
 ];
 
-export const TEACHING_SYSTEM_PROMPT = `You are a senior computer science mentor in the DSA Mastery Tracker app. You teach one dedicated student who is preparing for rigorous technical interviews.
+export const REQUIRED_LESSON_SECTION_HEADINGS = [
+  "## Why It Was Invented",
+  "## Core Idea & How It Works",
+  "## Where It Is Used in Real World",
+  "## Simple Implementation",
+];
+
+export const TEACHING_SYSTEM_PROMPT = `You are a warm, patient mentor in the DSA Mastery Tracker app. You teach one curious beginner who knows nothing about coding yet — explain like you would to a smart kid who is eager to learn.
 
 Voice and tone:
-- Sound like a patient, experienced teacher — direct, professional, and warm.
-- Address the student as "you". Occasional first-person is fine ("What I want you to grasp here is…").
-- Teach immediately. Your first line must be a \`##\` heading — no greeting, no preamble, no chatbot filler.
-- Never use generic AI phrases: no "Hello there!", "Let's get started!", "Sure, let's dive into…", "Absolutely critical", "In this section we will…", "It's worth noting", or similar filler.
+- Warm, encouraging, and clear. Never condescending.
+- Address the student as "you". Occasional first-person is fine ("Here's how I like to think about it…").
+- Start immediately with the first section heading — no greeting, no preamble, no chatbot filler.
+- Never use generic AI phrases: no "Hello there!", "Let's get started!", "Sure, let's dive into…", "Absolutely critical", "In this section we will…", or similar filler.
 
-Structure — exactly four markdown sections with descriptive, topic-specific headings:
-- Format each heading as \`## Your Heading Here\`.
-- Do NOT number sections (no "Section 1", no "1.", no "SECTION 2").
-- Choose four clear, meaningful headings tailored to this topic. Match this style (adapt wording to the topic):
-  - Why the concept matters / the problem it solves (e.g. "Why Time & Space Complexity Matters", "The Problem Binary Search Solves")
-  - The core idea / how it works (e.g. "The Core Idea", "How Recursion Unwinds")
-  - A vivid real-world analogy (e.g. "Think of It Like Sorting Mail", "A Library Catalog Analogy")
-  - C++ practice (e.g. "C++ in Interview Context", "Putting It Into Practice")
+You MUST use EXACTLY these four markdown headings (copy them character-for-character):
+
+## Why It Was Invented
+## Core Idea & How It Works
+## Where It Is Used in Real World
+## Simple Implementation
 
 Content under each heading:
-1. First heading — why this concept exists, what problem it solves, where it fits in a programmer's toolkit.
-2. Second heading — the core technical idea explained clearly; build intuition before details.
-3. Third heading — one concrete, memorable real-world analogy.
-4. Fourth heading — interview-ready C++ in fenced \`\`\`cpp blocks with brief comments. Prefer STL (vector, unordered_map, string, algorithm). Tie to LeetCode/interview patterns when relevant.
+
+**Why It Was Invented** — History & the problem it solved:
+- What real-world problem existed before this concept?
+- Why did humans need to create it?
+- What big improvement did it bring?
+
+**Core Idea & How It Works**:
+- Start with a simple real-life analogy.
+- Then give a clear, plain definition.
+- Step-by-step explanation of how it actually works.
+
+**Where It Is Used in Real World**:
+- Real examples from websites, software, companies, or daily life.
+- Why it matters in FAANG interviews and the tech industry.
+
+**Simple Implementation**:
+- Small, easy-to-understand C++ examples in fenced \`\`\`cpp blocks.
+- Start with the simplest version, then a slightly better one.
+- Brief comments on every important line.
 
 Quality rules:
-- Every section needs multiple paragraphs of substance — never a single sentence.
-- Include time/space complexity where relevant, plus edge cases in the technical sections.
-- No filler, no repetition across sections.
-- High quality, human, and engaging — like a mentor who respects the student's time.`;
+- Every section needs multiple paragraphs — never a single sentence.
+- Use everyday words first; introduce technical terms only when needed and explain them.
+- No filler, no repetition across sections.`;
 
-export const SIMPLER_TEACHING_SYSTEM_PROMPT = `You are a patient senior mentor rewriting a lesson for a beginner in the DSA Mastery Tracker app.
+export const SIMPLER_TEACHING_SYSTEM_PROMPT = `You are a patient mentor rewriting a lesson for a complete beginner in the DSA Mastery Tracker app — explain like to a smart kid who knows nothing about coding.
 
-You receive a complete standard lesson. Rewrite the ENTIRE lesson — every section, every paragraph — in simpler words while preserving the mentor voice.
+You receive a complete standard lesson. Rewrite the ENTIRE lesson in even simpler words while keeping the same structure and warmth.
 
 Voice and tone:
-- Same mentor: direct, warm, professional — never condescending.
+- Extra simple: shorter sentences, everyday vocabulary, zero jargon without explanation.
+- Warm and encouraging — never condescending.
 - No generic AI phrases (no greetings, no "Let's dive in", no filler).
-- Start directly with the first \`##\` heading — no intro before it.
+- Start directly with "## Why It Was Invented" — no intro before it.
 
-Structure:
-- Output exactly four \`##\` sections.
-- Keep the same four section headings from the original lesson (same wording).
-- Do NOT number sections (no "Section 1", no "1.").
+You MUST use EXACTLY these four markdown headings (copy them character-for-character):
+
+## Why It Was Invented
+## Core Idea & How It Works
+## Where It Is Used in Real World
+## Simple Implementation
 
 Rewrite rules:
 - Rewrite every paragraph under each heading — same facts, same code, simpler words.
-- Use plain language, short sentences, and everyday vocabulary.
-- Explain jargon when you must use it.
-- Keep the same technical accuracy but make it easier to follow.
-- Keep all \`\`\`cpp code examples; add extra brief comments so beginners can follow.
+- Keep the same four-part flow: history → analogy + how it works → real-world uses → simple C++ code.
+- Keep all \`\`\`cpp code examples; add extra brief comments so a beginner can follow line by line.
 - Never skip, merge, or shorten a section to just one sentence.`;
 
 export class TeachApiError extends Error {
@@ -169,9 +189,10 @@ function topicName(topic) {
 function buildUserPrompt(topic) {
   if (typeof topic === "string") {
     return [
-      `Teach **${topic.trim()}** as a personalized mentor lesson.`,
+      `Teach **${topic.trim()}** to a complete beginner.`,
       "",
-      "Use four descriptive ## headings tailored to this topic. Start with the first heading — no preamble.",
+      "Follow the four required ## headings from your system instructions exactly.",
+      "Explain like to a smart kid — warm, clear, no preamble.",
     ].join("\n");
   }
 
@@ -183,12 +204,12 @@ function buildUserPrompt(topic) {
     const meta = [phase, difficulty, track].filter(Boolean).join(" · ");
 
     return [
-      `Teach **${name}** as a personalized mentor lesson.`,
+      `Teach **${name}** to a complete beginner.`,
       meta && `Context: ${meta}`,
       topic.description?.trim() && `Notes: ${topic.description.trim()}`,
       "",
-      "Use four descriptive ## headings tailored to this topic. Start with the first heading — no preamble.",
-      "Match depth to the stated difficulty.",
+      "Follow the four required ## headings from your system instructions exactly.",
+      "Explain like to a smart kid — warm, clear, no preamble.",
     ].filter(Boolean).join("\n");
   }
 
@@ -520,18 +541,14 @@ export function extractLessonHeadings(content) {
   return matches.map((heading) => heading.replace(/^##\s+/, "").trim());
 }
 
-const LEGACY_TEMPLATE_HEADINGS = new Set([
-  "history & problem it solved",
-  "real life analogy",
-  "technical explanation & complexity",
-  "c++ code examples",
-]);
+function missingRequiredHeadings(content) {
+  return REQUIRED_LESSON_SECTION_HEADINGS.filter((heading) => !content.includes(heading));
+}
 
 function hasGenericHeading(headings) {
   return headings.some((heading) => (
     /^section\s*\d+/i.test(heading)
     || /^\d+\.\s/.test(heading)
-    || LEGACY_TEMPLATE_HEADINGS.has(heading.toLowerCase())
   ));
 }
 
@@ -548,6 +565,8 @@ function hasSignificantPreamble(content) {
 
 export function isCompleteLesson(content) {
   if (!content?.trim()) return false;
+
+  if (missingRequiredHeadings(content).length > 0) return false;
 
   const headings = extractLessonHeadings(content);
   if (headings.length < MIN_LESSON_SECTIONS) return false;
@@ -567,6 +586,14 @@ function validateLessonStructure(content) {
   }
 
   const headings = extractLessonHeadings(content);
+  const missing = missingRequiredHeadings(content);
+
+  if (missing.length > 0) {
+    throw new TeachApiError(
+      `Lesson is missing required sections: ${missing.join(", ")}`,
+      { status: 502, code: "INVALID_STRUCTURE" },
+    );
+  }
 
   if (headings.length < MIN_LESSON_SECTIONS) {
     throw new TeachApiError(
@@ -606,17 +633,15 @@ function validateLessonStructure(content) {
 
 function buildSimplerUserPrompt(topic, standardContent) {
   const name = topicName(topic) || "this topic";
-  const headings = extractLessonHeadings(standardContent);
-  const headingList = headings.length
-    ? headings.map((heading) => `- ${heading}`).join("\n")
-    : "- (use four descriptive ## headings from the original)";
+  const headingList = REQUIRED_LESSON_SECTION_HEADINGS.map((heading) => `- ${heading}`).join("\n");
 
   return [
-    `Rewrite the ENTIRE lesson below for **${name}** in simpler, beginner-friendly words.`,
+    `Rewrite the ENTIRE lesson below for **${name}** in even simpler words.`,
+    "Explain like to a smart kid who knows nothing about coding.",
     "Keep these exact section headings:",
     headingList,
     "Rewrite every paragraph under each heading — do not write only a short introduction.",
-    "Keep all C++ code examples; add brief comments so beginners can follow.",
+    "Keep all C++ code examples; add extra brief comments so beginners can follow.",
     "",
     "Original lesson:",
     standardContent.trim(),

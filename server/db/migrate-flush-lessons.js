@@ -5,7 +5,7 @@
 import mongoose from "mongoose";
 import { Lesson } from "../models/Lesson.js";
 
-const MIGRATION_ID = "flush-lessons-mentor-prompt-v1";
+const MIGRATION_ID = "flush-lessons-beginner-structure-v2";
 
 const migrationSchema = new mongoose.Schema(
   {
@@ -18,7 +18,7 @@ const migrationSchema = new mongoose.Schema(
 const AppMigration = mongoose.models.AppMigration || mongoose.model("AppMigration", migrationSchema);
 
 /**
- * Delete all cached lessons once so every user gets freshly generated mentor-style content.
+ * Delete all cached lessons once so every user gets the new 4-section beginner format.
  */
 export async function flushLessonsForMentorPromptRefresh() {
   const existing = await AppMigration.findOne({ id: MIGRATION_ID }).lean();

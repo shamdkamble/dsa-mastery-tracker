@@ -150,10 +150,10 @@ function renderLesson(content) {
 
 function renderLoadingSteps(activeIndex = 0) {
   const steps = [
-    "Why it matters",
-    "The core idea",
-    "Real-world connection",
-    "C++ practice",
+    "Why It Was Invented",
+    "Core Idea & How It Works",
+    "Real-World Uses",
+    "Simple Implementation",
   ];
 
   return steps.map((label, i) => `
