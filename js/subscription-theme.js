@@ -81,7 +81,7 @@ export function renderSubscriptionStatusCard(user = getSessionUser()) {
           ${renderSubscriptionBadge(user)}
           <span class="subscription-status__label">Full access unlocked</span>
         </div>
-        <p class="subscription-status__text">You have unlimited access to all phases, AI lessons, and problem helpers. Thank you for supporting DSA Mastery.</p>
+        <p class="subscription-status__text">You have unlimited access to all phases, AI lessons, and problem helpers. Thank you for supporting DSAMantra.</p>
         <ul class="subscription-status__perks">
           <li>All 6 roadmap phases</li>
           <li>Unlimited AI lessons &amp; regeneration</li>

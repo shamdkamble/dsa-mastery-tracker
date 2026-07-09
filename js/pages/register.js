@@ -1,5 +1,6 @@
 import { icon } from "../components/icons.js";
 import { Button, Field, Input } from "../components/ui/index.js";
+import { BRAND } from "../constants/branding.js";
 
 export default {
   title: "Create Account",
@@ -11,8 +12,8 @@ export default {
           <div class="auth-card__brand">
             <div class="auth-card__logo" aria-hidden="true">${icon("logo")}</div>
             <div>
-              <h1 class="auth-card__title">Join DSA Mastery</h1>
-              <p class="auth-card__subtitle">Register for access — admin approval required</p>
+              <h1 class="auth-card__title">Join ${BRAND.name}</h1>
+              <p class="auth-card__subtitle">${BRAND.tagline}</p>
             </div>
           </div>
 
@@ -62,6 +63,7 @@ export default {
           </p>
         </div>
 
+        <p class="auth-page__credit">${BRAND.credit}</p>
         <div class="auth-page__glow" aria-hidden="true"></div>
       </div>
     `;

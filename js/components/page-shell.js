@@ -27,7 +27,7 @@ export function createPage({ title, description, iconName, children = "", hideHe
 export function createPlaceholder(title, iconName = "grid") {
   return EmptyState({
     title: `${title} coming soon`,
-    text: "This section is part of your DSA mastery workspace. Content will be built in upcoming tasks.",
+    text: "This section is part of your DSAMantra workspace. Content will be built in upcoming tasks.",
     iconName,
   });
 }

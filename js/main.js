@@ -1,5 +1,5 @@
 /**
- * DSA Mastery Tracker — Application entry point
+ * DSAMantra — Application entry point
  */
 
 import { initTheme } from "./theme.js";

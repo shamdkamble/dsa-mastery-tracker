@@ -1,0 +1,17 @@
+{
+  "name": "DSAMantra",
+  "short_name": "DSAMantra",
+  "description": "Master DSA. Build Intuition. Land FAANG.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

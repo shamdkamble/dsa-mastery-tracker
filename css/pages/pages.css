@@ -1630,6 +1630,117 @@
   color: var(--color-text-tertiary);
 }
 
+/* ── About brand card ── */
+
+.about-brand-card {
+  position: relative;
+  padding: var(--space-6);
+  background: linear-gradient(
+    135deg,
+    var(--color-bg-secondary) 0%,
+    var(--color-bg-elevated) 60%,
+    var(--color-accent-subtle) 100%
+  );
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.about-brand-card__glow {
+  position: absolute;
+  top: -30%;
+  right: -5%;
+  width: 240px;
+  height: 240px;
+  border-radius: var(--radius-full);
+  background: radial-gradient(circle, var(--color-accent-muted) 0%, transparent 70%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.about-brand-card__head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  z-index: 1;
+}
+
+.about-brand-card__logo {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--color-accent), #818cf8);
+  color: white;
+  box-shadow: var(--shadow-md);
+  flex-shrink: 0;
+}
+
+.about-brand-card__logo svg {
+  width: 28px;
+  height: 28px;
+}
+
+.about-brand-card__name {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+}
+
+.about-brand-card__tagline {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-accent);
+}
+
+.about-brand-card__desc {
+  position: relative;
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text-secondary);
+  max-width: 62ch;
+  z-index: 1;
+}
+
+.about-brand-card__meta {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+  z-index: 1;
+}
+
+.about-brand-card__meta-label {
+  display: block;
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-1);
+}
+
+.about-brand-card__meta-value {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+@media (max-width: 640px) {
+  .about-brand-card__meta {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .profile-hero__main {
     flex-direction: column;

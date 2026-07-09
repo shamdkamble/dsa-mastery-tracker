@@ -9,6 +9,7 @@ import { getSessionUser } from "../auth/session.js";
 import { renderSubscriptionStatusCard, renderSubscriptionBadge } from "../subscription-theme.js";
 import { renderProfileAvatar } from "../utils/profile-avatar.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
+import { BRAND } from "../constants/branding.js";
 
 const SETTINGS_NAV = [
   { id: "profile", label: "Profile", icon: "user" },
@@ -16,6 +17,7 @@ const SETTINGS_NAV = [
   { id: "appearance", label: "Appearance", icon: "palette" },
   { id: "notifications", label: "Notifications", icon: "bell" },
   { id: "data", label: "Data", icon: "database" },
+  { id: "about", label: "About", icon: "info" },
 ];
 
 function escapeHtml(str) {
@@ -234,6 +236,32 @@ export default {
                   <button class="btn btn--danger" id="clear-data-btn" type="button">Clear All Data</button>
                 </div>
               </div>
+            </section>
+
+            <section id="about" class="settings-section settings-group">
+              <h2 class="settings-group__title">About</h2>
+              <p class="settings-group__desc">Product information and credits.</p>
+              <article class="about-brand-card">
+                <div class="about-brand-card__glow" aria-hidden="true"></div>
+                <div class="about-brand-card__head">
+                  <div class="about-brand-card__logo" aria-hidden="true">${icon("logo")}</div>
+                  <div class="about-brand-card__identity">
+                    <h3 class="about-brand-card__name">${escapeHtml(BRAND.name)}</h3>
+                    <p class="about-brand-card__tagline">${escapeHtml(BRAND.tagline)}</p>
+                  </div>
+                </div>
+                <p class="about-brand-card__desc">${escapeHtml(BRAND.description)}</p>
+                <div class="about-brand-card__meta">
+                  <div class="about-brand-card__meta-item">
+                    <span class="about-brand-card__meta-label">Credit</span>
+                    <span class="about-brand-card__meta-value">${escapeHtml(BRAND.credit)}</span>
+                  </div>
+                  <div class="about-brand-card__meta-item">
+                    <span class="about-brand-card__meta-label">Author</span>
+                    <span class="about-brand-card__meta-value">${escapeHtml(BRAND.author)}</span>
+                  </div>
+                </div>
+              </article>
             </section>
           </div>
         </div>

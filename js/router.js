@@ -4,6 +4,7 @@
 
 import { setState } from "./state.js";
 import { dispatch } from "./utils.js";
+import { pageTitle } from "./constants/branding.js";
 
 const routes = new Map();
 
@@ -89,7 +90,7 @@ export async function renderRoute(path, container) {
 
   setState({ currentRoute: path });
   dispatch("route:change", { path, config });
-  document.title = `${config.title} · DSA Mastery Tracker`;
+  document.title = pageTitle(config.title);
 }
 
 /** Re-render the current page content without auth checks or route events. */

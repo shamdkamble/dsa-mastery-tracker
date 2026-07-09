@@ -111,6 +111,17 @@
   color: var(--color-text-secondary);
 }
 
+.auth-page__credit {
+  position: relative;
+  z-index: 1;
+  margin: var(--space-6) 0 0;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  letter-spacing: 0.02em;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
 .auth-link {
   color: var(--color-accent);
   font-weight: var(--font-medium);

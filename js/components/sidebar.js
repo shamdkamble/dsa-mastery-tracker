@@ -9,6 +9,7 @@ import { $, $$, on, debounce } from "../utils.js";
 import { getProblems } from "../storage/db.js";
 import { computeTodaysMission } from "../storage/computed.js";
 import { isAdmin } from "../auth/session.js";
+import { BRAND } from "../constants/branding.js";
 
 function escapeAttr(str) {
   return String(str ?? "")
@@ -88,11 +89,11 @@ function renderSidebar(state) {
 
   return `
     <div class="sidebar__header">
-      <a href="#/dashboard" class="sidebar__logo" data-route="dashboard" data-tooltip="DSA Mastery Tracker" aria-label="DSA Mastery Tracker home">
+      <a href="#/dashboard" class="sidebar__logo" data-route="dashboard" data-tooltip="${escapeAttr(BRAND.name)}" aria-label="${escapeAttr(BRAND.name)} home">
         <div class="sidebar__logo-icon" aria-hidden="true">${icon("logo")}</div>
         <div class="sidebar__logo-text">
-          <span class="sidebar__logo-title">DSA Mastery</span>
-          <span class="sidebar__logo-subtitle">Tracker</span>
+          <span class="sidebar__logo-title">${BRAND.name}</span>
+          <span class="sidebar__logo-subtitle">${BRAND.tagline}</span>
         </div>
       </a>
       <button class="sidebar__collapse-btn" id="sidebar-collapse" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">

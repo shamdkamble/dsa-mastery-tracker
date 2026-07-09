@@ -1,5 +1,6 @@
 import { icon } from "../components/icons.js";
 import { Button, Field, Input } from "../components/ui/index.js";
+import { BRAND } from "../constants/branding.js";
 
 export default {
   title: "Sign In",
@@ -12,7 +13,7 @@ export default {
             <div class="auth-card__logo" aria-hidden="true">${icon("logo")}</div>
             <div>
               <h1 class="auth-card__title">Welcome back</h1>
-              <p class="auth-card__subtitle">Sign in to continue your FAANG mastery journey</p>
+              <p class="auth-card__subtitle">${BRAND.tagline}</p>
             </div>
           </div>
 
@@ -53,6 +54,7 @@ export default {
           </p>
         </div>
 
+        <p class="auth-page__credit">${BRAND.credit}</p>
         <div class="auth-page__glow" aria-hidden="true"></div>
       </div>
     `;

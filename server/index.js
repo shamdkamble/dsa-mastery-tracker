@@ -1,5 +1,5 @@
 /**
- * DSA Mastery Tracker — Express app
+ * DSAMantra — Express app
  * Local dev: serves static files + POST /api/teach (Gemini)
  * Vercel: API routes only (static files served by Vercel CDN)
  */
@@ -540,7 +540,7 @@ if (!IS_VERCEL && isMainModule) {
     }
 
     console.log("");
-    console.log("  DSA Mastery Tracker");
+    console.log("  DSAMantra");
     console.log(`  Serving at: http://localhost:${PORT}`);
     console.log(`  API proxy:  POST http://localhost:${PORT}/api/teach`);
     console.log(`  Provider:   Gemini (${resolveModel()})`);

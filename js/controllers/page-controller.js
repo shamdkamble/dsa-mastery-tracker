@@ -251,7 +251,7 @@ export function bindSettingsHandlers(root) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `dsa-tracker-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `dsamantra-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     showToast(Toast({ title: "Data exported", variant: "success" }));
@@ -303,7 +303,7 @@ export function bindSettingsHandlers(root) {
   }
 }
 
-const SETTINGS_SECTION_IDS = ["profile", "subscription", "appearance", "notifications", "data"];
+const SETTINGS_SECTION_IDS = ["profile", "subscription", "appearance", "notifications", "data", "about"];
 
 function syncUserState() {
   const u = getUser();

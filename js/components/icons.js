@@ -3,7 +3,7 @@
  */
 
 export const icons = {
-  logo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,
+  logo: `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="5" r="2.25" fill="currentColor"/><circle cx="8" cy="11" r="2" fill="currentColor"/><circle cx="16" cy="11" r="2" fill="currentColor"/><circle cx="5" cy="17" r="1.75" fill="currentColor" opacity="0.9"/><circle cx="11" cy="17" r="1.75" fill="currentColor" opacity="0.9"/><circle cx="13" cy="17" r="1.75" fill="currentColor" opacity="0.9"/><circle cx="19" cy="17" r="1.75" fill="currentColor" opacity="0.9"/><path d="M12 7.25L8 9M12 7.25L16 9M8 13L5 15.25M8 13L11 15.25M16 13L13 15.25M16 13L19 15.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
 
   dashboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>`,
 

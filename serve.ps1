@@ -1,4 +1,4 @@
-# Local dev server for DSA Mastery Tracker
+# Local dev server for DSAMantra
 # Node server: static files + POST /api/teach Gemini proxy
 # Fallback: Python static-only (no API proxy)
 
@@ -53,7 +53,7 @@ function Stop-PortListeners {
 }
 
 Write-Host ""
-Write-Host "  DSA Mastery Tracker" -ForegroundColor Cyan
+Write-Host "  DSAMantra" -ForegroundColor Cyan
 
 Set-Location $root
 

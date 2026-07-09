@@ -14,6 +14,7 @@ import { getNotifications, getUnreadNotificationCount } from "../services/notifi
 import { $, debounce } from "../utils.js";
 import { getSessionUser } from "../auth/session.js";
 import { renderSubscriptionBadge, getSubscriptionTier } from "../subscription-theme.js";
+import { BRAND } from "../constants/branding.js";
 
 const ROUTE_TITLES = {
   dashboard: "Dashboard",
@@ -106,7 +107,7 @@ function renderNavbar(state) {
         ${icon("menu")}
       </button>
       <nav class="navbar__breadcrumb" aria-label="Breadcrumb">
-        <span>DSA Mastery</span>
+        <span>${BRAND.name}</span>
         <span aria-hidden="true">/</span>
         <span class="navbar__breadcrumb-current">${pageTitle}</span>
       </nav>
