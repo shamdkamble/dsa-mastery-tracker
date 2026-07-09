@@ -93,6 +93,7 @@ export function bindMissionHandlers(root) {
       } else {
         showToast(Toast({ title: "All done!", text: "You've completed today's mission.", variant: "success" }));
       }
+      return;
     }
 
     const addMissionBtn = e.target.closest("[data-action='add-to-mission']");
@@ -106,6 +107,7 @@ export function bindMissionHandlers(root) {
           console.error("[mission] add failed", err);
           showToast(Toast({ title: "Failed", text: err?.message || "Could not add to mission.", variant: "danger" }));
         });
+      return;
     }
   });
 }

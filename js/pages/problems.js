@@ -80,7 +80,7 @@ function problemRow(p, i) {
       <td data-label="Solve Time"><span class="text-secondary text-xs font-mono">${solveTime}</span></td>
       <td data-label="Last Review"><span class="text-secondary text-xs">${formatRelativeTime(p.lastReviewAt)}</span></td>
       <td data-label="Actions">
-        <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+        <div class="flex items-center gap-2">
           ${lcUrl ? leetcodeLinkButton(lcUrl, { size: "xs", label: inProgress ? "Resume" : "Solve", problemId: p.id }) : ""}
           ${inProgress ? `<button class="btn btn--xs btn--primary" data-action="mark-solved" data-id="${p.id}" type="button">Solved</button>` : ""}
           ${!p.inMission ? `<button class="btn btn--xs btn--ghost" data-action="add-to-mission" data-id="${p.id}" type="button" title="Add to mission">+</button>` : ""}
@@ -168,10 +168,9 @@ export default {
     container.dataset.problemsRowBound = "true";
 
     container.addEventListener("click", (e) => {
+      if (e.target.closest("[data-action]")) return;
       const row = e.target.closest("tr[data-problem-row]");
-      if (row && !e.target.closest("button") && !e.target.closest("a")) {
-        openProblemModal(row.dataset.id);
-      }
+      if (row) openProblemModal(row.dataset.id);
     });
   },
 };
