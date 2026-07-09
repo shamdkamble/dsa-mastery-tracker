@@ -167,7 +167,7 @@ function renderTierBanner(user) {
   if (hasTrialAccess(user)) {
     const hint = getRoadmapAccessHint(user);
     title = "Trial plan";
-    text = `${hint}. All Phase 1 topics are unlocked — AI lesson generation, pattern detection, and complexity analysis require Premium.`;
+    text = `${hint}. All Phase 1 lessons are unlocked — "Explain in Simpler Words" is locked from Step 3 onward.`;
     context = "trial";
   } else if (hasStandardAccess(user)) {
     title = "Free plan";
@@ -232,8 +232,9 @@ function buildPhase1Steps(topics) {
 
 function phase1StepRow(entry, user) {
   const stepLocked = !canAccessRoadmapStep(user, 1, entry.step);
-  const cppAiLocked = !stepLocked && canOpenLesson(user, entry.cpp) && !canAccessAiGeneration(user, entry.cpp);
-  const dsaAiLocked = !stepLocked && canOpenLesson(user, entry.dsa) && !canAccessAiGeneration(user, entry.dsa);
+  const showLearnAiLock = !hasTrialAccess(user);
+  const cppAiLocked = showLearnAiLock && !stepLocked && canOpenLesson(user, entry.cpp) && !canAccessAiGeneration(user, entry.cpp);
+  const dsaAiLocked = showLearnAiLock && !stepLocked && canOpenLesson(user, entry.dsa) && !canAccessAiGeneration(user, entry.dsa);
 
   return `
     <div

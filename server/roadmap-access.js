@@ -6,7 +6,9 @@ export const FREE_ACCESS = { phase: 1, step: 1 };
 
 export const STANDARD_FREE_TOPIC_IDS = new Set(["cpp-toolchain", "dsa-complexity"]);
 
-/** All Phase 1 topic IDs — trial users can read cached lessons for these. */
+export const TRIAL_SIMPLER_MAX_STEP = 2;
+
+/** All Phase 1 topic IDs — trial users can access lessons for these. */
 export const PHASE1_TOPIC_IDS = new Set([
   "cpp-toolchain", "dsa-complexity", "cpp-types", "dsa-arrays",
   "cpp-control-flow", "dsa-array-basics", "cpp-loops", "dsa-two-pointers-intro",
@@ -17,6 +19,14 @@ export const PHASE1_TOPIC_IDS = new Set([
   "cpp-auto-const", "dsa-sliding-window-variable", "cpp-structs-classes", "dsa-prefix-sum",
   "cpp-recursion", "dsa-recursion", "cpp-debugging", "dsa-framework",
 ]);
+
+const PHASE1_TOPIC_ORDER = [...PHASE1_TOPIC_IDS];
+const TOPIC_STEP = new Map();
+for (let i = 0; i < PHASE1_TOPIC_ORDER.length; i += 2) {
+  const step = i / 2 + 1;
+  TOPIC_STEP.set(PHASE1_TOPIC_ORDER[i], step);
+  if (PHASE1_TOPIC_ORDER[i + 1]) TOPIC_STEP.set(PHASE1_TOPIC_ORDER[i + 1], step);
+}
 
 export function hasPremiumAccess(user) {
   if (!user) return false;
@@ -29,12 +39,28 @@ export function hasTrialAccess(user) {
   return user.accessLevel === "trial";
 }
 
+function resolveTopicStep(topic) {
+  if (topic?.step != null) return topic.step;
+  const topicId = topic?.id ?? topic?.topicId;
+  return topicId ? TOPIC_STEP.get(topicId) ?? null : null;
+}
+
 /** POST /api/teach — generate or regenerate AI lessons. */
-export function canAccessTeachTopic(user, topic) {
+export function canAccessTeachTopic(user, topic, variant = "standard") {
   if (!user || !topic) return false;
   if (hasPremiumAccess(user)) return true;
-  if (hasTrialAccess(user)) return false;
+
   const topicId = topic.id ?? topic.topicId;
+
+  if (hasTrialAccess(user)) {
+    if (!PHASE1_TOPIC_IDS.has(topicId)) return false;
+    if (variant === "simpler") {
+      const step = resolveTopicStep(topic);
+      return step != null && step <= TRIAL_SIMPLER_MAX_STEP;
+    }
+    return true;
+  }
+
   return user.accessLevel === "standard" && STANDARD_FREE_TOPIC_IDS.has(topicId);
 }
 

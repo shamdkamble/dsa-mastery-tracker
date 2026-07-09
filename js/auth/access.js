@@ -14,6 +14,9 @@ export const FREE_ACCESS = { phase: 1, step: 1 };
 /** Standard free preview: first 2 Phase 1 topics. */
 export const STANDARD_FREE_TOPIC_IDS = new Set(["cpp-toolchain", "dsa-complexity"]);
 
+/** Trial: "Explain in Simpler Words" allowed through this step (steps 3+ locked). */
+export const TRIAL_SIMPLER_MAX_STEP = 2;
+
 /** @deprecated Use STANDARD_FREE_TOPIC_IDS */
 export const STANDARD_AI_TOPIC_IDS = STANDARD_FREE_TOPIC_IDS;
 
@@ -122,9 +125,26 @@ export function canAccessCachedLesson(user, topic) {
 export function canAccessAiGeneration(user, topic) {
   if (!user || !topic) return false;
   if (hasPremiumAccess(user)) return true;
-  if (hasTrialAccess(user)) return false;
+  if (hasTrialAccess(user) && topic.phase === 1) return true;
   const topicId = topic.id ?? topic.topicId;
   return hasStandardAccess(user) && STANDARD_FREE_TOPIC_IDS.has(topicId);
+}
+
+/**
+ * Trial: simpler words through step 2; locked from step 3 onward.
+ * @param {Object | null | undefined} user
+ * @param {{ phase?: number, step?: number, id?: string, topicId?: string }} topic
+ * @returns {boolean}
+ */
+export function canAccessSimplerWords(user, topic) {
+  if (!user || !topic) return false;
+  if (hasPremiumAccess(user)) return true;
+  if (hasTrialAccess(user)) {
+    if (topic.phase !== 1) return false;
+    const step = topic.step;
+    return step != null && step <= TRIAL_SIMPLER_MAX_STEP;
+  }
+  return canAccessAiGeneration(user, topic);
 }
 
 /**
@@ -167,7 +187,7 @@ export function getRoadmapAccessHint(user = getSessionUser()) {
     if (days != null && days > 0) {
       return `Trial · ${days} day${days === 1 ? "" : "s"} left · AI locked`;
     }
-    return "Trial · Phase 1 · AI locked";
+    return "Trial · Phase 1 · Simpler words from Step 3 locked";
   }
   return "Free · 2 topics in Phase 1";
 }

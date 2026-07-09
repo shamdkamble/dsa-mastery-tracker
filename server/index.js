@@ -474,10 +474,12 @@ app.post("/api/teach", requireAuth, async (req, res) => {
     const token = extractBearer(req);
     const user = await getCurrentUser(token);
 
-    if (!canAccessTeachTopic(user, topic)) {
+    if (!canAccessTeachTopic(user, topic, variant)) {
       res.status(403).json({
         error: {
-          message: "Subscribe to unlock the full roadmap and AI lessons.",
+          message: variant === "simpler"
+            ? "Upgrade to Premium to unlock simpler explanations from Step 3 onward."
+            : "Subscribe to unlock the full roadmap and AI lessons.",
           code: "ROADMAP_LOCKED",
         },
       });

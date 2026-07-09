@@ -62,7 +62,7 @@ export function buildNotificationItems() {
     items.push({
       id: "trial-upgrade",
       title: "Upgrade to Premium",
-      text: `${daysLabel}Phase 1 is unlocked. Upgrade for AI lessons, pattern detection, and all phases.`,
+      text: `${daysLabel}Phase 1 lessons unlocked. Simpler words lock from Step 3. Upgrade for full AI & all phases.`,
       variant: "accent",
       time: "Upgrade",
       href: "#/roadmap",

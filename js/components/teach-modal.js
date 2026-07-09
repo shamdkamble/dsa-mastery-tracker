@@ -10,6 +10,7 @@ import { fetchCachedLesson, fetchLesson } from "../api/teachApi.js";
 import {
   canAccessAiGeneration,
   canAccessCachedLesson,
+  canAccessSimplerWords,
   canOpenLesson,
   hasTrialAccess,
 } from "../auth/access.js";
@@ -221,17 +222,17 @@ function renderCacheBadge() {
 
 function renderFooter() {
   const user = getSessionUser();
-  const aiLocked = currentTopic && !canAccessAiGeneration(user, currentTopic);
+  const simplerLocked = currentTopic && !canAccessSimplerWords(user, currentTopic);
   const hasSimpler = Boolean(lessonState.simpler);
   const isStandard = lessonState.activeVariant === "standard";
   const isSimpler = lessonState.activeVariant === "simpler";
   const completed = currentTopic?.id && isTopicCompleted(currentTopic.id);
 
-  const simplerControl = aiLocked && !hasSimpler
+  const simplerControl = simplerLocked && !hasSimpler
     ? renderLockedAiButton({
         id: "teach-simpler-btn",
         label: "Explain in Simpler Words",
-        title: "Upgrade to Premium to unlock AI lesson tools",
+        title: "Upgrade to Premium to unlock Explain in Simpler Words from Step 3 onward",
       })
     : `<button
         type="button"
@@ -260,7 +261,7 @@ function renderFooter() {
           role="tab"
           aria-selected="${isSimpler}"
           ${hasSimpler ? "" : "disabled"}
-          ${aiLocked && !hasSimpler ? 'title="Upgrade to Premium"' : ""}
+          ${simplerLocked && !hasSimpler ? 'title="Upgrade to Premium — Simpler words from Step 3"' : ""}
         >Simpler</button>
       </div>
       ${simplerControl}
@@ -445,7 +446,7 @@ function renderAiLockedState(topicName) {
 
 async function handleSimplerWords() {
   const user = getSessionUser();
-  if (currentTopic && !canAccessAiGeneration(user, currentTopic)) {
+  if (currentTopic && !canAccessSimplerWords(user, currentTopic)) {
     openUpgradeModal("ai-lesson");
     return;
   }
