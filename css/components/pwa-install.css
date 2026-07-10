@@ -80,8 +80,12 @@
   }
 }
 
+.pwa-install--push {
+  bottom: max(calc(var(--space-4) + 72px), calc(env(safe-area-inset-bottom, 0px) + 72px));
+}
+
 @media (display-mode: standalone) {
-  .pwa-install {
+  .pwa-install:not(.pwa-install--push) {
     display: none !important;
   }
 }

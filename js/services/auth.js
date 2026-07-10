@@ -55,6 +55,11 @@ export async function register({ name, email, password }) {
 
   const data = await parseJsonSafe(res);
   if (!res.ok) throw errorFromResponse(res.status, data);
+
+  if (data.token && data.user) {
+    setSession({ token: data.token, user: data.user });
+  }
+
   return data;
 }
 

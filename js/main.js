@@ -28,7 +28,7 @@ import {
 import { hydrateServerNotifications } from "./services/notifications.js";
 import { initProductTour, maybeAutoStartTour } from "./components/product-tour.js";
 import { initPWA } from "./pwa.js";
-import { initPushNotifications, syncPushSubscription } from "./push-notifications.js";
+import { initPushNotifications, maybePromptPushEnable, syncPushSubscription } from "./push-notifications.js";
 
 import dashboard from "./pages/dashboard.js";
 import mission from "./pages/mission.js";
@@ -180,6 +180,7 @@ async function init() {
       startLiveNotificationPolling();
     });
     void syncPushSubscription();
+    window.setTimeout(() => { void maybePromptPushEnable(); }, 1500);
     maybeAutoStartTour();
   }
 }

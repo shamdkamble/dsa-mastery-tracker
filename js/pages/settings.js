@@ -223,6 +223,9 @@ export default {
                 </div>
                 ${settingsRow("Push notifications", "Allow system alerts when your account is approved", Toggle({ checked: settings.notifications.pushEnabled, id: "push-notifications-toggle", attrs: 'data-setting="notif.pushEnabled"' }))}
                 <p class="settings-push-status" id="push-status-text" aria-live="polite"></p>
+                <div class="settings-push-actions">
+                  <button type="button" class="btn btn--secondary btn--sm" id="push-test-btn">Send test notification</button>
+                </div>
                 ${settingsRow("Daily mission reminder", "Get notified at 9:00 AM", Toggle({ checked: settings.notifications.dailyReminder, attrs: 'data-setting="notif.dailyReminder"' }))}
                 ${settingsRow("Streak at risk alert", "Warn when streak is about to break", Toggle({ checked: settings.notifications.streakAlert, attrs: 'data-setting="notif.streakAlert"' }))}
                 ${settingsRow("Review due notifications", "Alert when spaced repetitions are due", Toggle({ checked: settings.notifications.reviewDue, attrs: 'data-setting="notif.reviewDue"' }))}
@@ -282,8 +285,9 @@ export default {
   },
   onMount(container) {
     bindPageHandlers(container);
-    import("../push-notifications.js").then(({ bindPushSettingsUI }) => {
+    import("../push-notifications.js").then(({ bindPushSettingsUI, bindPushTestButton }) => {
       void bindPushSettingsUI(container);
+      bindPushTestButton(container);
     });
   },
 };

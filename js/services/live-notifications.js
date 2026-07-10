@@ -72,10 +72,19 @@ export async function refreshLiveNotifications({ toastNew = false } = {}) {
     dispatch("notifications:change");
 
     if (toastNew) {
+      let sawAccountApproved = false;
       serverItems.forEach((item) => {
         const isNew = !prevIds.has(item.id) && !item.read;
-        if (isNew) toastServerNotification(item);
+        if (isNew) {
+          toastServerNotification(item);
+          if (item.title === "Account approved") sawAccountApproved = true;
+        }
       });
+      if (sawAccountApproved) {
+        import("../push-notifications.js").then(({ maybePromptPushEnable }) => {
+          void maybePromptPushEnable();
+        });
+      }
     }
   } catch (err) {
     console.warn("[live-notifications] refresh failed:", err?.message || err);

@@ -322,6 +322,19 @@
 .dash-continue--main .dash-continue__cta-main {
   max-width: 16rem;
 }
+
+.dash-pending-approval__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.dash-pending-approval .alert {
+  margin-top: var(--space-4);
+  text-align: left;
+}
+
 .dash-continue--hero {
   position: relative;
   overflow: hidden;
@@ -1438,6 +1451,12 @@
 
 .settings-push-status[hidden] {
   display: none !important;
+}
+
+.settings-push-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 var(--space-4) var(--space-4);
 }
 
 .settings-row--disabled {

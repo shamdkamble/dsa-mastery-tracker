@@ -15,6 +15,11 @@ import { getSubscriptionTier, syncSubscriptionPresentation } from "../subscripti
 
 export const PUBLIC_ROUTES = new Set(["login", "register"]);
 export const ADMIN_ROUTES = new Set(["admin"]);
+export const PENDING_USER_ROUTES = new Set(["dashboard", "settings"]);
+
+export function isPendingUser(user) {
+  return user?.status === "pending" && user?.role !== "admin";
+}
 
 export function isPublicRoute(path) {
   return PUBLIC_ROUTES.has(path);
@@ -105,6 +110,11 @@ export async function enforceRouteAccess(path = getCurrentPath()) {
   }
 
   if (ADMIN_ROUTES.has(path) && user.role !== "admin") {
+    navigate("dashboard");
+    return false;
+  }
+
+  if (isPendingUser(user) && !PENDING_USER_ROUTES.has(path)) {
     navigate("dashboard");
     return false;
   }

@@ -23,6 +23,7 @@ import {
   requireAuth,
   requireAdmin,
   extractBearer,
+  buildSession,
 } from "./auth.js";
 import { canAccessProblemAi, canAccessTeachTopic, canAccessTeachTopicById } from "./roadmap-access.js";
 import {
@@ -63,7 +64,7 @@ import {
   hasPushSubscription,
   upsertPushSubscription,
 } from "./push-subscriptions-db.js";
-import { getVapidPublicKey, isPushConfigured } from "./push-service.js";
+import { getVapidPublicKey, isPushConfigured, sendTestPushToUser } from "./push-service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -203,7 +204,11 @@ app.post("/api/auth/register", async (req, res) => {
   try {
     const { name, email, password } = req.body ?? {};
     const user = await registerUser({ name, email, password });
-    res.status(201).json({ user, message: "Registration successful. Awaiting admin approval." });
+    const session = buildSession(user);
+    res.status(201).json({
+      ...session,
+      message: "Registration successful. Enable notifications to get alerted when approved.",
+    });
   } catch (err) {
     if (handleAuthError(res, err)) return;
     console.error("[/api/auth/register]", err);
@@ -339,6 +344,35 @@ app.delete("/api/push/unsubscribe", requireAuth, async (req, res) => {
     if (handleAuthError(res, err)) return;
     console.error("[/api/push/unsubscribe]", err);
     res.status(500).json({ error: { message: "Failed to remove push subscription.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/push/test", requireAuth, async (req, res) => {
+  try {
+    if (!isPushConfigured()) {
+      res.status(503).json({
+        error: { message: "Push notifications are not configured on the server.", code: "PUSH_NOT_CONFIGURED" },
+      });
+      return;
+    }
+
+    const subscribed = await hasPushSubscription(req.auth.sub);
+    if (!subscribed) {
+      res.status(400).json({
+        error: {
+          message: "No push subscription found for this account on this device. Enable push notifications first.",
+          code: "NOT_SUBSCRIBED",
+        },
+      });
+      return;
+    }
+
+    const result = await sendTestPushToUser(req.auth.sub);
+    res.json({ ok: true, result });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/push/test]", err);
+    res.status(500).json({ error: { message: "Failed to send test notification.", code: "SERVER_ERROR" } });
   }
 });
 

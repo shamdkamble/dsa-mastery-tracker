@@ -56,7 +56,7 @@ function buildLocalNotificationItems() {
       text: "Your registration is waiting for admin review.",
       variant: "warning",
       time: "Active",
-      href: "#/login",
+      href: "#/settings",
     });
   }
 

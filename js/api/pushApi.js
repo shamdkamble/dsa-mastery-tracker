@@ -82,3 +82,14 @@ export async function removePushSubscription(endpoint) {
   if (!res.ok) throw errorFromResponse(res.status, data);
   return data;
 }
+
+export async function sendTestPush() {
+  const res = await fetch(`${resolveBaseUrl()}/api/push/test`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}

@@ -2,22 +2,28 @@
  * Web Push — permission, subscribe/unsubscribe, settings sync
  */
 
-import { getToken } from "./auth/session.js";
+import { getToken, getSessionUser } from "./auth/session.js";
 import { getSettings, updateNotificationSetting } from "./storage/db.js";
 import {
   fetchPushConfig,
   fetchPushStatus,
   removePushSubscription,
   savePushSubscription,
+  sendTestPush,
 } from "./api/pushApi.js";
+import { ensureAppServiceWorker } from "./service-worker-register.js";
+import { icon } from "./components/icons.js";
 import { Toast } from "./components/ui/index.js";
 import { showToast } from "./components/ui/interactions.js";
 
 const IOS_INSTALL_MESSAGE = "For iOS users: Open the app from Home Screen, then enable notifications in Settings.";
+const PUSH_PROMPT_DISMISS_KEY = "dsa-push-enable-dismissed";
+const PUSH_PROMPT_DISMISS_MS = 3 * 24 * 60 * 60 * 1000;
 
 let cachedPublicKey = null;
 let activeEndpoint = null;
 let settingsUiBound = false;
+let pushEnableBanner = null;
 
 function supportsPush() {
   return "serviceWorker" in navigator
@@ -54,17 +60,121 @@ export function getPushEnvironment() {
   };
 }
 
-async function ensureServiceWorkerReady() {
-  const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-  await navigator.serviceWorker.ready;
-  return registration;
+async function getServiceWorkerRegistration() {
+  return ensureAppServiceWorker();
 }
 
-async function getServiceWorkerRegistration() {
-  if (navigator.serviceWorker.controller) {
-    return navigator.serviceWorker.ready;
+function wasPushPromptDismissedRecently() {
+  try {
+    const raw = localStorage.getItem(PUSH_PROMPT_DISMISS_KEY);
+    if (!raw) return false;
+    const dismissedAt = Number.parseInt(raw, 10);
+    return Number.isFinite(dismissedAt) && Date.now() - dismissedAt < PUSH_PROMPT_DISMISS_MS;
+  } catch {
+    return false;
   }
-  return ensureServiceWorkerReady();
+}
+
+function dismissPushEnableBanner() {
+  try {
+    localStorage.setItem(PUSH_PROMPT_DISMISS_KEY, String(Date.now()));
+  } catch {
+    /* ignore */
+  }
+  pushEnableBanner?.remove();
+  pushEnableBanner = null;
+}
+
+export async function isPushSubscribedOnServer() {
+  if (!getToken()) return false;
+  try {
+    const status = await fetchPushStatus();
+    return Boolean(status.configured && status.subscribed);
+  } catch {
+    return false;
+  }
+}
+
+function createPushEnableBanner() {
+  if (pushEnableBanner || wasPushPromptDismissedRecently()) return;
+
+  const env = getPushEnvironment();
+  if (!env.signedIn || !env.supportsPush || env.iosNeedsInstall) return;
+
+  const isPending = getSessionUser()?.status === "pending";
+  const hint = Notification.permission === "denied"
+    ? "Notifications are blocked in your browser settings."
+    : isPending
+      ? "Turn on alerts now — we'll notify you the moment your account is approved."
+      : "Get alerted on this device when your account is approved and for important updates.";
+
+  pushEnableBanner = document.createElement("aside");
+  pushEnableBanner.className = "pwa-install pwa-install--push";
+  pushEnableBanner.setAttribute("role", "region");
+  pushEnableBanner.setAttribute("aria-label", "Enable push notifications");
+  pushEnableBanner.innerHTML = `
+    <div class="pwa-install__icon" aria-hidden="true">
+      <img src="/icons/icon-192.png" width="40" height="40" alt="" />
+    </div>
+    <div class="pwa-install__copy">
+      <p class="pwa-install__title">Enable notifications</p>
+      <p class="pwa-install__text">${hint}</p>
+    </div>
+    <div class="pwa-install__actions">
+      <button type="button" class="btn btn--primary btn--sm" id="push-enable-btn">
+        ${icon("bell")}
+        <span>Allow</span>
+      </button>
+      <button type="button" class="btn btn--ghost btn--sm pwa-install__close" id="push-enable-dismiss" aria-label="Dismiss notification prompt">
+        ${icon("close")}
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(pushEnableBanner);
+
+  document.getElementById("push-enable-btn")?.addEventListener("click", async () => {
+    try {
+      await enableWebPush();
+      dismissPushEnableBanner();
+      showToast(Toast({
+        title: "Notifications enabled",
+        text: "You will receive system alerts from DSAMantra.",
+        variant: "success",
+      }));
+    } catch (err) {
+      showToast(Toast({
+        title: "Could not enable notifications",
+        text: err?.message || "Try again from Settings.",
+        variant: "danger",
+      }));
+    }
+  });
+
+  document.getElementById("push-enable-dismiss")?.addEventListener("click", () => {
+    dismissPushEnableBanner();
+  });
+}
+
+export async function maybePromptPushEnable() {
+  if (!supportsPush() || wasPushPromptDismissedRecently()) return;
+
+  const env = getPushEnvironment();
+  if (!env.signedIn || env.iosNeedsInstall) return;
+
+  try {
+    const config = await fetchPushConfig();
+    if (!config?.configured || !config?.publicKey) return;
+
+    const subscribed = await isPushSubscribedOnServer();
+    if (subscribed && Notification.permission === "granted") return;
+
+    if (Notification.permission === "denied") return;
+
+    createPushEnableBanner();
+  } catch {
+    /* ignore */
+  }
 }
 
 async function getVapidPublicKey() {
@@ -158,7 +268,12 @@ export async function enableWebPush() {
   await savePushSubscription(subscription);
   activeEndpoint = subscription.endpoint;
   updateNotificationSetting("pushEnabled", true, { silent: true });
+  dismissPushEnableBanner();
   return subscription;
+}
+
+export async function sendTestPushNotification() {
+  await sendTestPush();
 }
 
 export async function disableWebPush() {
@@ -370,6 +485,7 @@ function bindGlobalPushUiRefresh() {
 }
 
 export function initPushNotifications() {
+  void ensureAppServiceWorker();
   bindGlobalPushUiRefresh();
 
   if (!supportsPush()) return;
@@ -379,11 +495,36 @@ export function initPushNotifications() {
   document.addEventListener("auth:change", (e) => {
     if (e.detail?.user) {
       void syncPushSubscription();
+      window.setTimeout(() => { void maybePromptPushEnable(); }, 1200);
     } else {
+      dismissPushEnableBanner();
       void teardownPushOnLogout();
     }
 
     const section = document.getElementById("notifications");
     if (section) void bindPushSettingsUI(section.closest(".settings-card")?.parentElement || document);
+  });
+}
+
+export function bindPushTestButton(container) {
+  const btn = container?.querySelector("#push-test-btn");
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = "true";
+
+  btn.addEventListener("click", async () => {
+    try {
+      await sendTestPushNotification();
+      showToast(Toast({
+        title: "Test notification sent",
+        text: "Check your system notification tray.",
+        variant: "success",
+      }));
+    } catch (err) {
+      showToast(Toast({
+        title: "Test failed",
+        text: err?.message || "Enable push notifications first.",
+        variant: "danger",
+      }));
+    }
   });
 }

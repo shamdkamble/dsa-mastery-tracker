@@ -1,6 +1,7 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
-import { StatCard, ProgressBar, Card, EmptyState, DifficultyBadge } from "../components/ui/index.js";
+import { StatCard, ProgressBar, Card, EmptyState, DifficultyBadge, Alert, Toast } from "../components/ui/index.js";
+import { showToast } from "../components/ui/interactions.js";
 import { getUser } from "../storage/db.js";
 import { getSessionUser } from "../auth/session.js";
 import {
@@ -78,6 +79,34 @@ function activityItem(item) {
         <div class="activity-item__time">${escapeHtml(item.time)}</div>
       </div>
     </div>
+  `;
+}
+
+function renderPendingApprovalHero() {
+  return `
+    <section class="dash-continue dash-continue--hero dash-continue--main dash-pending-approval">
+      <div class="dash-continue__glow" aria-hidden="true"></div>
+      <div class="dash-continue__inner">
+        <div class="dash-continue__icon" aria-hidden="true">${icon("clock")}</div>
+        <span class="dash-continue__eyebrow">Awaiting approval</span>
+        <h2 class="dash-continue__headline">Your account is under review</h2>
+        <p class="dash-continue__text">
+          An admin will approve your registration soon. Enable push notifications now so you get a system alert the moment you're approved — even if this app is closed.
+        </p>
+        ${Alert({
+          variant: "info",
+          title: "Enable notifications",
+          text: "On iPhone, add DSAMantra to your Home Screen first, then turn on notifications in Settings.",
+        })}
+        <div class="dash-pending-approval__actions">
+          <button type="button" class="btn btn--primary dash-continue__cta-main" id="pending-enable-push-btn">
+            ${icon("bell")}
+            <span>Enable notifications</span>
+          </button>
+          <a href="#/settings" class="btn btn--secondary">Notification settings</a>
+        </div>
+      </div>
+    </section>
   `;
 }
 
@@ -189,6 +218,22 @@ export default {
     const dailyQuote = getDailyScientistQuote();
     const doneCount = mission.filter((m) => m.done).length;
     const missionPercent = mission.length ? Math.round((doneCount / mission.length) * 100) : 0;
+    const isPending = sessionUser?.status === "pending";
+
+    if (isPending) {
+      return createPage({
+        title: "",
+        children: `
+          <div class="page-greeting page-greeting--dash animate-fade-in-up">
+            <h1 class="page-greeting__title">
+              <span class="page-greeting__greeting">${formatGreeting()},</span>
+              <span class="page-greeting__name">${escapeHtml(firstName)}</span>
+            </h1>
+          </div>
+          ${renderPendingApprovalHero()}
+        `,
+      });
+    }
 
     return createPage({
       title: "",
@@ -268,6 +313,29 @@ export default {
   },
   onMount(container) {
     bindPageHandlers(container);
+
+    const pendingBtn = container.querySelector("#pending-enable-push-btn");
+    if (pendingBtn && !pendingBtn.dataset.bound) {
+      pendingBtn.dataset.bound = "true";
+      pendingBtn.addEventListener("click", async () => {
+        try {
+          const { enableWebPush } = await import("../push-notifications.js");
+          await enableWebPush();
+          showToast(Toast({
+            title: "Notifications enabled",
+            text: "You'll get a system alert when your account is approved.",
+            variant: "success",
+          }));
+        } catch (err) {
+          showToast(Toast({
+            title: "Could not enable notifications",
+            text: err?.message || "Try again from Settings.",
+            variant: "danger",
+          }));
+        }
+      });
+    }
+
     bindTeachTopicHandlers(container);
   },
 };

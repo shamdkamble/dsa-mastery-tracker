@@ -82,3 +82,15 @@ export async function sendPushToUser(userId, payload) {
 
   return { sent, failed, skipped: false };
 }
+
+/**
+ * Send a test push to the current user's subscriptions.
+ */
+export async function sendTestPushToUser(userId) {
+  return sendPushToUser(userId, {
+    title: "DSAMantra",
+    body: "Push notifications are working on this device.",
+    url: "/#/dashboard",
+    tag: "push-test",
+  });
+}

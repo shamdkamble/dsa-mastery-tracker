@@ -3,6 +3,7 @@
  */
 
 import { icon } from "./components/icons.js";
+import { ensureAppServiceWorker } from "./service-worker-register.js";
 
 const DISMISS_KEY = "dsa-pwa-install-dismissed";
 const DISMISS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -92,17 +93,8 @@ function createInstallBanner({ iosHint = false } = {}) {
   });
 }
 
-function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
-
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js", { scope: "/" })
-      .catch((err) => console.warn("Service worker registration failed:", err));
-  });
-}
-
 export function initPWA() {
-  registerServiceWorker();
+  void ensureAppServiceWorker();
 
   if (isStandalone()) return;
 

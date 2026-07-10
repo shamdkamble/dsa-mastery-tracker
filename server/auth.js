@@ -148,7 +148,7 @@ export function requireAdmin(req, res, next) {
   });
 }
 
-function buildSession(user) {
+export function buildSession(user) {
   const token = signToken({
     sub: user.id,
     name: user.name,
@@ -230,7 +230,7 @@ export async function loginUser({ identifier, password }) {
   }
 
   if (account.status === "pending") {
-    throw new AuthError("Your account is pending admin approval.", { status: 403, code: "PENDING_APPROVAL" });
+    return buildSession(account);
   }
 
   if (account.status === "rejected") {

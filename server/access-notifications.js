@@ -52,12 +52,18 @@ export async function notifyAccountApproved(userId) {
 
   await push(userId, payload);
 
-  void sendPushToUser(userId, {
+  const pushResult = await sendPushToUser(userId, {
     title: payload.title,
     body: payload.text,
     url: payload.href,
     tag: "account-approved",
   });
+
+  if (pushResult.skipped) {
+    console.info("[access-notifications] web push skipped:", userId, pushResult.reason);
+  } else {
+    console.info("[access-notifications] web push sent:", userId, pushResult);
+  }
 }
 
 export async function notifyAccountRejected(userId) {
@@ -79,12 +85,27 @@ export async function notifyAccountSuspended(userId) {
 }
 
 export async function notifyAccountActivated(userId) {
-  await push(userId, {
+  const payload = {
     title: "Account reactivated",
     text: "Your account has been reactivated. Welcome back to DSAMantra.",
     variant: "success",
     href: "#/dashboard",
+  };
+
+  await push(userId, payload);
+
+  const pushResult = await sendPushToUser(userId, {
+    title: payload.title,
+    body: payload.text,
+    url: payload.href,
+    tag: "account-activated",
   });
+
+  if (pushResult.skipped) {
+    console.info("[access-notifications] web push skipped:", userId, pushResult.reason);
+  } else {
+    console.info("[access-notifications] web push sent:", userId, pushResult);
+  }
 }
 
 /**

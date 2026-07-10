@@ -87,16 +87,9 @@ async function handleRegister(form) {
   submitBtn?.setAttribute("disabled", "true");
 
   try {
-    await register({ name, email, password });
-    if (alertEl) {
-      alertEl.innerHTML = Alert({
-        variant: "success",
-        title: "Registration submitted",
-        text: "Your account is pending admin approval. You'll be able to sign in once approved.",
-      });
-    }
-    form.reset();
-    setTimeout(() => navigate("login"), 2400);
+    const result = await register({ name, email, password });
+    await syncAuthState(result.user);
+    navigate("dashboard");
   } catch (err) {
     const message = err instanceof AuthApiError
       ? err.message
