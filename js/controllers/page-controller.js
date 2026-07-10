@@ -242,7 +242,14 @@ export function bindSettingsHandlers(root) {
     } else if (key === "darkMode") {
       setTheme(toggle.checked ? "dark" : "light");
     } else if (key.startsWith("notif.")) {
-      updateNotificationSetting(key.replace("notif.", ""), toggle.checked, { silent: true });
+      const notifKey = key.replace("notif.", "");
+      if (notifKey === "pushEnabled") {
+        import("../push-notifications.js").then(({ handlePushSettingToggle }) => {
+          void handlePushSettingToggle(toggle.checked, toggle);
+        });
+        return;
+      }
+      updateNotificationSetting(notifKey, toggle.checked, { silent: true });
     }
   });
 

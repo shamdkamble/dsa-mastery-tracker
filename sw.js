@@ -2,7 +2,7 @@
  * DSAMantra service worker — offline shell + static asset caching
  */
 
-const CACHE_VERSION = "dsamantra-v1";
+const CACHE_VERSION = "dsamantra-v2";
 const PRECACHE_URLS = [
   "/",
   "/index.html",
@@ -78,6 +78,51 @@ self.addEventListener("fetch", (event) => {
         .catch(() => cached);
 
       return cached || networkFetch;
+    }),
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {
+    title: "DSAMantra",
+    body: "You have a new notification.",
+    url: "/#/dashboard",
+    tag: "dsamantra-notification",
+  };
+
+  try {
+    if (event.data) {
+      payload = { ...payload, ...event.data.json() };
+    }
+  } catch {
+    /* use defaults */
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: payload.tag,
+      data: { url: payload.url },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const rawUrl = event.notification.data?.url || "/#/dashboard";
+  const targetUrl = new URL(rawUrl, self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (!("focus" in client)) continue;
+        client.postMessage({ type: "NOTIFICATION_NAVIGATE", url: rawUrl });
+        return client.focus();
+      }
+      return self.clients.openWindow(targetUrl);
     }),
   );
 });

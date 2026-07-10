@@ -3,6 +3,7 @@
  */
 
 import { createUserNotification } from "./notifications-db.js";
+import { sendPushToUser } from "./push-service.js";
 
 function formatExpiryDate(expiresAt) {
   if (!expiresAt) return null;
@@ -42,11 +43,20 @@ async function push(userId, payload) {
 }
 
 export async function notifyAccountApproved(userId) {
-  await push(userId, {
+  const payload = {
     title: "Account approved",
     text: "Your account has been approved. Welcome to DSAMantra — start your FAANG prep journey.",
     variant: "success",
     href: "#/dashboard",
+  };
+
+  await push(userId, payload);
+
+  void sendPushToUser(userId, {
+    title: payload.title,
+    body: payload.text,
+    url: payload.href,
+    tag: "account-approved",
   });
 }
 

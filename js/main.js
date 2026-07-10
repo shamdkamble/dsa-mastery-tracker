@@ -28,6 +28,7 @@ import {
 import { hydrateServerNotifications } from "./services/notifications.js";
 import { initProductTour, maybeAutoStartTour } from "./components/product-tour.js";
 import { initPWA } from "./pwa.js";
+import { initPushNotifications, syncPushSubscription } from "./push-notifications.js";
 
 import dashboard from "./pages/dashboard.js";
 import mission from "./pages/mission.js";
@@ -148,6 +149,7 @@ function initDataRefresh() {
 async function init() {
   initTheme();
   initPWA();
+  initPushNotifications();
   initAuthForms();
   initAppShell();
 
@@ -177,6 +179,7 @@ async function init() {
     void hydrateServerNotifications().then(() => {
       startLiveNotificationPolling();
     });
+    void syncPushSubscription();
     maybeAutoStartTour();
   }
 }

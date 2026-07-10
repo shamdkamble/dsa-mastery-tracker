@@ -209,8 +209,10 @@ export default {
 
             <section id="notifications" class="settings-section settings-group">
               <h2 class="settings-group__title">Notifications</h2>
-              <p class="settings-group__desc">Control reminders and review alerts (stored locally).</p>
+              <p class="settings-group__desc">Push alerts for account updates; study reminders are stored locally for now.</p>
               <div class="settings-card">
+                ${settingsRow("Push notifications", "Get system alerts when your account is approved", Toggle({ checked: settings.notifications.pushEnabled, attrs: 'data-setting="notif.pushEnabled"' }))}
+                <p class="settings-push-status" id="push-status-text" aria-live="polite"></p>
                 ${settingsRow("Daily mission reminder", "Get notified at 9:00 AM", Toggle({ checked: settings.notifications.dailyReminder, attrs: 'data-setting="notif.dailyReminder"' }))}
                 ${settingsRow("Streak at risk alert", "Warn when streak is about to break", Toggle({ checked: settings.notifications.streakAlert, attrs: 'data-setting="notif.streakAlert"' }))}
                 ${settingsRow("Review due notifications", "Alert when spaced repetitions are due", Toggle({ checked: settings.notifications.reviewDue, attrs: 'data-setting="notif.reviewDue"' }))}
@@ -270,5 +272,8 @@ export default {
   },
   onMount(container) {
     bindPageHandlers(container);
+    import("../push-notifications.js").then(({ refreshPushStatusLabel }) => {
+      void refreshPushStatusLabel(container);
+    });
   },
 };

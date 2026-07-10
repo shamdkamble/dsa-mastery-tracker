@@ -57,6 +57,13 @@ import {
   markAllUserNotificationsRead,
   markUserNotificationRead,
 } from "./notifications-db.js";
+import {
+  deleteAllPushSubscriptionsForUser,
+  deletePushSubscription,
+  hasPushSubscription,
+  upsertPushSubscription,
+} from "./push-subscriptions-db.js";
+import { getVapidPublicKey, isPushConfigured } from "./push-service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -264,6 +271,74 @@ app.post("/api/notifications/read-all", requireAuth, async (req, res) => {
     if (handleAuthError(res, err)) return;
     console.error("[/api/notifications/read-all]", err);
     res.status(500).json({ error: { message: "Failed to update notifications.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/push/config", (_req, res) => {
+  res.json({
+    configured: isPushConfigured(),
+    publicKey: getVapidPublicKey(),
+  });
+});
+
+app.get("/api/push/status", requireAuth, async (req, res) => {
+  try {
+    const subscribed = await hasPushSubscription(req.auth.sub);
+    res.json({
+      configured: isPushConfigured(),
+      subscribed,
+    });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/push/status]", err);
+    res.status(500).json({ error: { message: "Failed to load push status.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/push/subscribe", requireAuth, async (req, res) => {
+  try {
+    if (!isPushConfigured()) {
+      res.status(503).json({
+        error: { message: "Push notifications are not configured on the server.", code: "PUSH_NOT_CONFIGURED" },
+      });
+      return;
+    }
+
+    const subscription = req.body?.subscription || req.body;
+    const record = await upsertPushSubscription(
+      req.auth.sub,
+      subscription,
+      req.headers["user-agent"] || "",
+    );
+
+    if (!record) {
+      res.status(400).json({ error: { message: "Invalid push subscription.", code: "INVALID_SUBSCRIPTION" } });
+      return;
+    }
+
+    res.json({ ok: true, subscription: record });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/push/subscribe]", err);
+    res.status(500).json({ error: { message: "Failed to save push subscription.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.delete("/api/push/unsubscribe", requireAuth, async (req, res) => {
+  try {
+    const endpoint = req.body?.endpoint;
+
+    if (endpoint) {
+      await deletePushSubscription(req.auth.sub, endpoint);
+    } else {
+      await deleteAllPushSubscriptionsForUser(req.auth.sub);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/push/unsubscribe]", err);
+    res.status(500).json({ error: { message: "Failed to remove push subscription.", code: "SERVER_ERROR" } });
   }
 });
 

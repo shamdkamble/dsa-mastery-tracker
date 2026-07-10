@@ -35,6 +35,7 @@ function defaultDB() {
     settings: {
       compactSidebar: false,
       notifications: {
+        pushEnabled: false,
         dailyReminder: true,
         streakAlert: true,
         reviewDue: true,
@@ -81,7 +82,14 @@ function mergeStoredData(parsed) {
     ...base,
     ...parsed,
     user: { ...base.user, ...parsed.user },
-    settings: { ...base.settings, ...parsed.settings },
+    settings: {
+      ...base.settings,
+      ...parsed.settings,
+      notifications: {
+        ...base.settings.notifications,
+        ...parsed.settings?.notifications,
+      },
+    },
     meta: { ...base.meta, ...parsed.meta },
     problems: Array.isArray(parsed.problems) ? parsed.problems : [],
     notes: Array.isArray(parsed.notes) ? parsed.notes : [],

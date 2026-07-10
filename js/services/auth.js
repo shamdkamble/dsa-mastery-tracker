@@ -144,6 +144,9 @@ export async function rejectUser(userId) {
 export function logout() {
   clearSession();
   resetAuthSyncState();
+  import("../push-notifications.js").then(({ teardownPushOnLogout }) => {
+    void teardownPushOnLogout();
+  });
   import("./live-notifications.js").then(({ stopLiveNotificationPolling, resetLiveNotificationState }) => {
     stopLiveNotificationPolling();
     resetLiveNotificationState();
