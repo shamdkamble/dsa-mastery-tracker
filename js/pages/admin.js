@@ -69,6 +69,15 @@ function isExpired(expiresAt) {
   return new Date(expiresAt).getTime() <= Date.now();
 }
 
+function adminSubnav(active) {
+  return `
+    <nav class="admin-subnav" aria-label="Admin sections">
+      <a href="#/admin" class="admin-subnav__link${active === "users" ? " is-active" : ""}">User Management</a>
+      <a href="#/admin-push-logs" class="admin-subnav__link${active === "push-logs" ? " is-active" : ""}">Push Delivery Log</a>
+    </nav>
+  `;
+}
+
 function statCard({ iconName, value, label, variant = "accent" }) {
   return `
     <div class="card admin-stat-card admin-stat-card--${variant}">
@@ -281,6 +290,7 @@ export default {
       iconName: "shield",
       children: `
         <div class="admin-page user-mgmt">
+          ${adminSubnav("users")}
           <div id="admin-alert" class="admin-page__alert"></div>
 
           <div class="admin-stats user-mgmt__stats" id="admin-stats">

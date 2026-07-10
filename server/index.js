@@ -71,6 +71,7 @@ import {
 } from "./notification-preferences-db.js";
 import { runScheduledPushReminders } from "./push-reminders.js";
 import { deliverUndeliveredAccessPushes } from "./push-access-delivery.js";
+import { listPushDeliveryLogs, getPushDeliveryLogStats } from "./push-delivery-log-db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -494,6 +495,34 @@ app.post("/api/auth/admin/action", requireAdmin, async (req, res) => {
     }
     console.error("[/api/auth/admin/action]", err);
     res.status(500).json({ error: { message: "Action failed.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/auth/admin/push-logs", requireAdmin, async (req, res) => {
+  try {
+    const {
+      limit,
+      status,
+      source,
+      userId,
+      search,
+    } = req.query ?? {};
+
+    const [logs, stats] = await Promise.all([
+      listPushDeliveryLogs({
+        limit: limit ? Number.parseInt(limit, 10) : 100,
+        status: status || "all",
+        source: source || "all",
+        userId: userId || undefined,
+        search: search || undefined,
+      }),
+      getPushDeliveryLogStats(),
+    ]);
+
+    res.json({ logs, stats });
+  } catch (err) {
+    console.error("[/api/auth/admin/push-logs]", err);
+    res.status(500).json({ error: { message: "Failed to load push logs.", code: "SERVER_ERROR" } });
   }
 });
 

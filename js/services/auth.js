@@ -112,6 +112,24 @@ export async function getAllUsers() {
   return data.users;
 }
 
+export async function getPushDeliveryLogs({ limit = 100, status, source, userId, search } = {}) {
+  const params = new URLSearchParams();
+  if (limit) params.set("limit", String(limit));
+  if (status) params.set("status", status);
+  if (source) params.set("source", source);
+  if (userId) params.set("userId", userId);
+  if (search) params.set("search", search);
+
+  const query = params.toString();
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/push-logs${query ? `?${query}` : ""}`, {
+    headers: authHeaders(),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}
+
 export async function adminUserAction(userId, action) {
   const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/action`, {
     method: "POST",

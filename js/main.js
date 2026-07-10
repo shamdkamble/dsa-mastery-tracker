@@ -48,11 +48,13 @@ import settings from "./pages/settings.js";
 import login from "./pages/login.js";
 import register from "./pages/register.js";
 import admin from "./pages/admin.js";
+import adminPushLogs from "./pages/admin-push-logs.js";
 
 registerRoutes({
   login,
   register,
   admin,
+  "admin-push-logs": adminPushLogs,
   dashboard,
   mission,
   problems,

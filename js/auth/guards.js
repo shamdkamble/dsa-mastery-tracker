@@ -14,7 +14,7 @@ import { loadRoadmapProgress, resetRoadmapProgress } from "../storage/roadmap-pr
 import { getSubscriptionTier, syncSubscriptionPresentation } from "../subscription-theme.js";
 
 export const PUBLIC_ROUTES = new Set(["login", "register"]);
-export const ADMIN_ROUTES = new Set(["admin"]);
+export const ADMIN_ROUTES = new Set(["admin", "admin-push-logs"]);
 export const PENDING_USER_ROUTES = new Set(["dashboard", "settings"]);
 
 export function isPendingUser(user) {

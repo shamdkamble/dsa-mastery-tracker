@@ -66,7 +66,10 @@ async function markReminderSent(userId, reminderType, dateKey) {
 }
 
 async function sendReminderPush(userId, { title, body, url, tag, reminderType, dateKey }) {
-  const result = await sendPushToUser(userId, { title, body, url, tag });
+  const result = await sendPushToUser(userId, { title, body, url, tag }, {
+    source: "reminder",
+    eventTag: reminderType || tag,
+  });
   if (result.sent > 0) {
     await markReminderSent(userId, reminderType, dateKey);
   }

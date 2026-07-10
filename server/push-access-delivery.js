@@ -8,6 +8,7 @@ import {
 } from "./notifications-db.js";
 import { hasPushSubscription } from "./push-subscriptions-db.js";
 import { sendPushToUser } from "./push-service.js";
+import { createPushDeliveryLog } from "./push-delivery-log-db.js";
 
 export function buildPushTag(eventTag, notificationId) {
   const base = String(eventTag || "access")
@@ -22,15 +23,35 @@ export function buildPushTag(eventTag, notificationId) {
 /**
  * @param {string} userId
  * @param {{ id: string, title: string, text: string, href?: string, pushTag?: string }} notification
- * @param {{ eventTag?: string }} options
+ * @param {{ eventTag?: string, source?: string }} options
  */
-export async function deliverPushForNotification(userId, notification, { eventTag } = {}) {
+async function logAccessPushSkipped(userId, notification, { eventTag, source }, reason) {
+  try {
+    await createPushDeliveryLog({
+      userId,
+      source,
+      eventTag: eventTag || notification?.pushTag || "access",
+      notificationId: notification?.id || null,
+      title: notification?.title || "Access notification",
+      body: notification?.text || "",
+      pushTag: buildPushTag(eventTag || notification?.pushTag, notification?.id),
+      status: "skipped",
+      reason,
+    });
+  } catch (err) {
+    console.warn("[push-access-delivery] failed to write skipped log:", err?.message || err);
+  }
+}
+
+export async function deliverPushForNotification(userId, notification, { eventTag, source = "access" } = {}) {
   if (!notification?.id || !notification.title) {
+    await logAccessPushSkipped(userId, notification, { eventTag, source }, "invalid_notification");
     return { sent: 0, failed: 0, skipped: true, reason: "invalid_notification" };
   }
 
   const subscribed = await hasPushSubscription(userId);
   if (!subscribed) {
+    await logAccessPushSkipped(userId, notification, { eventTag, source }, "no_subscriptions");
     return { sent: 0, failed: 0, skipped: true, reason: "no_subscriptions" };
   }
 
@@ -41,6 +62,10 @@ export async function deliverPushForNotification(userId, notification, { eventTa
     body: notification.text,
     url: notification.href || "/#/dashboard",
     tag,
+  }, {
+    source,
+    eventTag: eventTag || notification.pushTag || "access",
+    notificationId: notification.id,
   });
 
   if (result.sent > 0) {
@@ -65,6 +90,7 @@ export async function deliverUndeliveredAccessPushes(userId) {
   for (const notification of pending) {
     const result = await deliverPushForNotification(userId, notification, {
       eventTag: notification.pushTag,
+      source: "redelivery",
     });
     if (result.sent > 0) {
       sent += result.sent;
