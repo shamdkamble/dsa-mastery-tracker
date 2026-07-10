@@ -10,6 +10,7 @@ import {
   computeTopicProgress,
 } from "../storage/computed.js";
 import { formatGreeting } from "../storage/helpers.js";
+import { getDailyScientistQuote } from "../data/scientist-quotes.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 import { bindTeachTopicHandlers } from "../components/teach-modal.js";
 import {
@@ -185,6 +186,7 @@ export default {
     const continueTopic = getContinueLearningTopic(sessionUser);
     const displayName = sessionUser?.name || profile.name || "Learner";
     const firstName = displayName.split(" ")[0] || "there";
+    const dailyQuote = getDailyScientistQuote();
     const doneCount = mission.filter((m) => m.done).length;
     const missionPercent = mission.length ? Math.round((doneCount / mission.length) * 100) : 0;
 
@@ -192,12 +194,15 @@ export default {
       title: "",
       children: `
         <div class="page-greeting page-greeting--dash animate-fade-in-up">
-          <div class="page-greeting__copy">
-            <p class="page-greeting__eyebrow">${formatGreeting()}</p>
-            <h1 class="page-greeting__title">
-              <span class="page-greeting__name">${escapeHtml(firstName)}</span>
-            </h1>
-          </div>
+          <h1 class="page-greeting__title">
+            <span class="page-greeting__greeting">${formatGreeting()},</span>
+            <span class="page-greeting__name">${escapeHtml(firstName)}</span>
+            <span class="page-greeting__divider" aria-hidden="true">—</span>
+            <span class="page-greeting__quote">
+              <q>${escapeHtml(dailyQuote.text)}</q>
+              <cite class="page-greeting__quote-author">${escapeHtml(dailyQuote.author)}</cite>
+            </span>
+          </h1>
         </div>
 
         <div class="dash-stats stagger-children" data-tour="dash-stats">
