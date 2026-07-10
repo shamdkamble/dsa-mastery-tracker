@@ -21,6 +21,79 @@ import { renderSubscriptionBadge, getSubscriptionTier } from "../subscription-th
 import { BRAND } from "../constants/branding.js";
 import { startTour } from "./product-tour.js";
 
+const MOBILE_NAV_QUERY = "(max-width: 768px)";
+const NAVBAR_PANEL_IDS = ["navbar-help-menu", "navbar-notif-panel", "navbar-profile-menu"];
+
+let portaledPanelSyncBound = false;
+
+function isMobileNavbar() {
+  return window.matchMedia(MOBILE_NAV_QUERY).matches;
+}
+
+function getNavbarPanelAnchor(panel) {
+  if (!panel) return null;
+  if (panel.id === "navbar-help-menu") return $(".navbar__help-wrap");
+  if (panel.id === "navbar-notif-panel") return $(".navbar__notif-wrap");
+  if (panel.id === "navbar-profile-menu") return $(".navbar__profile-wrap");
+  return null;
+}
+
+function syncPortaledNavbarPanel(panel) {
+  if (!panel?.classList.contains("navbar-panel--portaled")) return;
+
+  const navbar = $(".navbar");
+  if (!navbar) return;
+
+  const rect = navbar.getBoundingClientRect();
+  const side = Math.max(16, Number.parseFloat(getComputedStyle(navbar).paddingLeft)) || 16;
+
+  panel.style.top = `${rect.bottom}px`;
+  panel.style.left = `${side}px`;
+  panel.style.right = `${side}px`;
+  panel.style.width = "auto";
+}
+
+function portalNavbarPanel(panel) {
+  if (!panel || !isMobileNavbar() || panel.classList.contains("navbar-panel--portaled")) return;
+
+  const anchor = getNavbarPanelAnchor(panel);
+  if (!anchor) return;
+
+  document.body.appendChild(panel);
+  panel.classList.add("navbar-panel--portaled");
+  syncPortaledNavbarPanel(panel);
+  bindPortaledPanelSync();
+}
+
+function restoreNavbarPanel(panel) {
+  if (!panel?.classList.contains("navbar-panel--portaled")) return;
+
+  const anchor = getNavbarPanelAnchor(panel);
+  panel.classList.remove("navbar-panel--portaled");
+  panel.style.top = "";
+  panel.style.left = "";
+  panel.style.right = "";
+  panel.style.width = "";
+  anchor?.appendChild(panel);
+}
+
+function bindPortaledPanelSync() {
+  if (portaledPanelSyncBound) return;
+  portaledPanelSyncBound = true;
+
+  const syncOpenPanels = () => {
+    NAVBAR_PANEL_IDS.forEach((id) => {
+      const panel = document.getElementById(id);
+      if (panel && !panel.hasAttribute("hidden")) {
+        syncPortaledNavbarPanel(panel);
+      }
+    });
+  };
+
+  window.addEventListener("resize", syncOpenPanels);
+  document.getElementById("content")?.addEventListener("scroll", syncOpenPanels, { passive: true });
+}
+
 const ROUTE_TITLES = {
   dashboard: "Dashboard",
   mission: "Today's Mission",
@@ -257,8 +330,9 @@ function renderNavbar(state) {
 
 function closeHelpMenu(container) {
   const btn = $("#navbar-help-btn", container);
-  const menu = $("#navbar-help-menu", container);
+  const menu = document.getElementById("navbar-help-menu");
   menu?.setAttribute("hidden", "");
+  restoreNavbarPanel(menu);
   btn?.setAttribute("aria-expanded", "false");
   container.classList.remove("navbar--help-open");
 }
@@ -267,16 +341,19 @@ function openHelpMenu(container) {
   closeNotificationPanel(container);
   closeProfileMenu(container);
   const btn = $("#navbar-help-btn", container);
-  const menu = $("#navbar-help-menu", container);
+  const menu = document.getElementById("navbar-help-menu");
   menu?.removeAttribute("hidden");
+  portalNavbarPanel(menu);
+  syncPortaledNavbarPanel(menu);
   btn?.setAttribute("aria-expanded", "true");
   container.classList.add("navbar--help-open");
 }
 
 function closeProfileMenu(container) {
   const btn = $("#navbar-profile-btn", container);
-  const menu = $("#navbar-profile-menu", container);
+  const menu = document.getElementById("navbar-profile-menu");
   menu?.setAttribute("hidden", "");
+  restoreNavbarPanel(menu);
   btn?.setAttribute("aria-expanded", "false");
   container.classList.remove("navbar--profile-open");
 }
@@ -285,8 +362,10 @@ function openProfileMenu(container) {
   closeHelpMenu(container);
   closeNotificationPanel(container);
   const btn = $("#navbar-profile-btn", container);
-  const menu = $("#navbar-profile-menu", container);
+  const menu = document.getElementById("navbar-profile-menu");
   menu?.removeAttribute("hidden");
+  portalNavbarPanel(menu);
+  syncPortaledNavbarPanel(menu);
   btn?.setAttribute("aria-expanded", "true");
   container.classList.add("navbar--profile-open");
 }
@@ -316,16 +395,19 @@ function refreshProfileChrome(container) {
 
 function closeNotificationPanel(container) {
   const btn = $("#navbar-notif-btn", container);
-  const panel = $("#navbar-notif-panel", container);
+  const panel = document.getElementById("navbar-notif-panel");
   panel?.setAttribute("hidden", "");
+  restoreNavbarPanel(panel);
   btn?.setAttribute("aria-expanded", "false");
   container.classList.remove("navbar--notif-open");
 }
 
 function openNotificationPanel(container) {
   const btn = $("#navbar-notif-btn", container);
-  const panel = $("#navbar-notif-panel", container);
+  const panel = document.getElementById("navbar-notif-panel");
   panel?.removeAttribute("hidden");
+  portalNavbarPanel(panel);
+  syncPortaledNavbarPanel(panel);
   btn?.setAttribute("aria-expanded", "true");
   container.classList.add("navbar--notif-open");
   refreshNotificationUI(container);
@@ -357,12 +439,17 @@ function refreshNotificationUI(container) {
     badge?.remove();
   }
 
-  const panel = $("#navbar-notif-panel", container);
+  const panel = document.getElementById("navbar-notif-panel");
   if (!panel || panel.hasAttribute("hidden")) return;
 
+  const wasPortaled = panel.classList.contains("navbar-panel--portaled");
   panel.outerHTML = renderNotificationPanel();
-  const newPanel = $("#navbar-notif-panel", container);
+  const newPanel = document.getElementById("navbar-notif-panel");
   newPanel?.removeAttribute("hidden");
+  if (wasPortaled) {
+    portalNavbarPanel(newPanel);
+    syncPortaledNavbarPanel(newPanel);
+  }
   bindNotificationPanelEvents(container);
 }
 
@@ -435,7 +522,7 @@ function bindEvents(container) {
   const notifBtn = $("#navbar-notif-btn", container);
   notifBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
-    const panel = $("#navbar-notif-panel", container);
+    const panel = document.getElementById("navbar-notif-panel");
     const isOpen = panel && !panel.hasAttribute("hidden");
     if (isOpen) {
       closeNotificationPanel(container);
@@ -449,7 +536,7 @@ function bindEvents(container) {
   const helpBtn = $("#navbar-help-btn", container);
   helpBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
-    const menu = $("#navbar-help-menu", container);
+    const menu = document.getElementById("navbar-help-menu");
     const isOpen = menu && !menu.hasAttribute("hidden");
     if (isOpen) closeHelpMenu(container);
     else openHelpMenu(container);
@@ -469,7 +556,7 @@ function bindEvents(container) {
   const profileBtn = $("#navbar-profile-btn", container);
   profileBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
-    const menu = $("#navbar-profile-menu", container);
+    const menu = document.getElementById("navbar-profile-menu");
     const isOpen = menu && !menu.hasAttribute("hidden");
     if (isOpen) closeProfileMenu(container);
     else openProfileMenu(container);
@@ -492,7 +579,7 @@ function bindEvents(container) {
     document.addEventListener("click", (e) => {
       const navbar = $(".navbar");
       if (!navbar?.classList.contains("navbar--notif-open")) return;
-      if (e.target.closest(".navbar__notif-wrap")) return;
+      if (e.target.closest(".navbar__notif-wrap, #navbar-notif-panel")) return;
       closeNotificationPanel(navbar);
     });
     document.addEventListener("keydown", (e) => {
@@ -507,13 +594,13 @@ function bindEvents(container) {
     document.addEventListener("click", (e) => {
       const navbar = $(".navbar");
       if (!navbar?.classList.contains("navbar--profile-open")) return;
-      if (e.target.closest(".navbar__profile-wrap")) return;
+      if (e.target.closest(".navbar__profile-wrap, #navbar-profile-menu")) return;
       closeProfileMenu(navbar);
     });
     document.addEventListener("click", (e) => {
       const navbar = $(".navbar");
       if (!navbar?.classList.contains("navbar--help-open")) return;
-      if (e.target.closest(".navbar__help-wrap")) return;
+      if (e.target.closest(".navbar__help-wrap, #navbar-help-menu")) return;
       closeHelpMenu(navbar);
     });
   }
@@ -583,6 +670,8 @@ export function initNavbar(container) {
 
   document.addEventListener("auth:change", () => {
     closeNotificationPanel(container);
+    closeProfileMenu(container);
+    closeHelpMenu(container);
     container.innerHTML = renderNavbar(getState());
     bindEvents(container);
     refreshNotificationUI(container);

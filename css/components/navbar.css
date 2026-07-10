@@ -173,6 +173,20 @@
   position: relative;
 }
 
+/* Keep dropdown panels above page content when open */
+.navbar.navbar--help-open,
+.navbar.navbar--notif-open,
+.navbar.navbar--profile-open {
+  z-index: var(--z-overlay);
+  overflow: visible;
+}
+
+.navbar-panel--portaled {
+  position: fixed !important;
+  z-index: calc(var(--z-overlay) + 1);
+  margin: 0;
+}
+
 .navbar__notification-badge {
   position: absolute;
   top: 4px;
@@ -672,9 +686,15 @@
     left: max(var(--space-4), env(safe-area-inset-left, 0px));
     right: max(var(--space-4), env(safe-area-inset-right, 0px));
     width: auto;
+    z-index: calc(var(--z-overlay) + 1);
   }
 
-  .navbar-notif__panel {
+  .navbar-panel--portaled {
+    top: auto;
+  }
+
+  .navbar-notif__panel,
+  .navbar-panel--portaled.navbar-notif__panel {
     max-height: min(480px, calc(100dvh - var(--navbar-stack-height) - var(--space-4)));
   }
 }
