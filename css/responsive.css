@@ -212,15 +212,6 @@
     font-size: var(--text-base);
   }
 
-  .navbar-notif__panel {
-    position: fixed;
-    top: calc(var(--navbar-height) + var(--space-2));
-    left: var(--space-4);
-    right: var(--space-4);
-    width: auto;
-    max-height: min(480px, calc(100dvh - var(--navbar-height) - var(--space-8)));
-  }
-
 }
 
 /* ── Large phones (≤640px) ── */
@@ -531,12 +522,6 @@
   .search-input-wrapper {
     min-width: 0;
     max-width: 100%;
-  }
-
-  .navbar-notif__panel {
-    left: var(--content-padding);
-    right: var(--content-padding);
-    width: auto;
   }
 
   .problems-toolbar,

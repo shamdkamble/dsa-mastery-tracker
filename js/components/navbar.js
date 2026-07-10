@@ -116,6 +116,7 @@ function renderNavbar(state) {
         <span aria-hidden="true">/</span>
         <span class="navbar__breadcrumb-current">${pageTitle}</span>
       </nav>
+      <span class="navbar__mobile-title" aria-hidden="false">${pageTitle}</span>
     </div>
 
     <div class="navbar__center"${currentRoute === "dashboard" ? " hidden" : ""}>
@@ -536,10 +537,12 @@ function handleGlobalShortcut(e) {
 }
 
 function updateBreadcrumb(container, currentRoute) {
+  const title = ROUTE_TITLES[currentRoute] || "Dashboard";
   const breadcrumb = $(".navbar__breadcrumb-current", container);
-  if (breadcrumb) {
-    breadcrumb.textContent = ROUTE_TITLES[currentRoute] || "Dashboard";
-  }
+  if (breadcrumb) breadcrumb.textContent = title;
+
+  const mobileTitle = $(".navbar__mobile-title", container);
+  if (mobileTitle) mobileTitle.textContent = title;
 
   const searchCenter = $(".navbar__center", container);
   const hideSearch = currentRoute === "dashboard";

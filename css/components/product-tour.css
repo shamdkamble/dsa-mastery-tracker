@@ -226,8 +226,33 @@ body.tour-active .sidebar {
   pointer-events: auto;
 }
 
+body.tour-active .navbar {
+  background-color: var(--color-bg-primary);
+  isolation: isolate;
+}
+
 body.tour-active .product-tour__target {
   pointer-events: auto;
+}
+
+/* Navbar targets: ring only — avoids layout blowout on small screens */
+.navbar .product-tour__target,
+.navbar__new-btn.product-tour__target,
+.navbar__help-wrap.product-tour__target,
+.search-input-wrapper.product-tour__target {
+  animation: product-tour-navbar-pulse 2.2s ease-in-out infinite !important;
+  box-shadow: 0 0 0 2px var(--color-accent) !important;
+}
+
+@keyframes product-tour-navbar-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px var(--color-accent) !important;
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--color-accent) 85%, white),
+      0 0 0 6px color-mix(in srgb, var(--color-accent) 22%, transparent) !important;
+  }
 }
 
 @keyframes product-tour-fade-in {
