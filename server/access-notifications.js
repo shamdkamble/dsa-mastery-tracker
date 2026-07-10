@@ -1,5 +1,5 @@
 /**
- * Notification copy for admin access changes
+ * Notification copy for admin access changes + Web Push delivery
  */
 
 import { createUserNotification } from "./notifications-db.js";
@@ -34,78 +34,68 @@ function levelLabel(level) {
   return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
-async function push(userId, payload) {
+/**
+ * @param {string} userId
+ * @param {{ title: string, text: string, variant?: string, href?: string }} payload
+ * @param {{ tag: string, sendPush?: boolean }} options
+ */
+async function notifyUser(userId, payload, { tag, sendPush = true } = {}) {
   try {
     await createUserNotification(userId, payload);
   } catch (err) {
     console.error("[access-notifications] failed to create notification:", err?.message || err);
   }
+
+  if (!sendPush) return;
+
+  const pushResult = await sendPushToUser(userId, {
+    title: payload.title,
+    body: payload.text,
+    url: payload.href || "/#/dashboard",
+    tag: tag || "dsamantra-access",
+  });
+
+  if (pushResult.skipped) {
+    console.info("[access-notifications] web push skipped:", userId, tag, pushResult.reason);
+  } else {
+    console.info("[access-notifications] web push sent:", userId, tag, pushResult);
+  }
 }
 
 export async function notifyAccountApproved(userId) {
-  const payload = {
+  await notifyUser(userId, {
     title: "Account approved",
     text: "Your account has been approved. Welcome to DSAMantra — start your FAANG prep journey.",
     variant: "success",
     href: "#/dashboard",
-  };
-
-  await push(userId, payload);
-
-  const pushResult = await sendPushToUser(userId, {
-    title: payload.title,
-    body: payload.text,
-    url: payload.href,
-    tag: "account-approved",
-  });
-
-  if (pushResult.skipped) {
-    console.info("[access-notifications] web push skipped:", userId, pushResult.reason);
-  } else {
-    console.info("[access-notifications] web push sent:", userId, pushResult);
-  }
+  }, { tag: "account-approved" });
 }
 
 export async function notifyAccountRejected(userId) {
-  await push(userId, {
+  await notifyUser(userId, {
     title: "Registration declined",
     text: "Your registration was not approved. Contact the administrator if you believe this is a mistake.",
     variant: "danger",
     href: "#/login",
-  });
+  }, { tag: "account-rejected" });
 }
 
 export async function notifyAccountSuspended(userId) {
-  await push(userId, {
+  await notifyUser(userId, {
     title: "Access suspended",
     text: "Your account access has been suspended. Contact the administrator to restore access.",
     variant: "danger",
     href: "#/login",
-  });
+  }, { tag: "account-suspended" });
 }
 
 export async function notifyAccountActivated(userId) {
-  const payload = {
+  await notifyUser(userId, {
     title: "Account reactivated",
     text: "Your account has been reactivated. Welcome back to DSAMantra.",
     variant: "success",
     href: "#/dashboard",
-  };
-
-  await push(userId, payload);
-
-  const pushResult = await sendPushToUser(userId, {
-    title: payload.title,
-    body: payload.text,
-    url: payload.href,
-    tag: "account-activated",
-  });
-
-  if (pushResult.skipped) {
-    console.info("[access-notifications] web push skipped:", userId, pushResult.reason);
-  } else {
-    console.info("[access-notifications] web push sent:", userId, pushResult);
-  }
+  }, { tag: "account-activated" });
 }
 
 /**
@@ -126,61 +116,61 @@ export async function notifyAccessPatch(before, after, patch) {
   const expiryChanged = patch.expiresAt !== undefined && prevExpiry !== nextExpiry;
 
   if (levelChanged && nextLevel === "trial") {
-    await push(userId, {
+    await notifyUser(userId, {
       title: "Trial access granted",
       text: `You now have Trial access on DSAMantra. ${formatExpiryDetail(nextExpiry)}`,
       variant: "accent",
       href: "#/roadmap",
-    });
+    }, { tag: "trial-granted" });
     return;
   }
 
   if (levelChanged && nextLevel === "premium") {
-    await push(userId, {
+    await notifyUser(userId, {
       title: "Premium access granted",
       text: `Congratulations! You've been granted Premium access. ${formatExpiryDetail(nextExpiry)}`,
       variant: "success",
-      href: "#/settings",
-    });
+      href: "#/settings/subscription",
+    }, { tag: "premium-granted" });
     return;
   }
 
   if (levelChanged && (prevLevel === "premium" || prevLevel === "trial") && nextLevel === "standard") {
-    await push(userId, {
+    await notifyUser(userId, {
       title: "Premium access revoked",
       text: "Your Trial/Premium access has been changed to Standard. Some features may now be locked.",
       variant: "warning",
-      href: "#/settings",
-    });
+      href: "#/settings/subscription",
+    }, { tag: "premium-revoked" });
     return;
   }
 
   if (levelChanged) {
-    await push(userId, {
+    await notifyUser(userId, {
       title: "Access level updated",
       text: `Your access level is now ${levelLabel(nextLevel)}. ${formatExpiryDetail(nextExpiry)}`,
       variant: "info",
-      href: "#/settings",
-    });
+      href: "#/settings/subscription",
+    }, { tag: "access-level-updated" });
     return;
   }
 
   if (expiryChanged) {
     if (!nextExpiry) {
-      await push(userId, {
+      await notifyUser(userId, {
         title: "Access expiry cleared",
         text: `Your ${levelLabel(nextLevel)} access no longer has an expiry date.`,
         variant: "info",
-        href: "#/settings",
-      });
+        href: "#/settings/subscription",
+      }, { tag: "access-expiry-cleared" });
       return;
     }
 
-    await push(userId, {
+    await notifyUser(userId, {
       title: "Access expiry updated",
       text: `Your ${levelLabel(nextLevel)} access expiry has been updated. ${formatExpiryDetail(nextExpiry)}`,
       variant: "info",
-      href: "#/settings",
-    });
+      href: "#/settings/subscription",
+    }, { tag: "access-expiry-updated" });
   }
 }

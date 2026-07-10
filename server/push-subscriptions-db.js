@@ -89,3 +89,8 @@ export async function touchPushSubscription(endpoint) {
   await connectDB();
   await PushSubscription.updateOne({ endpoint }, { $set: { lastUsedAt: new Date() } });
 }
+
+export async function listDistinctUserIdsWithPushSubscriptions() {
+  await connectDB();
+  return PushSubscription.distinct("userId");
+}

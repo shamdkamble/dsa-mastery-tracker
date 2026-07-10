@@ -65,6 +65,11 @@ import {
   upsertPushSubscription,
 } from "./push-subscriptions-db.js";
 import { getVapidPublicKey, isPushConfigured, sendTestPushToUser } from "./push-service.js";
+import {
+  getNotificationPreferences,
+  upsertNotificationPreferences,
+} from "./notification-preferences-db.js";
+import { runScheduledPushReminders } from "./push-reminders.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -373,6 +378,46 @@ app.post("/api/push/test", requireAuth, async (req, res) => {
     if (handleAuthError(res, err)) return;
     console.error("[/api/push/test]", err);
     res.status(500).json({ error: { message: "Failed to send test notification.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/push/preferences", requireAuth, async (req, res) => {
+  try {
+    const preferences = await getNotificationPreferences(req.auth.sub);
+    res.json({ preferences });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/push/preferences]", err);
+    res.status(500).json({ error: { message: "Failed to load notification preferences.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.patch("/api/push/preferences", requireAuth, async (req, res) => {
+  try {
+    const preferences = await upsertNotificationPreferences(req.auth.sub, req.body?.preferences || req.body || {});
+    res.json({ ok: true, preferences });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/push/preferences]", err);
+    res.status(500).json({ error: { message: "Failed to save notification preferences.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/cron/push-reminders", async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const auth = req.headers.authorization || "";
+
+  if (!secret || auth !== `Bearer ${secret}`) {
+    res.status(401).json({ error: { message: "Unauthorized.", code: "UNAUTHORIZED" } });
+    return;
+  }
+
+  try {
+    const result = await runScheduledPushReminders();
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error("[/api/cron/push-reminders]", err);
+    res.status(500).json({ error: { message: "Cron job failed.", code: "SERVER_ERROR" } });
   }
 });
 

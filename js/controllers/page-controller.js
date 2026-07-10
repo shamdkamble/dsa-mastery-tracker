@@ -249,6 +249,9 @@ export function bindSettingsHandlers(root) {
     } else if (key.startsWith("notif.")) {
       const notifKey = key.replace("notif.", "");
       updateNotificationSetting(notifKey, toggle.checked, { silent: true });
+      import("../services/notification-preferences-sync.js").then(({ syncNotificationPreferenceToServer }) => {
+        void syncNotificationPreferenceToServer(notifKey, toggle.checked);
+      });
     }
   });
 

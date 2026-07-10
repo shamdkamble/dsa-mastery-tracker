@@ -240,12 +240,12 @@ export default {
               <div class="settings-card settings-card--study-reminders">
                 <div class="settings-card__subsection">
                   <h3 class="settings-card__subtitle">Study reminders</h3>
-                  <p class="settings-card__subsection-desc">In-app reminders stored on this device (not system push yet).</p>
+                  <p class="settings-card__subsection-desc">Scheduled system push when System notifications are enabled. Times use Asia/Kolkata.</p>
                 </div>
-                ${settingsRow("Daily mission reminder", "Get notified at 9:00 AM", Toggle({ checked: settings.notifications.dailyReminder, attrs: 'data-setting="notif.dailyReminder"' }))}
-                ${settingsRow("Streak at risk alert", "Warn when streak is about to break", Toggle({ checked: settings.notifications.streakAlert, attrs: 'data-setting="notif.streakAlert"' }))}
-                ${settingsRow("Review due notifications", "Alert when spaced repetitions are due", Toggle({ checked: settings.notifications.reviewDue, attrs: 'data-setting="notif.reviewDue"' }))}
-                ${settingsRow("Weekly progress summary", "Sunday evening recap", Toggle({ checked: settings.notifications.weeklySummary, attrs: 'data-setting="notif.weeklySummary"' }))}
+                ${settingsRow("Daily mission reminder", "9:00 AM — today's mission tasks", Toggle({ checked: settings.notifications.dailyReminder, attrs: 'data-setting="notif.dailyReminder"' }))}
+                ${settingsRow("Streak at risk alert", "8:00 PM — if you have not solved today", Toggle({ checked: settings.notifications.streakAlert, attrs: 'data-setting="notif.streakAlert"' }))}
+                ${settingsRow("Review due notifications", "9:00 AM — spaced repetition reviews due", Toggle({ checked: settings.notifications.reviewDue, attrs: 'data-setting="notif.reviewDue"' }))}
+                ${settingsRow("Weekly progress summary", "Sunday 6:00 PM — weekly recap", Toggle({ checked: settings.notifications.weeklySummary, attrs: 'data-setting="notif.weeklySummary"' }))}
               </div>
             </section>
 

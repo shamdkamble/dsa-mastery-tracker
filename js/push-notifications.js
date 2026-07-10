@@ -268,6 +268,9 @@ export async function enableWebPush() {
   await savePushSubscription(subscription);
   activeEndpoint = subscription.endpoint;
   updateNotificationSetting("pushEnabled", true, { silent: true });
+  import("./services/notification-preferences-sync.js").then(({ syncAllStudyPreferencesToServer }) => {
+    void syncAllStudyPreferencesToServer();
+  });
   dismissPushEnableBanner();
   return subscription;
 }

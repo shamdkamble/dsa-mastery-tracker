@@ -29,6 +29,7 @@ import { hydrateServerNotifications } from "./services/notifications.js";
 import { initProductTour, maybeAutoStartTour } from "./components/product-tour.js";
 import { initPWA } from "./pwa.js";
 import { initPushNotifications, maybePromptPushEnable, syncPushSubscription } from "./push-notifications.js";
+import { hydrateNotificationPreferencesFromServer } from "./services/notification-preferences-sync.js";
 
 import dashboard from "./pages/dashboard.js";
 import mission from "./pages/mission.js";
@@ -139,6 +140,7 @@ function initDataRefresh() {
     void hydrateServerNotifications().then(() => {
       startLiveNotificationPolling();
     });
+    void hydrateNotificationPreferencesFromServer();
     const path = getCurrentPath();
     if (DATA_DRIVEN_ROUTES.has(path)) {
       refreshRouteContent(path, content);
@@ -179,6 +181,7 @@ async function init() {
     void hydrateServerNotifications().then(() => {
       startLiveNotificationPolling();
     });
+    void hydrateNotificationPreferencesFromServer();
     void syncPushSubscription();
     window.setTimeout(() => { void maybePromptPushEnable(); }, 1500);
     maybeAutoStartTour();

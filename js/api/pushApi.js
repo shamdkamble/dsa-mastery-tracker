@@ -93,3 +93,25 @@ export async function sendTestPush() {
   if (!res.ok) throw errorFromResponse(res.status, data);
   return data;
 }
+
+export async function fetchPushPreferences() {
+  const res = await fetch(`${resolveBaseUrl()}/api/push/preferences`, {
+    headers: authHeaders(),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}
+
+export async function updatePushPreferences(preferences) {
+  const res = await fetch(`${resolveBaseUrl()}/api/push/preferences`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ preferences }),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}

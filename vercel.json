@@ -26,5 +26,11 @@
       "source": "/api/(.*)",
       "destination": "/api"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/push-reminders",
+      "schedule": "0 * * * *"
+    }
   ]
 }
