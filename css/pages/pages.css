@@ -1403,6 +1403,28 @@
   color: var(--color-text-primary);
 }
 
+.settings-card__subsection {
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+.settings-card__subtitle {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+}
+
+.settings-card__subsection-desc {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  line-height: var(--leading-relaxed);
+}
+
+.settings-card--study-reminders {
+  margin-top: var(--space-4);
+}
+
 .settings-push-ios-callout {
   margin: var(--space-4) var(--space-4) 0;
   padding: var(--space-4);

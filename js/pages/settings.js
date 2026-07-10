@@ -209,22 +209,34 @@ export default {
 
             <section id="notifications" class="settings-section settings-group">
               <h2 class="settings-group__title">Notifications</h2>
-              <p class="settings-group__desc">Push alerts for account updates; study reminders are stored locally for now.</p>
-              <div class="settings-card">
+              <p class="settings-group__desc">Control system alerts on this device and in-app study reminders.</p>
+
+              <div class="settings-card settings-card--system-notifications">
+                <div class="settings-card__subsection">
+                  <h3 class="settings-card__subtitle">System notifications</h3>
+                  <p class="settings-card__subsection-desc">Turning this on opens your device permission prompt — Allow or Block alerts outside the app.</p>
+                </div>
                 <div class="settings-push-ios-callout" id="push-ios-callout" hidden>
                   <p class="settings-push-ios-callout__title">For iOS users</p>
-                  <p class="settings-push-ios-callout__text">Open the app from Home Screen, then enable notifications in Settings.</p>
+                  <p class="settings-push-ios-callout__text">Open the app from Home Screen, then enable notifications below.</p>
                   <ol class="settings-push-ios-callout__steps">
                     <li>In Safari, tap <strong>Share</strong> → <strong>Add to Home Screen</strong></li>
                     <li>Open <strong>DSAMantra</strong> from your Home Screen</li>
-                    <li>Return here and turn on <strong>Push notifications</strong></li>
+                    <li>Turn on <strong>System notifications</strong> below</li>
                     <li>Tap <strong>Allow</strong> when iOS asks for permission</li>
                   </ol>
                 </div>
-                ${settingsRow("Push notifications", "Allow system alerts when your account is approved", Toggle({ checked: settings.notifications.pushEnabled, id: "push-notifications-toggle", attrs: 'data-setting="notif.pushEnabled"' }))}
+                ${settingsRow("System notifications", "Enable or disable alerts on this phone or browser", Toggle({ checked: settings.notifications.pushEnabled, id: "push-notifications-toggle", attrs: 'data-push-system-toggle aria-describedby="push-status-text"' }))}
                 <p class="settings-push-status" id="push-status-text" aria-live="polite"></p>
                 <div class="settings-push-actions">
                   <button type="button" class="btn btn--secondary btn--sm" id="push-test-btn">Send test notification</button>
+                </div>
+              </div>
+
+              <div class="settings-card settings-card--study-reminders">
+                <div class="settings-card__subsection">
+                  <h3 class="settings-card__subtitle">Study reminders</h3>
+                  <p class="settings-card__subsection-desc">In-app reminders stored on this device (not system push yet).</p>
                 </div>
                 ${settingsRow("Daily mission reminder", "Get notified at 9:00 AM", Toggle({ checked: settings.notifications.dailyReminder, attrs: 'data-setting="notif.dailyReminder"' }))}
                 ${settingsRow("Streak at risk alert", "Warn when streak is about to break", Toggle({ checked: settings.notifications.streakAlert, attrs: 'data-setting="notif.streakAlert"' }))}
@@ -285,7 +297,8 @@ export default {
   },
   onMount(container) {
     bindPageHandlers(container);
-    import("../push-notifications.js").then(({ bindPushSettingsUI, bindPushTestButton }) => {
+    import("../push-notifications.js").then(({ bindPushSettingsUI, bindPushTestButton, bindPushToggleHandler }) => {
+      bindPushToggleHandler(container);
       void bindPushSettingsUI(container);
       bindPushTestButton(container);
     });

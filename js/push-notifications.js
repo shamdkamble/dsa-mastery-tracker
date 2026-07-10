@@ -327,7 +327,7 @@ export async function teardownPushOnLogout() {
 }
 
 function setPushToggleState(container, { enabled, checked }) {
-  const toggle = container?.querySelector('[data-setting="notif.pushEnabled"]');
+  const toggle = container?.querySelector("[data-push-system-toggle]");
   if (!toggle) return;
 
   toggle.disabled = !enabled;
@@ -374,18 +374,18 @@ export async function refreshPushStatusLabel(container) {
 
     if (status.subscribed && Notification.permission === "granted") {
       statusEl.hidden = false;
-      statusEl.textContent = "Push notifications are active on this device.";
+      statusEl.textContent = "System notifications are active on this device.";
       return;
     }
 
     if (getSettings().notifications?.pushEnabled) {
       statusEl.hidden = false;
-      statusEl.textContent = "Push is enabled in settings but not active on this device yet.";
+      statusEl.textContent = "Enabled in settings but not active on this device yet — turn the toggle on again.";
       return;
     }
 
     statusEl.hidden = false;
-    statusEl.textContent = "Enable push to get alerts when your account is approved.";
+    statusEl.textContent = "Turn on the toggle above to open your device permission prompt.";
   } catch {
     statusEl.hidden = true;
   }
@@ -412,8 +412,39 @@ export async function bindPushSettingsUI(container) {
   await refreshPushStatusLabel(container);
 }
 
+export function bindPushToggleHandler(container) {
+  const toggle = container?.querySelector("[data-push-system-toggle]");
+  if (!toggle || toggle.dataset.pushBound) return;
+  toggle.dataset.pushBound = "true";
+
+  toggle.addEventListener("change", () => {
+    void handlePushSettingToggle(toggle.checked, toggle);
+  });
+}
+
 export async function handlePushSettingToggle(enabled, toggleEl) {
   const container = toggleEl?.closest(".settings-card") || document;
+
+  if (enabled) {
+    const env = getPushEnvironment();
+
+    if (env.supportsPush && Notification.permission === "default") {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        if (toggleEl) toggleEl.checked = false;
+        updateNotificationSetting("pushEnabled", false, { silent: true });
+        showToast(Toast({
+          title: "Notifications not allowed",
+          text: isIOSDevice()
+            ? "Open iOS Settings → DSAMantra → Notifications to allow alerts."
+            : "Permission was blocked. Check your browser notification settings.",
+          variant: "warning",
+        }));
+        await bindPushSettingsUI(container);
+        return;
+      }
+    }
+  }
 
   if (enabled && getPushEnvironment().iosNeedsInstall) {
     if (toggleEl) toggleEl.checked = false;
@@ -430,16 +461,16 @@ export async function handlePushSettingToggle(enabled, toggleEl) {
     if (enabled) {
       await enableWebPush();
       showToast(Toast({
-        title: "Push notifications enabled",
+        title: "System notifications enabled",
         text: isIOSDevice()
           ? "You will receive alerts from DSAMantra on this device."
-          : "You will receive alerts for important account updates.",
+          : "You will receive system alerts for important account updates.",
         variant: "success",
       }));
     } else {
       await disableWebPush();
       showToast(Toast({
-        title: "Push notifications disabled",
+        title: "System notifications disabled",
         variant: "info",
       }));
     }
