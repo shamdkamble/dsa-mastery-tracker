@@ -661,6 +661,11 @@
   color: var(--color-text-secondary);
 }
 
+.push-logs__updated {
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
 .push-logs__content {
   min-height: 200px;
 }

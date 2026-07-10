@@ -216,6 +216,7 @@ export default {
                   ${icon("repeat")}
                   <span>Refresh</span>
                 </button>
+                <span class="push-logs__updated text-tertiary" id="push-logs-updated" aria-live="polite"></span>
               </div>
             </div>
 
@@ -234,11 +235,13 @@ export default {
     const statusFilter = container.querySelector("#push-logs-status");
     const sourceFilter = container.querySelector("#push-logs-source");
     const refreshBtn = container.querySelector("#push-logs-refresh");
+    const updatedEl = container.querySelector("#push-logs-updated");
 
     let search = "";
     let status = "all";
     let source = "all";
     let searchTimer = null;
+    let refreshTimer = null;
 
     function updateStats(stats) {
       if (!statsEl || !stats) return;
@@ -262,6 +265,9 @@ export default {
 
         updateStats(data.stats);
         listEl.innerHTML = renderTable(data.logs);
+        if (updatedEl) {
+          updatedEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+        }
       } catch (err) {
         const message = err instanceof AuthApiError
           ? err.message
@@ -292,6 +298,13 @@ export default {
 
     refreshBtn?.addEventListener("click", () => { void loadLogs(); });
 
+    refreshTimer = window.setInterval(() => { void loadLogs(); }, 30000);
+
     void loadLogs();
+
+    return () => {
+      clearTimeout(searchTimer);
+      if (refreshTimer) window.clearInterval(refreshTimer);
+    };
   },
 };
