@@ -30,6 +30,7 @@
 @import url("components/sidebar.css");
 @import url("components/navbar.css");
 @import url("components/product-tour.css");
+@import url("components/pwa-install.css");
 
 /* Pages */
 @import url("pages/pages.css");
