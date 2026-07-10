@@ -72,6 +72,11 @@ import {
 import { runScheduledPushReminders } from "./push-reminders.js";
 import { deliverUndeliveredAccessPushes } from "./push-access-delivery.js";
 import { listPushDeliveryLogs, getPushDeliveryLogStats } from "./push-delivery-log-db.js";
+import { seedPilotLearningFacts } from "./topic-learning-facts-db.js";
+import {
+  deliverLearningFactToUser,
+  previewLearningFactForUser,
+} from "./learning-fact-delivery.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -523,6 +528,54 @@ app.get("/api/auth/admin/push-logs", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("[/api/auth/admin/push-logs]", err);
     res.status(500).json({ error: { message: "Failed to load push logs.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/auth/admin/learning-facts/seed", requireAdmin, async (_req, res) => {
+  try {
+    const result = await seedPilotLearningFacts();
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error("[/api/auth/admin/learning-facts/seed]", err);
+    res.status(500).json({ error: { message: "Failed to seed learning facts.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/learning-facts/anchor", requireAuth, async (req, res) => {
+  try {
+    const preview = await previewLearningFactForUser(req.auth.sub);
+    res.json(preview);
+  } catch (err) {
+    console.error("[/api/learning-facts/anchor]", err);
+    res.status(500).json({ error: { message: "Failed to load learning anchor.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/learning-facts/deliver-next", requireAuth, async (req, res) => {
+  try {
+    const { sendPush = true } = req.body ?? {};
+    const result = await deliverLearningFactToUser(req.auth.sub, { sendPush: Boolean(sendPush) });
+
+    if (!result.ok) {
+      res.status(409).json({
+        ok: false,
+        reason: result.reason,
+        anchor: result.anchor,
+        fact: result.fact,
+      });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      anchor: result.anchor,
+      fact: result.fact,
+      notification: result.notification,
+      pushDelivery: result.push,
+    });
+  } catch (err) {
+    console.error("[/api/learning-facts/deliver-next]", err);
+    res.status(500).json({ error: { message: "Failed to deliver learning fact.", code: "SERVER_ERROR" } });
   }
 });
 

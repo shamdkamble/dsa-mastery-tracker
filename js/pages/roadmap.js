@@ -9,7 +9,9 @@ import {
   isTopicCompleted,
 } from "../storage/roadmap-progress.js";
 import { refreshPage } from "../controllers/page-controller.js";
-import { getCurrentPath } from "../router.js";
+import { getCurrentPath, getHashSearchParams } from "../router.js";
+import { openTeachLesson } from "../components/teach-modal.js";
+import { loadRoadmapProgress } from "../storage/roadmap-progress.js";
 import { renderAiLockBadge } from "../components/access-ui.js";
 import { getTierBannerClass } from "../subscription-theme.js";
 import {
@@ -377,6 +379,37 @@ function phaseSection(phaseData, user, { isOpen = false } = {}) {
   `;
 }
 
+function expandRoadmapPhase(container, phaseId) {
+  const phaseEl = container.querySelector(`.roadmap-phase[data-phase="${phaseId}"]`);
+  if (!phaseEl) return;
+
+  openPhaseIds.add(phaseId);
+  phaseEl.classList.add("is-open");
+
+  const toggle = phaseEl.querySelector(".roadmap-phase__toggle");
+  const panel = phaseEl.querySelector(".roadmap-phase__panel");
+  toggle?.setAttribute("aria-expanded", "true");
+  panel?.setAttribute("aria-hidden", "false");
+}
+
+async function tryOpenTopicFromHash(container) {
+  const topicId = getHashSearchParams().get("open");
+  if (!topicId) return;
+
+  const topic = ROADMAP_TOPICS.find((t) => t.id === topicId);
+  if (!topic) return;
+
+  await loadRoadmapProgress();
+  expandRoadmapPhase(container, topic.phase);
+
+  const card = container.querySelector(`[data-topic-id="${topicId}"]`);
+  card?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  window.requestAnimationFrame(() => {
+    void openTeachLesson(topic);
+  });
+}
+
 function bindPhaseAccordion(container) {
   if (container.dataset.roadmapAccordionBound === "true") return;
   container.dataset.roadmapAccordionBound = "true";
@@ -536,6 +569,7 @@ export default {
     bindPhaseAccordion(container);
     bindLockedContentHandlers(container);
     bindTeachTopicHandlers(container);
+    void tryOpenTopicFromHash(container);
 
     if (!container.dataset.roadmapProgressBound) {
       container.dataset.roadmapProgressBound = "true";

@@ -112,6 +112,17 @@ export async function getAllUsers() {
   return data.users;
 }
 
+export async function seedLearningFacts() {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/learning-facts/seed`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}
+
 export async function getPushDeliveryLogs({ limit = 100, status, source, userId, search } = {}) {
   const params = new URLSearchParams();
   if (limit) params.set("limit", String(limit));

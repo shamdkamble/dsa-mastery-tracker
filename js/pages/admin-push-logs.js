@@ -1,10 +1,12 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
 import { Badge, EmptyState, SkeletonTable } from "../components/ui/index.js";
-import { getPushDeliveryLogs, AuthApiError } from "../services/auth.js";
+import { getPushDeliveryLogs, seedLearningFacts, AuthApiError } from "../services/auth.js";
+import { showToast } from "../components/ui/interactions.js";
+import { Toast } from "../components/ui/index.js";
 
 const STATUS_FILTERS = ["all", "sent", "failed", "skipped"];
-const SOURCE_FILTERS = ["all", "access", "test", "reminder", "redelivery"];
+const SOURCE_FILTERS = ["all", "access", "test", "reminder", "redelivery", "learning-fact"];
 
 function escapeHtml(str) {
   return String(str)
@@ -45,6 +47,7 @@ function sourceBadge(source) {
     test: "Test",
     reminder: "Reminder",
     redelivery: "Redelivery",
+    "learning-fact": "Learning fact",
   };
   return Badge({
     label: labels[source] || source,
@@ -216,6 +219,10 @@ export default {
                   ${icon("repeat")}
                   <span>Refresh</span>
                 </button>
+                <button class="btn btn--ghost btn--sm" type="button" id="push-logs-seed-facts" title="Seed pilot learning facts into MongoDB">
+                  ${icon("database")}
+                  <span>Seed facts</span>
+                </button>
                 <span class="push-logs__updated text-tertiary" id="push-logs-updated" aria-live="polite"></span>
               </div>
             </div>
@@ -235,6 +242,7 @@ export default {
     const statusFilter = container.querySelector("#push-logs-status");
     const sourceFilter = container.querySelector("#push-logs-source");
     const refreshBtn = container.querySelector("#push-logs-refresh");
+    const seedFactsBtn = container.querySelector("#push-logs-seed-facts");
     const updatedEl = container.querySelector("#push-logs-updated");
 
     let search = "";
@@ -297,6 +305,26 @@ export default {
     });
 
     refreshBtn?.addEventListener("click", () => { void loadLogs(); });
+
+    seedFactsBtn?.addEventListener("click", async () => {
+      seedFactsBtn.disabled = true;
+      try {
+        const data = await seedLearningFacts();
+        showToast(Toast({
+          title: "Pilot facts seeded",
+          text: `${data.result?.total ?? 0} facts across ${data.result?.topicIds?.length ?? 0} topics.`,
+          variant: "success",
+        }));
+      } catch (err) {
+        showToast(Toast({
+          title: "Seed failed",
+          text: err instanceof AuthApiError ? err.message : "Could not seed learning facts.",
+          variant: "danger",
+        }));
+      } finally {
+        seedFactsBtn.disabled = false;
+      }
+    });
 
     refreshTimer = window.setInterval(() => { void loadLogs(); }, 30000);
 

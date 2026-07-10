@@ -32,6 +32,13 @@ export function registerRoutes(routeMap) {
  * Parse #/settings/notifications → { path: "settings", section: "notifications" }
  * Legacy #notifications (broken) → settings + notifications section
  */
+export function getHashSearchParams(hash = window.location.hash) {
+  const full = (hash || "").replace(/^#\/?/, "");
+  const queryIndex = full.indexOf("?");
+  if (queryIndex < 0) return new URLSearchParams();
+  return new URLSearchParams(full.slice(queryIndex + 1));
+}
+
 export function parseRoute(hash = window.location.hash) {
   const raw = (hash || "#/login").replace(/^#\/?/, "").split("?")[0];
   const parts = raw.split("/").filter(Boolean);

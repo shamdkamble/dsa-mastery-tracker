@@ -30,7 +30,7 @@ const pushDeliveryLogSchema = new mongoose.Schema(
     source: {
       type: String,
       required: true,
-      enum: ["access", "test", "reminder", "redelivery"],
+      enum: ["access", "test", "reminder", "redelivery", "learning-fact"],
       index: true,
     },
     eventTag: {
