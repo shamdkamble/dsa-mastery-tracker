@@ -264,13 +264,12 @@ export default {
   render() {
     return createPage({
       title: "User Management",
-      description: "Manage learner accounts, access levels, and expiry dates from one place.",
       iconName: "shield",
+      hideHeader: true,
       children: `
         <div class="admin-page admin-page--modern user-mgmt">
           ${adminHero({
             title: "User Management",
-            description: "Approve learners, manage access levels, and jump to push tools or the notification architecture map.",
             badge: "Control center",
           })}
           ${adminSubnav("users")}

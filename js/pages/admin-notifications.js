@@ -65,13 +65,13 @@ export default {
   render() {
     return createPage({
       title: "Notification Architecture",
-      description: "How DSAMantra triggers, personalizes, and delivers every notification.",
       iconName: "layers",
+      hideHeader: true,
       children: `
         <div class="admin-page admin-page--modern arch-page">
           ${adminHero({
             title: "Notification Architecture",
-            description: "End-to-end map of in-app bells, Web Push, cron jobs, Daily Wisdom, and delivery logging — your admin reference.",
+            description: "Triggers, pipelines, and storage — admin reference.",
             badge: "System map",
           })}
           ${adminSubnav("notifications")}

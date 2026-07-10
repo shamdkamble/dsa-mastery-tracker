@@ -165,13 +165,13 @@ export default {
   render() {
     return createPage({
       title: "Push Delivery Log",
-      description: "Track every system push attempt — who it was sent to, whether it succeeded, and why it failed.",
       iconName: "bell",
+      hideHeader: true,
       children: `
         <div class="admin-page admin-page--modern push-logs">
           ${adminHero({
             title: "Push Delivery Log",
-            description: "Track every system push, manage Daily Wisdom, and run the cron on demand for testing.",
+            description: "Delivery audit, Daily Wisdom, and manual cron.",
             badge: "Notifications",
           })}
           ${adminSubnav("push-logs")}

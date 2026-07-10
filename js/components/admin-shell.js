@@ -24,13 +24,19 @@ export function adminSubnav(active) {
 }
 
 export function adminHero({ title, description, badge = "Admin" }) {
+  const desc = description
+    ? `<p class="admin-hero__desc">${description}</p>`
+    : "";
+
   return `
     <header class="admin-hero">
       <div class="admin-hero__glow" aria-hidden="true"></div>
       <div class="admin-hero__content">
-        <span class="admin-hero__badge">${icon("shield")}<span>${badge}</span></span>
-        <h1 class="admin-hero__title">${title}</h1>
-        <p class="admin-hero__desc">${description}</p>
+        <div class="admin-hero__top">
+          <span class="admin-hero__badge">${icon("shield")}<span>${badge}</span></span>
+          <h1 class="admin-hero__title">${title}</h1>
+        </div>
+        ${desc}
       </div>
     </header>
   `;
