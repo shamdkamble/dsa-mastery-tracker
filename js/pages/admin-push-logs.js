@@ -1,7 +1,14 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
 import { Badge, EmptyState, SkeletonTable } from "../components/ui/index.js";
-import { getPushDeliveryLogs, seedLearningFacts, AuthApiError } from "../services/auth.js";
+import {
+  getPushDeliveryLogs,
+  seedLearningFacts,
+  deliverLearningFactToMe,
+  deliverLearningFactToUser,
+  previewLearningFactAnchor,
+  AuthApiError,
+} from "../services/auth.js";
 import { showToast } from "../components/ui/interactions.js";
 import { Toast } from "../components/ui/index.js";
 
@@ -183,6 +190,42 @@ export default {
         <div class="admin-page push-logs">
           ${adminSubnav("push-logs")}
 
+          <section class="card learning-facts-guide">
+            <div class="card__body learning-facts-guide__body">
+              <div>
+                <h2 class="learning-facts-guide__title">Learning facts — how to push</h2>
+                <ol class="learning-facts-guide__steps">
+                  <li><strong>Seed facts</strong> — loads pilot facts into the database (you did this).</li>
+                  <li><strong>Send fact</strong> — picks the user's current roadmap topic and sends bell + system push.</li>
+                  <li><strong>Student taps notification</strong> — opens that topic's AI lesson on the roadmap.</li>
+                </ol>
+                <p class="learning-facts-guide__note text-secondary">
+                  Automatic hourly delivery comes in Phase 2. For now, send manually with the buttons below.
+                </p>
+                <p class="learning-facts-guide__anchor text-tertiary" id="learning-facts-anchor-preview">Your anchor topic: loading…</p>
+              </div>
+              <div class="learning-facts-guide__actions">
+                <button type="button" class="btn btn--primary btn--sm" id="learning-facts-send-me">
+                  ${icon("bell")}
+                  <span>Send fact to me</span>
+                </button>
+                <div class="learning-facts-guide__user-send">
+                  <input
+                    type="text"
+                    class="input input--sm"
+                    id="learning-facts-user-id"
+                    placeholder="Student userId (e.g. user_173…)"
+                    autocomplete="off"
+                  />
+                  <button type="button" class="btn btn--ghost btn--sm" id="learning-facts-send-user">
+                    ${icon("user")}
+                    <span>Send to student</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <div class="admin-stats push-logs__stats" id="push-logs-stats">
             ${statCard({ iconName: "bell", value: "—", label: "Total attempts" })}
             ${statCard({ iconName: "check", value: "—", label: "Delivered", variant: "success" })}
@@ -243,6 +286,10 @@ export default {
     const sourceFilter = container.querySelector("#push-logs-source");
     const refreshBtn = container.querySelector("#push-logs-refresh");
     const seedFactsBtn = container.querySelector("#push-logs-seed-facts");
+    const sendMeBtn = container.querySelector("#learning-facts-send-me");
+    const sendUserBtn = container.querySelector("#learning-facts-send-user");
+    const userIdInput = container.querySelector("#learning-facts-user-id");
+    const anchorPreview = container.querySelector("#learning-facts-anchor-preview");
     const updatedEl = container.querySelector("#push-logs-updated");
 
     let search = "";
@@ -305,6 +352,99 @@ export default {
     });
 
     refreshBtn?.addEventListener("click", () => { void loadLogs(); });
+
+    async function loadAnchorPreview() {
+      if (!anchorPreview) return;
+      try {
+        const data = await previewLearningFactAnchor();
+        if (!data.anchor) {
+          anchorPreview.textContent = "Your anchor topic: none (admin may have completed all topics)";
+          return;
+        }
+        const next = data.fact ? ` · next fact: "${data.fact.title}"` : " · no new facts left for this topic";
+        anchorPreview.textContent = `Your anchor topic: ${data.anchor.topicName} (${data.anchor.topicId})${next}`;
+      } catch {
+        anchorPreview.textContent = "Your anchor topic: could not load";
+      }
+    }
+
+    function formatDeliverResult(data) {
+      const push = data.pushDelivery;
+      if (push?.sent > 0) return "System push sent.";
+      if (push?.skipped) return `No system push (${push.reason || "skipped"}). In-app bell still created.`;
+      if (push?.failed > 0) return "Push failed — check delivery log below.";
+      return "In-app notification created.";
+    }
+
+    function formatDeliverError(err, data) {
+      if (data?.reason === "no_facts") {
+        return "No facts for this user's topic. Seed facts first, or user anchor is past the 5 pilot topics.";
+      }
+      if (data?.reason === "already_delivered") {
+        return "This user already received all facts for their current topic. They need to complete a topic or wait for more facts.";
+      }
+      if (data?.reason === "no_anchor") {
+        return "Could not determine this user's current roadmap topic.";
+      }
+      return err instanceof AuthApiError ? err.message : "Delivery failed.";
+    }
+
+    sendMeBtn?.addEventListener("click", async () => {
+      sendMeBtn.disabled = true;
+      try {
+        const data = await deliverLearningFactToMe({ sendPush: true });
+        showToast(Toast({
+          title: "Fact sent to you",
+          text: `${data.fact?.title || "Learning fact"} — ${formatDeliverResult(data)}`,
+          variant: "success",
+        }));
+        void loadLogs();
+        void loadAnchorPreview();
+      } catch (err) {
+        const details = err instanceof AuthApiError ? err.details : null;
+        showToast(Toast({
+          title: "Could not send fact",
+          text: formatDeliverError(err, details),
+          variant: "danger",
+        }));
+      } finally {
+        sendMeBtn.disabled = false;
+      }
+    });
+
+    sendUserBtn?.addEventListener("click", async () => {
+      const userId = userIdInput?.value?.trim();
+      if (!userId) {
+        showToast(Toast({
+          title: "Enter a user ID",
+          text: "Copy a student's userId from User Management (e.g. user_173…).",
+          variant: "warning",
+        }));
+        return;
+      }
+
+      sendUserBtn.disabled = true;
+      try {
+        const data = await deliverLearningFactToUser(userId, { sendPush: true });
+        showToast(Toast({
+          title: "Fact sent to student",
+          text: `${data.fact?.title || "Learning fact"} — ${formatDeliverResult(data)}`,
+          variant: "success",
+        }));
+        void loadLogs();
+      } catch (err) {
+        const details = err instanceof AuthApiError ? err.details : null;
+        showToast(Toast({
+          title: "Could not send to student",
+          text: formatDeliverError(err, details),
+          variant: "danger",
+        }));
+      } finally {
+        sendUserBtn.disabled = false;
+      }
+    });
+
+    void loadAnchorPreview();
 
     seedFactsBtn?.addEventListener("click", async () => {
       seedFactsBtn.disabled = true;

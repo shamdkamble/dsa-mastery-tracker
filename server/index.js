@@ -551,6 +551,40 @@ app.get("/api/learning-facts/anchor", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/auth/admin/learning-facts/deliver", requireAdmin, async (req, res) => {
+  try {
+    const { userId, sendPush = true } = req.body ?? {};
+    if (!userId) {
+      res.status(400).json({ error: { message: "userId is required.", code: "INVALID_INPUT" } });
+      return;
+    }
+
+    const result = await deliverLearningFactToUser(userId, { sendPush: Boolean(sendPush) });
+
+    if (!result.ok) {
+      res.status(409).json({
+        ok: false,
+        reason: result.reason,
+        anchor: result.anchor,
+        fact: result.fact,
+      });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      userId,
+      anchor: result.anchor,
+      fact: result.fact,
+      notification: result.notification,
+      pushDelivery: result.push,
+    });
+  } catch (err) {
+    console.error("[/api/auth/admin/learning-facts/deliver]", err);
+    res.status(500).json({ error: { message: "Failed to deliver learning fact.", code: "SERVER_ERROR" } });
+  }
+});
+
 app.post("/api/learning-facts/deliver-next", requireAuth, async (req, res) => {
   try {
     const { sendPush = true } = req.body ?? {};

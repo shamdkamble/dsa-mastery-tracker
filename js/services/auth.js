@@ -123,6 +123,40 @@ export async function seedLearningFacts() {
   return data;
 }
 
+export async function deliverLearningFactToUser(userId, { sendPush = true } = {}) {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/learning-facts/deliver`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ userId, sendPush }),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}
+
+export async function deliverLearningFactToMe({ sendPush = true } = {}) {
+  const res = await fetch(`${resolveBaseUrl()}/api/learning-facts/deliver-next`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ sendPush }),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}
+
+export async function previewLearningFactAnchor() {
+  const res = await fetch(`${resolveBaseUrl()}/api/learning-facts/anchor`, {
+    headers: authHeaders(),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}
+
 export async function getPushDeliveryLogs({ limit = 100, status, source, userId, search } = {}) {
   const params = new URLSearchParams();
   if (limit) params.set("limit", String(limit));
