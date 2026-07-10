@@ -456,42 +456,59 @@ function refreshNotificationUI(container) {
     portalNavbarPanel(newPanel);
     syncPortaledNavbarPanel(newPanel);
   }
-  bindNotificationPanelEvents(container);
+  bindNotificationPanelEvents();
 }
 
-function bindNotificationPanelEvents(container) {
-  const wrap = $(".navbar__notif-wrap", container);
-  if (!wrap || wrap.dataset.notifBound) return;
-  wrap.dataset.notifBound = "true";
+function handleNotificationPanelInteraction(e) {
+  const panel = document.getElementById("navbar-notif-panel");
+  if (!panel || panel.hasAttribute("hidden")) return;
 
-  wrap.addEventListener("click", (e) => {
-    const closeBtn = e.target.closest("#navbar-notif-close");
-    if (closeBtn) {
-      e.stopPropagation();
-      closeNotificationPanel(container);
-      return;
-    }
+  const target = e.target instanceof Element ? e.target : e.target?.parentElement;
+  if (!target || !panel.contains(target)) return;
 
-    const markAll = e.target.closest("#navbar-notif-mark-all");
-    if (markAll) {
-      const ids = getNotifications().filter((n) => !n.read).map((n) => n.id);
-      void markAllNotificationsReadByIds(ids).then(() => refreshNotificationUI(container));
-      return;
-    }
+  const container = $(".navbar");
+  if (!container) return;
 
-    const item = e.target.closest("[data-notif-id]");
-    if (!item) return;
+  const closeBtn = target.closest("#navbar-notif-close");
+  if (closeBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeNotificationPanel(container);
+    return;
+  }
 
-    const id = item.dataset.notifId;
-    const href = item.dataset.notifHref;
-    void markNotificationReadById(id).then(() => refreshNotificationUI(container));
+  const markAll = target.closest("#navbar-notif-mark-all");
+  if (markAll) {
+    e.preventDefault();
+    e.stopPropagation();
+    const ids = getNotifications().filter((n) => !n.read).map((n) => n.id);
+    void markAllNotificationsReadByIds(ids).then(() => refreshNotificationUI(container));
+    return;
+  }
 
-    if (href) {
-      closeNotificationPanel(container);
-      const path = href.replace(/^#\/?/, "");
-      navigate(path);
-    }
-  });
+  const item = target.closest("[data-notif-id]");
+  if (!item) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const id = item.dataset.notifId;
+  const href = item.dataset.notifHref;
+  void markNotificationReadById(id).then(() => refreshNotificationUI(container));
+
+  if (href) {
+    closeNotificationPanel(container);
+    const path = href.replace(/^#\/?/, "");
+    navigate(path);
+  }
+}
+
+function bindNotificationPanelEvents() {
+  if (document.body.dataset.notifPanelBound) return;
+  document.body.dataset.notifPanelBound = "true";
+
+  document.addEventListener("click", handleNotificationPanelInteraction, true);
+  document.addEventListener("touchend", handleNotificationPanelInteraction, true);
 }
 
 function bindEvents(container) {
@@ -537,7 +554,7 @@ function bindEvents(container) {
     }
   });
 
-  bindNotificationPanelEvents(container);
+  bindNotificationPanelEvents();
 
   const helpBtn = $("#navbar-help-btn", container);
   helpBtn?.addEventListener("click", (e) => {

@@ -2038,6 +2038,63 @@
   color: var(--color-text-primary);
 }
 
+.problem-lc-meta {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-elevated) 80%, transparent);
+}
+
+.problem-lc-meta--ready {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--color-accent) 22%, var(--color-border));
+  background: var(--color-bg-elevated);
+}
+
+.problem-lc-meta__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.problem-lc-meta__main {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.problem-lc-meta__aside {
+  flex-shrink: 0;
+}
+
+.problem-lc-meta__label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-1);
+}
+
+.problem-lc-meta__title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  line-height: var(--leading-snug);
+}
+
+.problem-lc-meta__placeholder,
+.problem-lc-meta__hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.problem-lc-meta__hint {
+  margin-top: var(--space-3);
+}
+
 .leetcode-preview__tags {
   display: flex;
   flex-wrap: wrap;

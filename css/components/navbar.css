@@ -697,6 +697,22 @@
   .navbar-panel--portaled.navbar-notif__panel {
     max-height: min(480px, calc(100dvh - var(--navbar-stack-height) - var(--space-4)));
   }
+
+  .navbar-notif__close,
+  #navbar-notif-mark-all {
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .navbar-notif__item {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .navbar-notif__head-actions {
+    gap: var(--space-2);
+  }
 }
 
 @media (max-width: 400px) {

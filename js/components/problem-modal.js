@@ -3,7 +3,7 @@
  */
 
 import { icon } from "./icons.js";
-import { Modal, Button, Field, Input } from "./ui/index.js";
+import { Modal, Button, Field, Input, DifficultyBadge } from "./ui/index.js";
 import { openModal, closeModal, initModals } from "./ui/interactions.js";
 import {
   createProblem,
@@ -11,7 +11,7 @@ import {
   deleteProblem,
   getProblem,
 } from "../storage/db.js";
-import { PATTERN_CATALOG, DIFFICULTIES, STATUSES, MISSION_TYPES } from "../storage/patterns-catalog.js";
+import { PATTERN_CATALOG, STATUSES, MISSION_TYPES } from "../storage/patterns-catalog.js";
 import {
   fetchLeetcodeProblem,
   parseLeetcodeSlug,
@@ -59,14 +59,73 @@ function renderLeetcodePreview(meta) {
         <span class="leetcode-preview__badge">LeetCode</span>
         ${meta.leetcodeId ? `<span class="leetcode-preview__id">#${meta.leetcodeId}</span>` : ""}
         ${meta.isPaidOnly ? `<span class="leetcode-preview__premium">Premium</span>` : ""}
+        ${meta.difficulty ? DifficultyBadge(meta.difficulty) : ""}
       </div>
-      <div class="leetcode-preview__title">${meta.title || "Problem found"}</div>
       ${meta.topicTags?.length ? `
         <div class="leetcode-preview__tags">
-          ${meta.topicTags.map((t) => `<span class="badge badge--accent badge--sm">${t}</span>`).join("")}
+          ${meta.topicTags.map((t) => `<span class="badge badge--accent badge--sm">${escapeHtml(t)}</span>`).join("")}
         </div>
       ` : ""}
     </div>
+  `;
+}
+
+function renderProblemMetaLocked(p = {}) {
+  const hasMeta = Boolean(p.title?.trim());
+  return `
+    <div class="problem-lc-meta${hasMeta ? " problem-lc-meta--ready" : ""}" id="problem-lc-meta">
+      <input type="hidden" name="title" id="problem-title" value="${escapeAttr(p.title || "")}">
+      <input type="hidden" name="difficulty" id="problem-difficulty" value="${escapeAttr(p.difficulty || "")}">
+      ${hasMeta ? `
+        <div class="problem-lc-meta__row">
+          <div class="problem-lc-meta__main">
+            <span class="problem-lc-meta__label">Problem title</span>
+            <div class="problem-lc-meta__title" id="problem-title-display">${escapeHtml(p.title)}</div>
+          </div>
+          <div class="problem-lc-meta__aside">
+            <span class="problem-lc-meta__label">Difficulty</span>
+            <div id="problem-difficulty-display">${DifficultyBadge(p.difficulty || "Medium")}</div>
+          </div>
+        </div>
+        <p class="problem-lc-meta__hint text-tertiary">Loaded from LeetCode — not editable here.</p>
+      ` : `
+        <p class="problem-lc-meta__placeholder text-tertiary">Paste a LeetCode URL above and tap <strong>Fetch</strong> to load the title and difficulty.</p>
+      `}
+    </div>
+  `;
+}
+
+function updateProblemMetaDisplay(host, meta = {}) {
+  const block = host.querySelector("#problem-lc-meta");
+  if (!block) return;
+
+  const title = meta.title?.trim() || "";
+  const difficulty = meta.difficulty || "";
+
+  const titleInput = host.querySelector("#problem-title");
+  const diffInput = host.querySelector("#problem-difficulty");
+  if (titleInput) titleInput.value = title;
+  if (diffInput) diffInput.value = difficulty;
+
+  block.classList.toggle("problem-lc-meta--ready", Boolean(title));
+  block.innerHTML = `
+    <input type="hidden" name="title" id="problem-title" value="${escapeAttr(title)}">
+    <input type="hidden" name="difficulty" id="problem-difficulty" value="${escapeAttr(difficulty)}">
+    ${title ? `
+      <div class="problem-lc-meta__row">
+        <div class="problem-lc-meta__main">
+          <span class="problem-lc-meta__label">Problem title</span>
+          <div class="problem-lc-meta__title" id="problem-title-display">${escapeHtml(title)}</div>
+        </div>
+        <div class="problem-lc-meta__aside">
+          <span class="problem-lc-meta__label">Difficulty</span>
+          <div id="problem-difficulty-display">${DifficultyBadge(difficulty || "Medium")}</div>
+        </div>
+      </div>
+      <p class="problem-lc-meta__hint text-tertiary">Loaded from LeetCode — not editable here.</p>
+    ` : `
+      <p class="problem-lc-meta__placeholder text-tertiary">Paste a LeetCode URL above and tap <strong>Fetch</strong> to load the title and difficulty.</p>
+    `}
   `;
 }
 
@@ -190,7 +249,7 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
       <div class="leetcode-import">
         <div class="leetcode-import__header">
           <label class="field__label" for="leetcode-url">LeetCode link</label>
-          <span class="leetcode-import__hint">Paste a URL to auto-fill title, difficulty & tags</span>
+          <span class="leetcode-import__hint">Paste a URL to load title, difficulty & tags</span>
         </div>
         <div class="leetcode-import__row">
           <div class="leetcode-import__input-wrap">
@@ -214,9 +273,9 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
         <div id="leetcode-preview-host">${p.title && lcUrl ? renderLeetcodePreview({ ...p, topicTags: p.topicTags }) : ""}</div>
       </div>
 
-      <div class="divider divider--subtle"></div>
+      ${renderProblemMetaLocked(p)}
 
-      ${Field({ label: "Problem title", children: Input({ placeholder: "e.g. Two Sum", value: p.title || "", attrs: 'name="title" id="problem-title" required' }) })}
+      <div class="divider divider--subtle"></div>
 
       <div class="ds-grid md:grid-cols-2 gap-4">
         ${Field({ label: "Topic", children: Input({ placeholder: "e.g. Array · Hash Table", value: p.topic || "", attrs: 'name="topic" id="problem-topic"' }) })}
@@ -245,17 +304,14 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
 
       <div class="ds-grid md:grid-cols-2 gap-4">
         ${Field({
-          label: "Difficulty",
-          children: `<select class="select" name="difficulty" id="problem-difficulty">${selectOptions(DIFFICULTIES, p.difficulty || "Medium")}</select>`,
-        })}
-        ${Field({
           label: "Status",
           children: `<select class="select" name="status">${selectOptions(STATUSES, p.status || "todo")}</select>`,
         })}
+        ${Field({ label: "Est. time (min)", children: Input({ type: "number", value: p.estimatedMinutes || 30, attrs: 'name="estimatedMinutes" id="problem-time" min="5" max="180"' }) })}
       </div>
       <div class="ds-grid md:grid-cols-2 gap-4">
-        ${Field({ label: "Est. time (min)", children: Input({ type: "number", value: p.estimatedMinutes || 30, attrs: 'name="estimatedMinutes" id="problem-time" min="5" max="180"' }) })}
         ${Field({ label: "Attempts", children: Input({ type: "number", value: p.attempts || 0, attrs: 'name="attempts" min="0"' }) })}
+        <div class="field" aria-hidden="true"></div>
       </div>
       <div class="ds-grid md:grid-cols-2 gap-4">
         <label class="checkbox">
@@ -334,10 +390,9 @@ function applyMetadata(host, meta) {
     if (el && val) el.value = val;
   };
 
-  if (meta.title) setVal("title", meta.title);
+  updateProblemMetaDisplay(host, meta);
   if (meta.topic) setVal("topic", meta.topic);
   if (meta.pattern) setSelect("problem-pattern", meta.pattern);
-  if (meta.difficulty) setSelect("problem-difficulty", meta.difficulty);
   if (meta.estimatedMinutes) setVal("estimatedMinutes", meta.estimatedMinutes);
   if (meta.leetcodeUrl) setVal("leetcodeUrl", meta.leetcodeUrl);
   if (meta.leetcodeSlug) setVal("leetcodeSlug", meta.leetcodeSlug);
@@ -719,8 +774,16 @@ export function openProblemModal(problemId = null) {
   const deleteBtn = host.querySelector("#problem-delete-btn");
 
   saveBtn?.addEventListener("click", async () => {
-    if (!form.reportValidity()) return;
     const data = readForm(form);
+
+    if (!data.title?.trim()) {
+      setStatus(host, "Fetch a LeetCode problem first to load the title and difficulty.", "error");
+      return;
+    }
+    if (!data.difficulty?.trim()) {
+      setStatus(host, "Difficulty is missing — refetch the LeetCode link.", "error");
+      return;
+    }
 
     if (!data.leetcodeSlug && data.leetcodeUrl) {
       data.leetcodeSlug = parseLeetcodeSlug(data.leetcodeUrl);
