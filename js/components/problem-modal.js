@@ -264,30 +264,33 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
           </div>
         </header>
 
-        <div class="problem-form__grid problem-form__grid--2">
-          ${Field({
-            label: "Topic",
-            hint: "Auto-filled from tags when available",
-            children: Input({
+        <div class="problem-form__grid problem-form__grid--2 problem-form__grid--classify">
+          <div class="field problem-form__field">
+            <div class="problem-form__field-head">
+              <label class="field__label" for="problem-topic">Topic</label>
+              <span class="problem-form__field-meta">From LeetCode tags</span>
+            </div>
+            ${Input({
               placeholder: "e.g. Array · Hash Table",
               value: p.topic || "",
               attrs: 'name="topic" id="problem-topic"',
-            }),
-          })}
-          <div class="field">
-            <div class="problem-field-header">
+            })}
+          </div>
+          <div class="field problem-form__field">
+            <div class="problem-form__field-head">
               <label class="field__label" for="problem-pattern">Pattern</label>
               ${aiLocked
-                ? `<span id="detect-pattern-btn-wrap" ${showDetect ? "" : "hidden"}>${renderLockedAiButton({ id: "detect-pattern-btn", label: "Auto Detect", size: "xs" })}</span>`
-                : `<button
-                    class="btn btn--ghost btn--xs"
-                    type="button"
-                    id="detect-pattern-btn"
-                    ${showDetect ? "" : "hidden"}
-                  >
-                    ${icon("zap")}
-                    <span>Auto Detect</span>
-                  </button>`}
+                ? `<span class="problem-form__field-action" id="detect-pattern-btn-wrap" ${showDetect ? "" : "hidden"}>${renderLockedAiButton({ id: "detect-pattern-btn", label: "Auto Detect", size: "xs" })}</span>`
+                : `<span class="problem-form__field-action" id="detect-pattern-btn-wrap" ${showDetect ? "" : "hidden"}>
+                    <button
+                      class="btn btn--ghost btn--xs"
+                      type="button"
+                      id="detect-pattern-btn"
+                    >
+                      ${icon("zap")}
+                      <span>Auto Detect</span>
+                    </button>
+                  </span>`}
             </div>
             <select class="select" name="pattern" id="problem-pattern">
               <option value="">Select pattern</option>
