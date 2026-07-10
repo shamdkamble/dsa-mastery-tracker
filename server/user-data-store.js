@@ -2,8 +2,11 @@
  * Per-user problems & activities — MongoDB persistence
  */
 
+import { randomUUID } from "node:crypto";
 import { Problem, toProblemDto } from "./models/Problem.js";
 import { Activity, toActivityDto } from "./models/Activity.js";
+import { UserDataArchive, toArchiveSummaryDto } from "./models/UserDataArchive.js";
+import { resetUserRoadmapProgress, getUserRoadmapProgress } from "./lesson-store.js";
 
 export class UserDataError extends Error {
   constructor(message, { status = 400, code = "DATA_ERROR" } = {}) {
@@ -47,15 +50,36 @@ function sortActivities(activities) {
 }
 
 export async function getUserData(userId) {
-  const [problems, activities] = await Promise.all([
+  const [problems, activities, pendingRestore] = await Promise.all([
     Problem.find({ userId }).lean(),
     Activity.find({ userId }).lean(),
+    UserDataArchive.findOne({
+      userId,
+      restoredAt: { $ne: null },
+      clientAppliedAt: null,
+    }).sort({ restoredAt: -1 }).lean(),
   ]);
 
-  return {
+  const payload = {
     problems: sortProblems(problems.map(toProblemDto)),
     activities: sortActivities(activities.map(toActivityDto)),
   };
+
+  if (pendingRestore?.localSnapshot) {
+    payload.localRestore = pendingRestore.localSnapshot;
+    payload.localRestoreArchiveId = pendingRestore.id;
+  }
+
+  return payload;
+}
+
+export async function acknowledgeLocalRestore(userId, archiveId) {
+  if (!archiveId) return { ok: true };
+  await UserDataArchive.updateOne(
+    { userId, id: archiveId, clientAppliedAt: null },
+    { $set: { clientAppliedAt: new Date().toISOString() } },
+  );
+  return { ok: true };
 }
 
 export async function createProblem(userId, data) {
@@ -174,4 +198,178 @@ export async function migrateUserData(userId, { problems = [], activities = [] }
     migratedProblems: problemDocs.length,
     migratedActivities: activityDocs.length,
   }));
+}
+
+function stripMongoFields(doc) {
+  if (!doc) return doc;
+  const { _id, __v, userId, ...rest } = doc;
+  return rest;
+}
+
+async function bulkInsertProblems(userId, problems) {
+  if (!problems.length) return 0;
+
+  const docs = problems.map((p) => ({
+    userId,
+    id: p.id,
+    ...pickProblemFields(p),
+    createdAt: p.createdAt || new Date().toISOString(),
+    updatedAt: p.updatedAt || new Date().toISOString(),
+  }));
+
+  await Problem.insertMany(docs, { ordered: false }).catch((err) => {
+    if (err.code !== 11000) throw err;
+  });
+
+  return docs.length;
+}
+
+async function bulkInsertActivities(userId, activities) {
+  if (!activities.length) return 0;
+
+  const docs = activities.slice(0, 200).map((a) => ({
+    userId,
+    id: a.id,
+    action: a.action,
+    problemId: a.problemId ?? null,
+    problemTitle: a.problemTitle ?? "",
+    topic: a.topic ?? "",
+    timestamp: a.timestamp || new Date().toISOString(),
+  }));
+
+  await Activity.insertMany(docs, { ordered: false }).catch((err) => {
+    if (err.code !== 11000) throw err;
+  });
+
+  return docs.length;
+}
+
+/**
+ * Archive and wipe all study data for a candidate. Profile/account is untouched.
+ */
+export async function clearUserStudyData(userId, { localSnapshot = {} } = {}) {
+  const [problems, activities, roadmapProgress] = await Promise.all([
+    Problem.find({ userId }).lean(),
+    Activity.find({ userId }).lean(),
+    getUserRoadmapProgress(userId),
+  ]);
+
+  const notes = Array.isArray(localSnapshot.notes) ? localSnapshot.notes : [];
+  const searchRecent = Array.isArray(localSnapshot.searchRecent) ? localSnapshot.searchRecent : [];
+  const meta = localSnapshot.meta && typeof localSnapshot.meta === "object" ? localSnapshot.meta : {};
+
+  const hasData = problems.length > 0
+    || activities.length > 0
+    || (roadmapProgress.completedTopicIds?.length > 0)
+    || notes.length > 0
+    || searchRecent.length > 0
+    || Object.keys(meta).length > 0;
+
+  let archive = null;
+
+  if (hasData) {
+    const archiveId = randomUUID();
+    const archivedAt = new Date().toISOString();
+
+    archive = await UserDataArchive.create({
+      id: archiveId,
+      userId,
+      archivedAt,
+      problems: problems.map((p) => stripMongoFields(toProblemDto(p))),
+      activities: activities.map((a) => stripMongoFields(toActivityDto(a))),
+      roadmapProgress: {
+        completedTopicIds: roadmapProgress.completedTopicIds || [],
+      },
+      localSnapshot: { notes, searchRecent, meta },
+      stats: {
+        problemCount: problems.length,
+        activityCount: activities.length,
+        noteCount: notes.length,
+      },
+    });
+  }
+
+  await Promise.all([
+    Problem.deleteMany({ userId }),
+    Activity.deleteMany({ userId }),
+    resetUserRoadmapProgress(userId),
+  ]);
+
+  return {
+    ok: true,
+    archiveId: archive?.id || null,
+    cleared: {
+      problems: problems.length,
+      activities: activities.length,
+      roadmapTopics: roadmapProgress.completedTopicIds?.length || 0,
+      notes: notes.length,
+    },
+  };
+}
+
+export async function listUserDataArchives(userId) {
+  const docs = await UserDataArchive.find({ userId })
+    .sort({ archivedAt: -1 })
+    .lean();
+
+  return docs.map(toArchiveSummaryDto);
+}
+
+export async function restoreUserStudyData(userId, { archiveId } = {}) {
+  const query = archiveId
+    ? { userId, id: archiveId }
+    : { userId, restoredAt: null };
+
+  const archive = archiveId
+    ? await UserDataArchive.findOne(query).lean()
+    : await UserDataArchive.findOne(query).sort({ archivedAt: -1 }).lean();
+
+  if (!archive) {
+    throw new UserDataError(
+      archiveId ? "Archive not found." : "No restorable archive found for this user.",
+      { status: 404, code: "NOT_FOUND" },
+    );
+  }
+
+  await Promise.all([
+    Problem.deleteMany({ userId }),
+    Activity.deleteMany({ userId }),
+    resetUserRoadmapProgress(userId),
+  ]);
+
+  const problems = Array.isArray(archive.problems) ? archive.problems : [];
+  const activities = Array.isArray(archive.activities) ? archive.activities : [];
+  const completedTopicIds = archive.roadmapProgress?.completedTopicIds || [];
+
+  await bulkInsertProblems(userId, problems);
+  await bulkInsertActivities(userId, activities);
+
+  if (completedTopicIds.length) {
+    const { RoadmapProgress } = await import("./models/RoadmapProgress.js");
+    await RoadmapProgress.findOneAndUpdate(
+      { userId },
+      { $set: { completedTopicIds } },
+      { upsert: true, new: true },
+    );
+  }
+
+  await UserDataArchive.updateOne(
+    { id: archive.id },
+    { $set: { restoredAt: new Date().toISOString() } },
+  );
+
+  const data = await getUserData(userId);
+
+  return {
+    ok: true,
+    archiveId: archive.id,
+    restored: {
+      problems: problems.length,
+      activities: activities.length,
+      roadmapTopics: completedTopicIds.length,
+      notes: archive.localSnapshot?.notes?.length || 0,
+    },
+    localSnapshot: archive.localSnapshot || {},
+    ...data,
+  };
 }

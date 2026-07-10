@@ -13,6 +13,8 @@ import {
   apiUpdateProblem,
   apiDeleteProblem,
   apiCreateActivity,
+  apiClearUserData,
+  apiAcknowledgeLocalRestore,
 } from "../api/userDataApi.js";
 
 const STORAGE_KEY_LEGACY = "dsa-tracker-db";
@@ -172,10 +174,36 @@ function readLocalSnapshot(userId) {
   return null;
 }
 
+function applyLocalRestore(localRestore, archiveId) {
+  if (!localRestore || typeof localRestore !== "object") return;
+
+  if (Array.isArray(localRestore.notes)) {
+    cache.notes = localRestore.notes;
+  }
+  if (Array.isArray(localRestore.searchRecent)) {
+    cache.searchRecent = localRestore.searchRecent;
+  }
+  if (localRestore.meta && typeof localRestore.meta === "object") {
+    cache.meta = { ...cache.meta, ...localRestore.meta };
+  }
+
+  persist({ silent: true });
+
+  if (archiveId) {
+    apiAcknowledgeLocalRestore(archiveId).catch((err) => {
+      console.warn("[db] Failed to acknowledge local restore", err);
+    });
+  }
+}
+
 async function loadRemoteUserData(userId) {
   const remote = await fetchUserData();
   cache.problems = Array.isArray(remote.problems) ? remote.problems : [];
   cache.activities = Array.isArray(remote.activities) ? remote.activities : [];
+
+  if (remote.localRestore) {
+    applyLocalRestore(remote.localRestore, remote.localRestoreArchiveId);
+  }
 
   const local = readLocalSnapshot(userId);
   if (!cache.problems.length && local?.problems?.length) {
@@ -719,8 +747,57 @@ export function importData(json) {
   return cache;
 }
 
-export function clearAllData() {
-  cache = defaultDB();
+function buildStudyLocalSnapshot(db) {
+  return {
+    notes: Array.isArray(db.notes) ? db.notes : [],
+    searchRecent: Array.isArray(db.searchRecent) ? db.searchRecent : [],
+    meta: {
+      longestStreak: db.meta?.longestStreak || 0,
+      calendarMonth: db.meta?.calendarMonth || {
+        year: new Date().getFullYear(),
+        month: new Date().getMonth(),
+      },
+    },
+  };
+}
+
+function applyClearedStudyData(preserved) {
+  const fresh = defaultDB();
+  cache = {
+    ...fresh,
+    user: preserved.user,
+    settings: preserved.settings,
+    problems: [],
+    notes: [],
+    activities: [],
+    searchRecent: [],
+    meta: {
+      ...fresh.meta,
+      readNotificationIds: preserved.meta?.readNotificationIds || [],
+      tour: preserved.meta?.tour || fresh.meta.tour,
+    },
+  };
   touch();
   return cache;
+}
+
+export async function clearAllData() {
+  const db = load();
+  const preserved = {
+    user: { ...db.user },
+    settings: {
+      ...db.settings,
+      notifications: { ...db.settings.notifications },
+    },
+    meta: {
+      readNotificationIds: [...(db.meta?.readNotificationIds || [])],
+      tour: db.meta?.tour ? { ...db.meta.tour } : undefined,
+    },
+  };
+
+  if (isRemoteMode()) {
+    await apiClearUserData(buildStudyLocalSnapshot(db));
+  }
+
+  return applyClearedStudyData(preserved);
 }

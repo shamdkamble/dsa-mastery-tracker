@@ -9,6 +9,11 @@ import {
   updateUserAdmin,
   AuthApiError,
 } from "../services/auth.js";
+import {
+  apiListUserDataArchives,
+  apiRestoreUserStudyData,
+  UserDataApiError,
+} from "../api/userDataApi.js";
 
 const ACCESS_LEVELS = ["standard", "premium", "trial"];
 const STATUS_FILTERS = ["all", "pending", "approved", "rejected", "suspended"];
@@ -121,8 +126,9 @@ function overflowMenu(user) {
     { action: "reject", label: "Reject" },
     { action: "suspend", label: "Suspend" },
     { action: "activate", label: "Activate" },
+    { action: "restore-data", label: "Restore study data" },
     { action: "delete", label: "Delete", danger: true },
-  ].filter((item) => item.action === "delete"
+  ].filter((item) => item.action === "delete" || item.action === "restore-data"
     || (!primaryIds.has(item.action) && !isActionDisabled(item.action, user.status)));
 
   const menuItems = items.map((item) => `
@@ -448,9 +454,62 @@ export default {
       showToast(Toast({ variant, title, text }));
     }
 
+    async function handleRestoreStudyData(userId) {
+      const row = listEl.querySelector(`tr[data-user-id="${userId}"]`);
+      const user = allUsers.find((u) => u.id === userId);
+      row?.classList.add("is-processing");
+
+      try {
+        const { archives } = await apiListUserDataArchives(userId);
+        const restorable = (archives || []).filter((a) => !a.restoredAt);
+        if (!restorable.length) {
+          notify("info", "No archive", `${user?.name || "This user"} has no restorable study data.`);
+          row?.classList.remove("is-processing");
+          return;
+        }
+
+        const latest = restorable[0];
+        const stats = latest.stats || {};
+        const summary = [
+          stats.problemCount ? `${stats.problemCount} problems` : null,
+          stats.activityCount ? `${stats.activityCount} activities` : null,
+          stats.noteCount ? `${stats.noteCount} notes` : null,
+        ].filter(Boolean).join(", ") || "saved study data";
+
+        if (!confirm(
+          `Restore study data for ${user?.name || "this user"}?\n\n`
+          + `Latest backup from ${formatDate(latest.archivedAt)} (${summary}) will replace their current progress.`,
+        )) {
+          row?.classList.remove("is-processing");
+          return;
+        }
+
+        const result = await apiRestoreUserStudyData(userId, { archiveId: latest.id });
+        const restored = result.restored || {};
+        notify(
+          "success",
+          "Study data restored",
+          `Restored ${restored.problems ?? 0} problems and ${restored.activities ?? 0} activities for ${user?.name || "user"}.`,
+        );
+      } catch (err) {
+        const message = err instanceof UserDataApiError || err instanceof AuthApiError
+          ? err.message
+          : "Restore failed.";
+        notify("danger", "Error", message);
+      } finally {
+        row?.classList.remove("is-processing");
+      }
+    }
+
     async function handleAction(userId, action) {
       const row = listEl.querySelector(`tr[data-user-id="${userId}"]`);
       row?.classList.add("is-processing");
+
+      if (action === "restore-data") {
+        row?.classList.remove("is-processing");
+        await handleRestoreStudyData(userId);
+        return;
+      }
 
       if (action === "delete") {
         const user = allUsers.find((u) => u.id === userId);

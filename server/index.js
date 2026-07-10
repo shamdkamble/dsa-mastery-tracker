@@ -44,6 +44,10 @@ import {
   deleteProblemRecord,
   createActivity as createActivityRecord,
   migrateUserData,
+  clearUserStudyData,
+  listUserDataArchives,
+  restoreUserStudyData,
+  acknowledgeLocalRestore,
 } from "./user-data-store.js";
 import {
   connectDB,
@@ -750,6 +754,18 @@ app.get("/api/user-data", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/user-data/ack-restore", requireAuth, async (req, res) => {
+  try {
+    const { archiveId } = req.body ?? {};
+    const result = await acknowledgeLocalRestore(req.auth.sub, archiveId);
+    res.json(result);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/user-data/ack-restore]", err);
+    res.status(500).json({ error: { message: "Failed to acknowledge restore.", code: "SERVER_ERROR" } });
+  }
+});
+
 app.post("/api/user-data/migrate", requireAuth, async (req, res) => {
   try {
     const { problems, activities } = req.body ?? {};
@@ -760,6 +776,43 @@ app.post("/api/user-data/migrate", requireAuth, async (req, res) => {
     if (handleUserDataError(res, err)) return;
     console.error("[/api/user-data/migrate]", err);
     res.status(500).json({ error: { message: "Migration failed.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/user-data/clear", requireAuth, async (req, res) => {
+  try {
+    const { localSnapshot } = req.body ?? {};
+    const result = await clearUserStudyData(req.auth.sub, { localSnapshot });
+    res.json(result);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleUserDataError(res, err)) return;
+    console.error("[/api/user-data/clear]", err);
+    res.status(500).json({ error: { message: "Failed to clear study data.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/auth/admin/users/:userId/data-archives", requireAdmin, async (req, res) => {
+  try {
+    const archives = await listUserDataArchives(req.params.userId);
+    res.json({ archives });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/auth/admin/users/:userId/data-archives]", err);
+    res.status(500).json({ error: { message: "Failed to load archives.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/auth/admin/users/:userId/restore-data", requireAdmin, async (req, res) => {
+  try {
+    const { archiveId } = req.body ?? {};
+    const result = await restoreUserStudyData(req.params.userId, { archiveId });
+    res.json(result);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleUserDataError(res, err)) return;
+    console.error("[/api/auth/admin/users/:userId/restore-data]", err);
+    res.status(500).json({ error: { message: "Failed to restore study data.", code: "SERVER_ERROR" } });
   }
 });
 

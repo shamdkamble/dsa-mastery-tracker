@@ -284,11 +284,35 @@ export function bindSettingsHandlers(root) {
     reader.readAsText(file);
   });
 
-  $("#clear-data-btn", root)?.addEventListener("click", () => {
-    if (confirm("Clear ALL data? This cannot be undone.")) {
-      clearAllData();
-      showToast(Toast({ title: "Data cleared", variant: "info" }));
+  $("#clear-data-btn", root)?.addEventListener("click", async () => {
+    const confirmed = confirm(
+      "Delete all your study data?\n\n"
+      + "This removes problems, notes, activity history, and roadmap progress from your account. "
+      + "Your profile and settings are kept.\n\n"
+      + "An administrator can restore this data for you later if needed.",
+    );
+    if (!confirmed) return;
+
+    const btn = $("#clear-data-btn", root);
+    btn?.setAttribute("disabled", "true");
+
+    try {
+      await clearAllData();
+      const { resetRoadmapProgress } = await import("../storage/roadmap-progress.js");
+      resetRoadmapProgress();
+      showToast(Toast({
+        title: "Study data deleted",
+        text: "Your problems and progress have been cleared.",
+        variant: "info",
+      }));
       refreshPage();
+    } catch (err) {
+      showToast(Toast({
+        title: "Delete failed",
+        text: err?.message || "Could not clear your data. Try again.",
+        variant: "danger",
+      }));
+      btn?.removeAttribute("disabled");
     }
   });
 

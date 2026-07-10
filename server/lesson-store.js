@@ -160,3 +160,12 @@ export async function markTopicComplete(userId, topicId) {
 
   return toProgressDto(doc);
 }
+
+export async function resetUserRoadmapProgress(userId) {
+  await RoadmapProgress.findOneAndUpdate(
+    { userId },
+    { $set: { completedTopicIds: [] } },
+    { upsert: true, new: true },
+  );
+  return { userId, completedTopicIds: [] };
+}

@@ -83,3 +83,25 @@ export function apiDeleteProblem(id) {
 export function apiCreateActivity(activity) {
   return request("/api/activities", { method: "POST", body: activity });
 }
+
+export function apiClearUserData(localSnapshot) {
+  return request("/api/user-data/clear", { method: "POST", body: { localSnapshot } });
+}
+
+export function apiListUserDataArchives(userId) {
+  return request(`/api/auth/admin/users/${encodeURIComponent(userId)}/data-archives`);
+}
+
+export function apiRestoreUserStudyData(userId, { archiveId } = {}) {
+  return request(`/api/auth/admin/users/${encodeURIComponent(userId)}/restore-data`, {
+    method: "POST",
+    body: archiveId ? { archiveId } : {},
+  });
+}
+
+export function apiAcknowledgeLocalRestore(archiveId) {
+  return request("/api/user-data/ack-restore", {
+    method: "POST",
+    body: { archiveId },
+  });
+}

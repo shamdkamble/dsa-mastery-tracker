@@ -252,20 +252,20 @@ export default {
 
             <section id="data" class="settings-section settings-group">
               <h2 class="settings-group__title">Data</h2>
-              <p class="settings-group__desc">Your study data is stored locally in this browser.</p>
+              <p class="settings-group__desc">Export, import, or delete your study progress. Profile and settings are kept when you delete.</p>
               <div class="settings-card settings-card--data">
                 <div class="settings-data-summary">
                   <div>
                     <div class="settings-data-summary__title">${getProblems().length} problems · ${stats.problemsSolved} solved</div>
-                    <div class="settings-data-summary__hint">Stored in localStorage on this device</div>
+                    <div class="settings-data-summary__hint">Problems sync to your account when signed in</div>
                   </div>
-                  ${Badge({ label: "Local only", variant: "outline" })}
+                  ${sessionUser ? Badge({ label: "Cloud sync", variant: "outline" }) : Badge({ label: "This device", variant: "outline" })}
                 </div>
                 <div class="cluster">
                   <button class="btn btn--secondary" id="export-data-btn" type="button">${icon("download")}<span>Export Data</span></button>
                   <button class="btn btn--outline" id="import-data-btn" type="button">Import Data</button>
                   <input type="file" id="import-data-input" accept=".json" class="hidden" aria-hidden="true">
-                  <button class="btn btn--danger" id="clear-data-btn" type="button">Clear All Data</button>
+                  <button class="btn btn--danger" id="clear-data-btn" type="button">Delete All Study Data</button>
                 </div>
               </div>
             </section>
