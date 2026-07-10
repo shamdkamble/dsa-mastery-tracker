@@ -1,11 +1,14 @@
 /**
- * Groq API client (OpenAI-compatible) — used for Mantra Feed hook generation
+ * Groq API client (OpenAI-compatible)
+ * Primary for Mantra Feed hooks; fallback for lessons & problem AI.
  */
 
 import { TeachApiError } from "./gemini.js";
 
 const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
-export const DEFAULT_GROQ_HOOKS_MODEL = "llama-3.3-70b-versatile";
+export const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
+/** @deprecated Use DEFAULT_GROQ_MODEL */
+export const DEFAULT_GROQ_HOOKS_MODEL = DEFAULT_GROQ_MODEL;
 
 export function isGroqConfigured() {
   const raw = process.env.GROQ_API_KEY;
@@ -29,8 +32,12 @@ export function resolveGroqApiKey() {
   return key;
 }
 
+export function resolveGroqModel() {
+  return (process.env.GROQ_MODEL || process.env.GROQ_HOOKS_MODEL || DEFAULT_GROQ_MODEL).trim();
+}
+
 export function resolveGroqHooksModel() {
-  return (process.env.GROQ_HOOKS_MODEL || DEFAULT_GROQ_HOOKS_MODEL).trim();
+  return (process.env.GROQ_HOOKS_MODEL || process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL).trim();
 }
 
 function groqErrorFromResponse(status, data) {
@@ -57,7 +64,7 @@ export async function generateWithGroq({
   signal,
   validateResponse,
 }) {
-  const model = options.model || resolveGroqHooksModel();
+  const model = options.model || resolveGroqModel();
 
   const body = {
     model,

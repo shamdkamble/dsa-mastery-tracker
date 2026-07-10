@@ -1,6 +1,6 @@
 /**
  * DSAMantra — Express app
- * Local dev: serves static files + POST /api/teach (Gemini)
+ * Local dev: serves static files + POST /api/teach (Gemini primary, Groq fallback)
  * Vercel: API routes only (static files served by Vercel CDN)
  */
 
@@ -9,6 +9,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { TeachApiError, resolveApiKey, resolveModel } from "./gemini.js";
+import { isGroqConfigured, resolveGroqModel } from "./groq.js";
 import { detectProblemPattern, analyzeSolutionComplexity } from "./problem-ai.js";
 import { fetchLeetcodeProblem, LeetcodeApiError, parseLeetcodeSlug } from "./leetcode.js";
 import {
@@ -109,13 +110,16 @@ function sendDbError(res, err) {
 }
 
 app.get("/api/health", async (_req, res) => {
-  let keyStatus = "missing";
+  let geminiStatus = "missing";
   try {
     const key = resolveApiKey();
-    keyStatus = key ? "configured" : "missing";
+    geminiStatus = key ? "configured" : "missing";
   } catch {
-    keyStatus = "invalid";
+    geminiStatus = "missing";
   }
+
+  const groqStatus = isGroqConfigured() ? "configured" : "missing";
+  const aiReady = geminiStatus === "configured" || groqStatus === "configured";
 
   let dbOk = false;
   let dbError = null;
@@ -132,10 +136,12 @@ app.get("/api/health", async (_req, res) => {
 
   res.status(dbOk ? 200 : 503).json({
     ok: dbOk,
-    teach: keyStatus === "configured",
-    keyStatus,
-    provider: "gemini",
+    teach: aiReady,
+    keyStatus: geminiStatus,
+    provider: geminiStatus === "configured" ? "gemini" : (groqStatus === "configured" ? "groq" : "none"),
     model: resolveModel(),
+    gemini: { status: geminiStatus, model: resolveModel() },
+    groq: { status: groqStatus, model: resolveGroqModel() },
     userStore: "mongodb-atlas",
     problemStore: dbOk ? "mongodb-atlas" : "unavailable",
     userStorePersistent: dbOk,
@@ -971,20 +977,25 @@ const isMainModule = process.argv[1]
 
 if (!IS_VERCEL && isMainModule) {
   const server = app.listen(PORT, async () => {
-    let keyLabel = "GEMINI_API_KEY not set";
+    let geminiLabel = "not set";
     try {
       const key = resolveApiKey();
-      keyLabel = `configured (${key.slice(0, 6)}...${key.slice(-4)})`;
+      geminiLabel = `configured (${key.slice(0, 6)}...${key.slice(-4)})`;
     } catch (err) {
-      keyLabel = err.message;
+      geminiLabel = err.message;
     }
+
+    const groqLabel = isGroqConfigured()
+      ? `configured (${resolveGroqModel()})`
+      : "not set";
 
     console.log("");
     console.log("  DSAMantra");
     console.log(`  Serving at: http://localhost:${PORT}`);
     console.log(`  API proxy:  POST http://localhost:${PORT}/api/teach`);
-    console.log(`  Provider:   Gemini (${resolveModel()})`);
-    console.log(`  Gemini API: ${keyLabel}`);
+    console.log(`  AI routing: Gemini primary → Groq fallback (hooks: Groq primary)`);
+    console.log(`  Gemini:     ${resolveModel()} — ${geminiLabel}`);
+    console.log(`  Groq:       ${groqLabel}`);
     try {
       await connectDB();
       const diag = getMongoDiagnostics();

@@ -2,11 +2,7 @@
  * AI helpers for problem modal — pattern detection & complexity analysis
  */
 
-import {
-  generateWithModelFallback,
-  resolveApiKey,
-  TeachApiError,
-} from "./gemini.js";
+import { TeachApiError } from "./gemini.js";
 import { PATTERN_CATALOG } from "../js/storage/patterns-catalog.js";
 
 const PATTERN_NAMES = PATTERN_CATALOG.map((p) => p.name);
@@ -133,13 +129,12 @@ function normalizePatternName(name) {
 }
 
 async function generateAndParseJson({ systemPrompt, userPrompt, options }) {
-  const apiKey = resolveApiKey();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 45_000);
 
   try {
-    return await generateWithModelFallback({
-      apiKey,
+    const { generateWithGeminiPrimary } = await import("./ai-provider.js");
+    return await generateWithGeminiPrimary({
       userPrompt,
       options,
       systemPrompt,
@@ -151,7 +146,7 @@ async function generateAndParseJson({ systemPrompt, userPrompt, options }) {
     if (err?.name === "AbortError") {
       throw new TeachApiError("Request timed out.", { status: 504, code: "TIMEOUT" });
     }
-    throw new TeachApiError(err?.message || "Unexpected error calling Gemini.", { status: 500, code: "UNKNOWN" });
+    throw new TeachApiError(err?.message || "Unexpected error calling AI.", { status: 500, code: "UNKNOWN" });
   } finally {
     clearTimeout(timeout);
   }

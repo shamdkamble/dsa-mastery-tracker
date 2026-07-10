@@ -80,8 +80,9 @@ function errorFromResponse(status, data) {
     : "API_ERROR");
 
   const hints = {
-    MISSING_API_KEY: " Set GEMINI_API_KEY in your environment and restart the server.",
-    RATE_LIMITED: " Wait a minute and try again, or check your Gemini API quota.",
+    MISSING_API_KEY: " Set GEMINI_API_KEY or GROQ_API_KEY in your environment and restart the server.",
+    NO_AI_PROVIDER: " Set GEMINI_API_KEY or GROQ_API_KEY in your environment and restart the server.",
+    RATE_LIMITED: " Wait a minute and try again, or check your API quota.",
     NOT_IMPLEMENTED: "",
     SERVER_ERROR: " Ensure the Node server is running (npm start).",
     NETWORK_ERROR: " Start the server with npm start instead of a static-only server.",

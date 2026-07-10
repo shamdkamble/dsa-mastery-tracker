@@ -32,7 +32,8 @@ function errorFromResponse(status, data) {
   const code = data?.error?.code || "API_ERROR";
 
   const hints = {
-    MISSING_API_KEY: " Set GEMINI_API_KEY and restart the server.",
+    MISSING_API_KEY: " Set GEMINI_API_KEY or GROQ_API_KEY and restart the server.",
+    NO_AI_PROVIDER: " Set GEMINI_API_KEY or GROQ_API_KEY and restart the server.",
     RATE_LIMITED: " Wait a moment and try again, or fill in manually.",
     PARSE_ERROR: " Fill in the fields manually.",
     INVALID_PATTERN: " Select a pattern from the dropdown.",

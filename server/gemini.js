@@ -513,13 +513,12 @@ export async function generateContent({ systemPrompt = null, userPrompt, options
     throw new TeachApiError("userPrompt is required.", { status: 400, code: "INVALID_INPUT" });
   }
 
-  const apiKey = resolveApiKey();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 60_000);
 
   try {
-    return await generateWithModelFallback({
-      apiKey,
+    const { generateWithGeminiPrimary } = await import("./ai-provider.js");
+    return await generateWithGeminiPrimary({
       userPrompt,
       options,
       systemPrompt,
@@ -530,7 +529,7 @@ export async function generateContent({ systemPrompt = null, userPrompt, options
     if (err?.name === "AbortError") {
       throw new TeachApiError("Request timed out.", { status: 504, code: "TIMEOUT" });
     }
-    throw new TeachApiError(err?.message || "Unexpected error calling Gemini.", { status: 500, code: "UNKNOWN" });
+    throw new TeachApiError(err?.message || "Unexpected error calling AI.", { status: 500, code: "UNKNOWN" });
   } finally {
     clearTimeout(timeout);
   }
@@ -651,14 +650,13 @@ function buildSimplerUserPrompt(topic, standardContent) {
 export async function teachTopic(topic, options = {}) {
   validateTopic(topic);
 
-  const apiKey = resolveApiKey();
   const userPrompt = buildUserPrompt(topic);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   try {
-    return await generateWithModelFallback({
-      apiKey,
+    const { generateWithGeminiPrimary } = await import("./ai-provider.js");
+    return await generateWithGeminiPrimary({
       userPrompt,
       options: {
         ...options,
@@ -666,14 +664,14 @@ export async function teachTopic(topic, options = {}) {
       },
       signal: controller.signal,
       validateResponse: validateLessonStructure,
-      onSuccess: (model) => console.log(`[gemini] lesson generated with ${model}`),
+      onSuccess: ({ provider, model }) => console.log(`[ai] lesson generated with ${provider}/${model}`),
     });
   } catch (err) {
     if (err instanceof TeachApiError) throw err;
     if (err?.name === "AbortError") {
       throw new TeachApiError("Request timed out.", { status: 504, code: "TIMEOUT" });
     }
-    throw new TeachApiError(err?.message || "Unexpected error calling Gemini.", { status: 500, code: "UNKNOWN" });
+    throw new TeachApiError(err?.message || "Unexpected error calling AI.", { status: 500, code: "UNKNOWN" });
   } finally {
     clearTimeout(timeout);
   }
@@ -686,14 +684,13 @@ export async function teachTopicSimpler(topic, standardContent, options = {}) {
     throw new TeachApiError("Standard lesson content is required to simplify.", { status: 400, code: "INVALID_INPUT" });
   }
 
-  const apiKey = resolveApiKey();
   const userPrompt = buildSimplerUserPrompt(topic, standardContent);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
   try {
-    return await generateWithModelFallback({
-      apiKey,
+    const { generateWithGeminiPrimary } = await import("./ai-provider.js");
+    return await generateWithGeminiPrimary({
       userPrompt,
       options: {
         ...options,
@@ -703,14 +700,14 @@ export async function teachTopicSimpler(topic, standardContent, options = {}) {
       systemPrompt: SIMPLER_TEACHING_SYSTEM_PROMPT,
       signal: controller.signal,
       validateResponse: validateLessonStructure,
-      onSuccess: (model) => console.log(`[gemini] simpler lesson generated with ${model}`),
+      onSuccess: ({ provider, model }) => console.log(`[ai] simpler lesson generated with ${provider}/${model}`),
     });
   } catch (err) {
     if (err instanceof TeachApiError) throw err;
     if (err?.name === "AbortError") {
       throw new TeachApiError("Request timed out.", { status: 504, code: "TIMEOUT" });
     }
-    throw new TeachApiError(err?.message || "Unexpected error calling Gemini.", { status: 500, code: "UNKNOWN" });
+    throw new TeachApiError(err?.message || "Unexpected error calling AI.", { status: 500, code: "UNKNOWN" });
   } finally {
     clearTimeout(timeout);
   }

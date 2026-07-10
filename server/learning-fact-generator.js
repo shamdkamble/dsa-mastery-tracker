@@ -1,6 +1,7 @@
 /**
- * Generate Daily Wisdom hooks via Gemini (shared Mantra Feed)
- * Multi-topic batching: ~18 topics per Gemini call (~6 calls for full roadmap)
+ * Generate Daily Wisdom hooks (shared Mantra Feed)
+ * Groq primary; Gemini fallback on admin approval.
+ * Multi-topic batching: ~18 topics per call (~6 calls for full roadmap)
  */
 
 import crypto from "crypto";
