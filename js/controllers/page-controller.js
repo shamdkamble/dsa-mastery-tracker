@@ -181,17 +181,49 @@ export function bindSearchHandlers(root) {
 
 /* ── Settings handlers ── */
 
+async function handleClearStudyData(root) {
+  const confirmed = confirm(
+    "Delete all your study data?\n\n"
+    + "This removes problems, notes, activity history, and roadmap progress from your account. "
+    + "Your profile and settings are kept.\n\n"
+    + "An administrator can restore this data for you later if needed.",
+  );
+  if (!confirmed) return;
+
+  const btn = $("#clear-data-btn", root);
+  btn?.setAttribute("disabled", "true");
+
+  try {
+    await clearAllData();
+    const { resetRoadmapProgress } = await import("../storage/roadmap-progress.js");
+    resetRoadmapProgress();
+    showToast(Toast({
+      title: "Study data deleted",
+      text: "Your problems and progress have been cleared.",
+      variant: "info",
+    }));
+    refreshPage();
+  } catch (err) {
+    showToast(Toast({
+      title: "Delete failed",
+      text: err?.message || "Could not clear your data. Try again.",
+      variant: "danger",
+    }));
+    btn?.removeAttribute("disabled");
+  }
+}
+
 export function bindSettingsHandlers(root) {
   if (root.dataset.settingsHandlersBound) return;
   root.dataset.settingsHandlersBound = "true";
 
-  const profileForm = $("#settings-profile-form", root);
   const MAX_PHOTO_BYTES = 280_000;
 
-  const saveProfile = debounce(() => {
+  const saveProfile = debounce((scope) => {
+    const profileForm = $("#settings-profile-form", scope);
     if (!profileForm) return;
     const fd = new FormData(profileForm);
-    const photoInput = $("#profile-photo-data", root);
+    const photoInput = $("#profile-photo-data", scope);
     updateUser({
       name: String(fd.get("name") || "").trim(),
       bio: String(fd.get("bio") || "").trim(),
@@ -200,43 +232,64 @@ export function bindSettingsHandlers(root) {
     });
     syncUserState();
     showToast(Toast({ title: "Profile saved", variant: "success" }));
-    refreshProfilePreview(root);
+    refreshProfilePreview(scope);
   }, 500);
 
-  profileForm?.addEventListener("input", () => {
+  root.addEventListener("input", (e) => {
+    if (!e.target.closest("#settings-profile-form")) return;
     refreshProfilePreview(root);
-    saveProfile();
+    saveProfile(root);
   });
-  profileForm?.addEventListener("change", saveProfile);
-
-  const photoFileInput = $("#profile-photo-input", root);
-  photoFileInput?.addEventListener("change", (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      showToast(Toast({ title: "Invalid file", text: "Please choose an image.", variant: "danger" }));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result || "");
-      if (dataUrl.length > MAX_PHOTO_BYTES) {
-        showToast(Toast({ title: "Image too large", text: "Use a photo under 200 KB.", variant: "danger" }));
-        return;
-      }
-      const hidden = $("#profile-photo-data", root);
-      if (hidden) hidden.value = dataUrl;
-      updateUser({ profilePhoto: dataUrl });
-      syncUserState();
-      refreshProfilePreview(root);
-      showToast(Toast({ title: "Photo updated", variant: "success" }));
-    };
-    reader.readAsDataURL(file);
-  });
-
-  $("#profile-photo-remove", root)?.addEventListener("click", () => handlePhotoRemove(root));
 
   root.addEventListener("change", (e) => {
+    if (e.target.closest("#settings-profile-form")) {
+      saveProfile(root);
+      return;
+    }
+
+    if (e.target.id === "profile-photo-input") {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        showToast(Toast({ title: "Invalid file", text: "Please choose an image.", variant: "danger" }));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = String(reader.result || "");
+        if (dataUrl.length > MAX_PHOTO_BYTES) {
+          showToast(Toast({ title: "Image too large", text: "Use a photo under 200 KB.", variant: "danger" }));
+          return;
+        }
+        const hidden = $("#profile-photo-data", root);
+        if (hidden) hidden.value = dataUrl;
+        updateUser({ profilePhoto: dataUrl });
+        syncUserState();
+        refreshProfilePreview(root);
+        showToast(Toast({ title: "Photo updated", variant: "success" }));
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    if (e.target.id === "import-data-input") {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          importData(reader.result);
+          showToast(Toast({ title: "Data imported", variant: "success" }));
+          refreshPage();
+        } catch {
+          showToast(Toast({ title: "Import failed", text: "Invalid JSON file.", variant: "danger" }));
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = "";
+      return;
+    }
+
     const toggle = e.target.closest("[data-setting]");
     if (!toggle) return;
     const key = toggle.dataset.setting;
@@ -255,64 +308,31 @@ export function bindSettingsHandlers(root) {
     }
   });
 
-  $("#export-data-btn", root)?.addEventListener("click", () => {
-    const blob = new Blob([exportData()], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `dsamantra-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast(Toast({ title: "Data exported", variant: "success" }));
-  });
+  root.addEventListener("click", (e) => {
+    if (e.target.closest("#profile-photo-remove")) {
+      handlePhotoRemove(root);
+      return;
+    }
 
-  const importInput = $("#import-data-input", root);
-  $("#import-data-btn", root)?.addEventListener("click", () => importInput?.click());
-  importInput?.addEventListener("change", (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        importData(reader.result);
-        showToast(Toast({ title: "Data imported", variant: "success" }));
-        refreshPage();
-      } catch {
-        showToast(Toast({ title: "Import failed", text: "Invalid JSON file.", variant: "danger" }));
-      }
-    };
-    reader.readAsText(file);
-  });
+    if (e.target.closest("#export-data-btn")) {
+      const blob = new Blob([exportData()], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dsamantra-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast(Toast({ title: "Data exported", variant: "success" }));
+      return;
+    }
 
-  $("#clear-data-btn", root)?.addEventListener("click", async () => {
-    const confirmed = confirm(
-      "Delete all your study data?\n\n"
-      + "This removes problems, notes, activity history, and roadmap progress from your account. "
-      + "Your profile and settings are kept.\n\n"
-      + "An administrator can restore this data for you later if needed.",
-    );
-    if (!confirmed) return;
+    if (e.target.closest("#import-data-btn")) {
+      $("#import-data-input", root)?.click();
+      return;
+    }
 
-    const btn = $("#clear-data-btn", root);
-    btn?.setAttribute("disabled", "true");
-
-    try {
-      await clearAllData();
-      const { resetRoadmapProgress } = await import("../storage/roadmap-progress.js");
-      resetRoadmapProgress();
-      showToast(Toast({
-        title: "Study data deleted",
-        text: "Your problems and progress have been cleared.",
-        variant: "info",
-      }));
-      refreshPage();
-    } catch (err) {
-      showToast(Toast({
-        title: "Delete failed",
-        text: err?.message || "Could not clear your data. Try again.",
-        variant: "danger",
-      }));
-      btn?.removeAttribute("disabled");
+    if (e.target.closest("#clear-data-btn")) {
+      void handleClearStudyData(root);
     }
   });
 
@@ -384,7 +404,6 @@ function refreshProfilePreview(root) {
         "afterend",
         '<button type="button" class="btn btn--ghost btn--sm" id="profile-photo-remove">Remove</button>',
       );
-      $("#profile-photo-remove", root)?.addEventListener("click", () => handlePhotoRemove(root));
     }
   } else if (!u.profilePhoto && removeBtn) {
     removeBtn.remove();
@@ -437,12 +456,16 @@ export function bindCalendarHandlers(root) {
 /* ── Master binder ── */
 
 export function bindPageHandlers(root) {
-  if (pageHandlersRoot === root) return;
+  const isNewRoot = pageHandlersRoot !== root;
   pageHandlersRoot = root;
 
-  bindMissionHandlers(root);
-  bindFilterHandlers(root);
-  bindSearchHandlers(root);
+  if (isNewRoot) {
+    bindMissionHandlers(root);
+    bindFilterHandlers(root);
+    bindSearchHandlers(root);
+    bindCalendarHandlers(root);
+  }
+
+  // Settings controls are rendered after first bind; delegation handles late-mounted elements.
   bindSettingsHandlers(root);
-  bindCalendarHandlers(root);
 }
