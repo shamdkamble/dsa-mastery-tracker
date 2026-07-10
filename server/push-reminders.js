@@ -50,6 +50,14 @@ function isDueNow(type, zoned) {
   return zoned.hour === schedule.hour && zoned.minute === schedule.minute;
 }
 
+/** Hobby Vercel cron runs once per day — match types without exact hour/minute. */
+function isDueDailyBatch(type, zoned) {
+  const schedule = REMINDER_SCHEDULE[type];
+  if (!schedule) return false;
+  if (schedule.weekday !== undefined && zoned.weekday !== schedule.weekday) return false;
+  return true;
+}
+
 async function wasReminderSent(userId, reminderType, dateKey) {
   await connectDB();
   const existing = await PushReminderLog.findOne({ userId, reminderType, dateKey }).lean();
@@ -122,9 +130,11 @@ function buildWeeklySummaryMessage(snapshot) {
 }
 
 /**
- * Run due reminders for the current hour (called by Vercel cron).
+ * Run due reminders (Vercel cron — once daily on Hobby, ~9:00 Asia/Kolkata).
  */
 export async function runScheduledPushReminders() {
+  const isDailyBatch = process.env.VERCEL !== "1" || process.env.CRON_BATCH_MODE !== "hourly";
+  const isTypeDue = isDailyBatch ? isDueDailyBatch : isDueNow;
   const subscribedUserIds = await listDistinctUserIdsWithPushSubscriptions();
   if (!subscribedUserIds.length) {
     return { sent: 0, checked: 0, types: [] };
@@ -150,10 +160,10 @@ export async function runScheduledPushReminders() {
 
     const dueTypes = [];
 
-    if (prefs.dailyReminder && isDueNow("daily-mission", zoned)) dueTypes.push("daily-mission");
-    if (prefs.reviewDue && isDueNow("review-due", zoned)) dueTypes.push("review-due");
-    if (prefs.streakAlert && isDueNow("streak-risk", zoned)) dueTypes.push("streak-risk");
-    if (prefs.weeklySummary && isDueNow("weekly-summary", zoned)) dueTypes.push("weekly-summary");
+    if (prefs.dailyReminder && isTypeDue("daily-mission", zoned)) dueTypes.push("daily-mission");
+    if (prefs.reviewDue && isTypeDue("review-due", zoned)) dueTypes.push("review-due");
+    if (prefs.streakAlert && isTypeDue("streak-risk", zoned)) dueTypes.push("streak-risk");
+    if (prefs.weeklySummary && isTypeDue("weekly-summary", zoned)) dueTypes.push("weekly-summary");
 
     if (!dueTypes.length) continue;
 
