@@ -14,6 +14,8 @@ import { $ } from "../utils.js";
 const TOOLTIP_GAP = 14;
 const VIEWPORT_PAD = 12;
 const NAVBAR_PAD = 64;
+const MOBILE_DOCK_QUERY = "(max-width: 640px)";
+const DOCKED_TOOLTIP_RESERVE = 200;
 const WAIT_MS = 4000;
 
 let active = false;
@@ -77,8 +79,16 @@ function ensureRoot() {
   `;
 
   document.body.appendChild(root);
+  bindTooltipActions(root.querySelector(".product-tour__tooltip"));
 
-  root.addEventListener("click", (e) => {
+  return root;
+}
+
+function bindTooltipActions(tooltipEl) {
+  if (!tooltipEl || tooltipEl.dataset.tourActionsBound) return;
+  tooltipEl.dataset.tourActionsBound = "true";
+
+  tooltipEl.addEventListener("click", (e) => {
     const action = e.target.closest("[data-tour-action]")?.dataset.tourAction;
     if (!action) return;
 
@@ -93,8 +103,33 @@ function ensureRoot() {
       dismissTour();
     }
   });
+}
 
-  return root;
+function getTooltipEl() {
+  return document.querySelector(".product-tour__tooltip");
+}
+
+function portalTooltip() {
+  const tooltipEl = getTooltipEl();
+  if (!tooltipEl || tooltipEl.classList.contains("product-tour__tooltip--portaled")) return;
+
+  document.body.appendChild(tooltipEl);
+  tooltipEl.classList.add("product-tour__tooltip--portaled");
+  bindTooltipActions(tooltipEl);
+}
+
+function restoreTooltip() {
+  const tooltipEl = getTooltipEl();
+  if (!tooltipEl?.classList.contains("product-tour__tooltip--portaled") || !root) return;
+
+  tooltipEl.classList.remove("product-tour__tooltip--portaled", "product-tour__tooltip--docked");
+  root.appendChild(tooltipEl);
+}
+
+function shouldDockTooltip(step, target = currentTarget) {
+  return window.matchMedia(MOBILE_DOCK_QUERY).matches
+    && step?.placement !== "center"
+    && Boolean(target);
 }
 
 function wait(ms) {
@@ -246,24 +281,48 @@ function positionArrow(arrowEl, side, rect, tooltipRect, tooltipTop, tooltipLeft
   arrowEl.style.left = `${arrowLeft}px`;
 }
 
+function positionTooltipDocked(tooltipEl, arrowEl) {
+  tooltipEl.className = "product-tour__tooltip product-tour__tooltip--portaled product-tour__tooltip--docked";
+  tooltipEl.style.transform = "";
+  tooltipEl.style.width = "";
+  tooltipEl.style.top = "auto";
+  tooltipEl.style.left = "";
+  tooltipEl.style.right = "";
+  tooltipEl.style.bottom = "";
+  tooltipEl.dataset.placement = "docked";
+  if (arrowEl) arrowEl.style.display = "none";
+}
+
 function positionTooltipCenter(tooltipEl) {
-  tooltipEl.className = "product-tour__tooltip product-tour__tooltip--center";
+  const arrowEl = $(".product-tour__arrow", tooltipEl);
+  tooltipEl.className = "product-tour__tooltip product-tour__tooltip--portaled product-tour__tooltip--center";
   tooltipEl.style.top = "50%";
   tooltipEl.style.left = "50%";
+  tooltipEl.style.right = "";
+  tooltipEl.style.bottom = "auto";
   tooltipEl.style.transform = "translate(-50%, -50%)";
   tooltipEl.style.width = `min(380px, calc(100vw - ${VIEWPORT_PAD * 2}px))`;
+  if (arrowEl) arrowEl.style.display = "none";
 }
 
 function positionTooltipAnchored(tooltipEl, arrowEl, target, step) {
+  if (shouldDockTooltip(step)) {
+    positionTooltipDocked(tooltipEl, arrowEl);
+    return;
+  }
+
   const rect = getTargetRect(target);
   if (!rect) return;
 
-  tooltipEl.className = "product-tour__tooltip";
+  tooltipEl.className = "product-tour__tooltip product-tour__tooltip--portaled";
   tooltipEl.style.transform = "";
   tooltipEl.style.width = `min(320px, calc(100vw - ${VIEWPORT_PAD * 2}px))`;
   tooltipEl.style.visibility = "hidden";
   tooltipEl.style.top = "0";
   tooltipEl.style.left = "0";
+  tooltipEl.style.right = "";
+  tooltipEl.style.bottom = "auto";
+  if (arrowEl) arrowEl.style.display = "";
 
   const tooltipRect = tooltipEl.getBoundingClientRect();
   const preferred = window.innerWidth <= 640 ? "bottom" : (step.placement || "bottom");
@@ -280,8 +339,8 @@ function positionTooltipAnchored(tooltipEl, arrowEl, target, step) {
 function updateLayout() {
   if (!active || !root) return;
 
-  const tooltipEl = $(".product-tour__tooltip", root);
-  const arrowEl = $(".product-tour__arrow", root);
+  const tooltipEl = getTooltipEl();
+  const arrowEl = tooltipEl ? $(".product-tour__arrow", tooltipEl) : null;
   if (!tooltipEl) return;
 
   if (!currentTarget || currentStep?.placement === "center") {
@@ -292,19 +351,20 @@ function updateLayout() {
   positionTooltipAnchored(tooltipEl, arrowEl, currentTarget, currentStep);
 }
 
-async function scrollTargetIntoView(target) {
+async function scrollTargetIntoView(target, step) {
   if (!target) return;
 
   const container = getScrollContainer();
-  const tooltipEl = $(".product-tour__tooltip", root);
-  const tooltipHeight = tooltipEl?.offsetHeight || 180;
+  const tooltipEl = getTooltipEl();
+  const docked = shouldDockTooltip(step, target);
+  const tooltipHeight = docked ? DOCKED_TOOLTIP_RESERVE : (tooltipEl?.offsetHeight || 180);
 
-  target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+  target.scrollIntoView({ block: docked ? "start" : "center", inline: "nearest", behavior: "auto" });
   await wait(20);
 
   const rect = target.getBoundingClientRect();
   const minTop = NAVBAR_PAD + 8;
-  const maxBottom = window.innerHeight - tooltipHeight - VIEWPORT_PAD - TOOLTIP_GAP;
+  const maxBottom = window.innerHeight - tooltipHeight - VIEWPORT_PAD - (docked ? 0 : TOOLTIP_GAP);
 
   let delta = 0;
   if (rect.top < minTop) delta = rect.top - minTop;
@@ -332,7 +392,7 @@ function bindReposition(target, step) {
   if (typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(repositionHandler);
     if (target) resizeObserver.observe(target);
-    const tooltipEl = $(".product-tour__tooltip", root);
+    const tooltipEl = getTooltipEl();
     if (tooltipEl) resizeObserver.observe(tooltipEl);
   }
 
@@ -354,13 +414,16 @@ function unbindReposition() {
 }
 
 function renderStepUI(step, index) {
-  const iconEl = $("#product-tour-icon", root);
-  const titleEl = $("#product-tour-title", root);
-  const bodyEl = $("#product-tour-body", root);
-  const progressEl = $("#product-tour-progress", root);
-  const progressTextEl = $("#product-tour-progress-text", root);
-  const backBtn = $('[data-tour-action="back"]', root);
-  const nextBtn = $('[data-tour-action="next"]', root);
+  const tooltipEl = getTooltipEl();
+  if (!tooltipEl) return;
+
+  const iconEl = $("#product-tour-icon", tooltipEl);
+  const titleEl = $("#product-tour-title", tooltipEl);
+  const bodyEl = $("#product-tour-body", tooltipEl);
+  const progressEl = $("#product-tour-progress", tooltipEl);
+  const progressTextEl = $("#product-tour-progress-text", tooltipEl);
+  const backBtn = $('[data-tour-action="back"]', tooltipEl);
+  const nextBtn = $('[data-tour-action="next"]', tooltipEl);
 
   if (iconEl) iconEl.innerHTML = icon(step.icon || "info");
   if (titleEl) titleEl.textContent = step.title;
@@ -392,13 +455,13 @@ async function showStep(index) {
 
   if (target) {
     target.classList.add("product-tour__target");
-    await scrollTargetIntoView(target);
+    await scrollTargetIntoView(target, step);
   }
 
   root.dataset.tourTarget = target ? step.id : (step.placement === "center" ? "center" : "missing");
   document.body.classList.toggle("tour-active--anchored", Boolean(target && step.placement !== "center"));
 
-  const tooltipEl = $(".product-tour__tooltip", root);
+  const tooltipEl = getTooltipEl();
   tooltipEl?.classList.add("is-entering");
   window.setTimeout(() => tooltipEl?.classList.remove("is-entering"), 280);
 
@@ -416,6 +479,7 @@ function clearTargetHighlight() {
 
 function openTourUI() {
   ensureRoot();
+  portalTooltip();
   root.removeAttribute("hidden");
   document.body.classList.add("tour-active");
   active = true;
@@ -424,6 +488,7 @@ function openTourUI() {
 function closeTourUI() {
   unbindReposition();
   clearTargetHighlight();
+  restoreTooltip();
   root?.setAttribute("hidden", "");
   document.body.classList.remove("tour-active", "tour-active--anchored");
   active = false;

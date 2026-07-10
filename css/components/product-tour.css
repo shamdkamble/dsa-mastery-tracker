@@ -17,10 +17,10 @@
   animation: product-tour-fade-in 220ms var(--ease-out);
 }
 
-/* Direct highlight on the target element */
+/* Direct highlight on the target element — above backdrop, below tooltip */
 .product-tour__target {
   position: relative;
-  z-index: calc(var(--z-tour) + 2) !important;
+  z-index: calc(var(--z-tour) + 1) !important;
   border-radius: inherit;
   animation: product-tour-highlight-pulse 2.2s ease-in-out infinite;
   box-shadow:
@@ -57,12 +57,30 @@
   }
 }
 
-/* Anchored tooltip */
+/* Anchored tooltip — portaled to body so it stacks above highlighted targets */
 .product-tour__tooltip {
   position: fixed;
-  z-index: calc(var(--z-tour) + 3);
+  z-index: calc(var(--z-tour) + 5);
   pointer-events: auto;
   max-width: min(320px, calc(100vw - 24px));
+}
+
+.product-tour__tooltip--portaled {
+  z-index: calc(var(--z-tour) + 5);
+}
+
+.product-tour__tooltip--docked {
+  left: max(12px, env(safe-area-inset-left, 0px)) !important;
+  right: max(12px, env(safe-area-inset-right, 0px)) !important;
+  bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+  top: auto !important;
+  width: auto !important;
+  max-width: none;
+  transform: none !important;
+}
+
+.product-tour__tooltip--docked .product-tour__arrow {
+  display: none;
 }
 
 .product-tour__tooltip.is-entering {
@@ -287,11 +305,19 @@ body.tour-active .product-tour__target {
     max-width: calc(100vw - 20px);
   }
 
+  .product-tour__tooltip--docked {
+    max-width: none;
+  }
+
   .product-tour__tooltip-inner {
     padding: var(--space-3) var(--space-4);
   }
 
   .product-tour__body {
     margin-bottom: var(--space-3);
+  }
+
+  body.tour-active .content {
+    scroll-padding-bottom: 220px;
   }
 }
