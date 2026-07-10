@@ -588,13 +588,19 @@ app.get("/api/auth/admin/learning-facts/dashboard", requireAdmin, async (req, re
 
 app.post("/api/auth/admin/learning-facts/generate-batch", requireAdmin, async (req, res) => {
   try {
-    const { topicsPerCall, limit, replaceExisting = false } = req.body ?? {};
+    const { topicsPerCall, limit, replaceExisting = false, useGeminiFallback = false } = req.body ?? {};
     const perCall = Number.parseInt(topicsPerCall ?? limit, 10) || 18;
     const result = await generateFactsBatch({
       topicsPerCall: Math.min(Math.max(perCall, 1), 20),
       replaceExisting: replaceExisting === true,
+      useGeminiFallback: useGeminiFallback === true,
     });
-    res.json({ ok: true, result });
+    res.json({
+      ok: !result.needsGeminiFallback,
+      needsGeminiFallback: Boolean(result.needsGeminiFallback),
+      groqError: result.groqError || null,
+      result,
+    });
   } catch (err) {
     if (handleAuthError(res, err)) return;
     console.error("[/api/auth/admin/learning-facts/generate-batch]", err);

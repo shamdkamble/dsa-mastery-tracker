@@ -132,14 +132,19 @@ export async function getDailyWisdomDashboard() {
   return data.dashboard;
 }
 
-export async function generateLearningFactsBatch({ topicsPerCall = 18, replaceExisting = false } = {}) {
+export async function generateLearningFactsBatch({
+  topicsPerCall = 18,
+  replaceExisting = false,
+  useGeminiFallback = false,
+} = {}) {
   const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/learning-facts/generate-batch`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ topicsPerCall, replaceExisting }),
+    body: JSON.stringify({ topicsPerCall, replaceExisting, useGeminiFallback }),
   });
 
   const data = await parseJsonSafe(res);
+  if (data?.needsGeminiFallback) return data;
   if (!res.ok) throw errorFromResponse(res.status, data);
   return data;
 }

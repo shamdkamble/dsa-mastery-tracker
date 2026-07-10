@@ -5,6 +5,7 @@
 
 import crypto from "crypto";
 import { generateWithModelFallback, resolveApiKey, TeachApiError } from "./gemini.js";
+import { generateWithGroq, isGroqConfigured, resolveGroqApiKey } from "./groq.js";
 import {
   getTopicById,
   getOrderedRoadmapTopics,
@@ -204,22 +205,35 @@ async function saveFactsForTopic(topicId, facts, { replaceExisting = false } = {
   return saved;
 }
 
-async function callGeminiForFacts({
+function resolveHooksProvider(useGeminiFallback = false) {
+  return useGeminiFallback ? "gemini" : "groq";
+}
+
+async function callHooksLlmForFacts({
+  provider = "groq",
   userPrompt,
   maxTokens,
   timeoutMs,
   validateResponse,
 }) {
-  const apiKey = resolveApiKey();
-  if (!apiKey) {
-    throw new TeachApiError("Gemini API key is not configured.", { status: 503, code: "API_KEY_MISSING" });
-  }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await generateWithModelFallback({
+    if (provider === "gemini") {
+      const apiKey = resolveApiKey();
+      return await generateWithModelFallback({
+        apiKey,
+        systemPrompt: FACT_SYSTEM_PROMPT,
+        userPrompt,
+        options: { json: true, temperature: 0.85, maxTokens },
+        signal: controller.signal,
+        validateResponse,
+      });
+    }
+
+    const apiKey = resolveGroqApiKey();
+    return await generateWithGroq({
       apiKey,
       systemPrompt: FACT_SYSTEM_PROMPT,
       userPrompt,
@@ -236,13 +250,14 @@ async function callGeminiForFacts({
  * @param {string} topicId
  * @param {{ replaceExisting?: boolean }} options
  */
-export async function generateFactsForTopic(topicId, { replaceExisting = true } = {}) {
+export async function generateFactsForTopic(topicId, { replaceExisting = true, provider = "groq" } = {}) {
   const topic = getTopicById(topicId);
   if (!topic) {
     throw new TeachApiError("Unknown topic id.", { status: 404, code: "NOT_FOUND" });
   }
 
-  const result = await callGeminiForFacts({
+  const result = await callHooksLlmForFacts({
+    provider,
     userPrompt: buildSingleTopicPrompt(topic),
     maxTokens: 1024,
     timeoutMs: SINGLE_TOPIC_TIMEOUT_MS,
@@ -264,17 +279,19 @@ export async function generateFactsForTopic(topicId, { replaceExisting = true } 
     generated: saved.length,
     model: result.model,
     mode: "single",
+    provider,
     facts: saved,
   };
 }
 
 /**
- * One Gemini call for multiple topics; per-topic fallback on partial failure.
+ * One LLM call for multiple topics; per-topic fallback on partial failure (same provider).
  */
-async function generateFactsMultiTopicCall(topics, { replaceExisting = false } = {}) {
-  if (!topics.length) return { results: [], errors: [], mode: "multi", model: null };
+async function generateFactsMultiTopicCall(topics, { replaceExisting = false, provider = "groq" } = {}) {
+  if (!topics.length) return { results: [], errors: [], mode: "multi", model: null, provider };
 
-  const result = await callGeminiForFacts({
+  const result = await callHooksLlmForFacts({
+    provider,
     userPrompt: buildMultiTopicPrompt(topics),
     maxTokens: 8192,
     timeoutMs: MULTI_BATCH_TIMEOUT_MS,
@@ -314,7 +331,7 @@ async function generateFactsMultiTopicCall(topics, { replaceExisting = false } =
     }
 
     try {
-      const single = await generateFactsForTopic(topic.id, { replaceExisting });
+      const single = await generateFactsForTopic(topic.id, { replaceExisting, provider });
       single.mode = "single_fallback";
       results.push(single);
     } catch (err) {
@@ -327,22 +344,26 @@ async function generateFactsMultiTopicCall(topics, { replaceExisting = false } =
     }
   }
 
-  return { results, errors, mode: "multi", model: result.model };
+  return { results, errors, mode: "multi", model: result.model, provider };
 }
 
 /**
- * Try multi-topic batch; on total failure retry each topic individually.
+ * Try multi-topic batch; Groq failures require admin-approved Gemini fallback.
  */
-async function generateFactsWithBatchFallback(topics, { replaceExisting = false } = {}) {
+async function generateFactsWithBatchFallback(topics, { replaceExisting = false, provider = "groq" } = {}) {
   try {
-    return await generateFactsMultiTopicCall(topics, { replaceExisting });
+    return await generateFactsMultiTopicCall(topics, { replaceExisting, provider });
   } catch (batchErr) {
+    if (provider === "groq") {
+      throw batchErr;
+    }
+
     const results = [];
     const errors = [];
 
     for (const topic of topics) {
       try {
-        const single = await generateFactsForTopic(topic.id, { replaceExisting });
+        const single = await generateFactsForTopic(topic.id, { replaceExisting, provider: "gemini" });
         single.mode = "single_fallback";
         results.push(single);
       } catch (err) {
@@ -360,9 +381,39 @@ async function generateFactsWithBatchFallback(topics, { replaceExisting = false 
       errors,
       mode: "single_fallback",
       model: null,
+      provider: "gemini",
       batchError: batchErr?.message || String(batchErr),
     };
   }
+}
+
+function buildGroqFailureResult({ queueTotal, perCall, groqError }) {
+  const totalBatches = Math.ceil(queueTotal / perCall) || 1;
+  return {
+    topicsPerCall: perCall,
+    provider: "groq",
+    mode: "groq_failed",
+    needsGeminiFallback: true,
+    groqError,
+    processed: 0,
+    succeeded: 0,
+    failed: 0,
+    skipped: 0,
+    fallbackCount: 0,
+    remaining: queueTotal,
+    queueTotal,
+    totalBatches,
+    batchIndex: 0,
+    completedTopics: 0,
+    totalTopics: getOrderedRoadmapTopics().length,
+    coveredTopics: null,
+    results: [],
+    errors: [],
+    activity: [{
+      status: "warning",
+      message: `Groq failed: ${groqError}. Approve Gemini fallback to continue.`,
+    }],
+  };
 }
 
 export async function listTopicsNeedingFacts({ minFacts = MIN_FACTS_PER_TOPIC } = {}) {
@@ -394,13 +445,14 @@ async function resolveTopicsQueue({ replaceExisting = false } = {}) {
   return listTopicsNeedingFacts();
 }
 
-function buildBatchActivity({ results, errors, mode, batchError }) {
+function buildBatchActivity({ results, errors, mode, batchError, provider = "groq" }) {
   const lines = [];
+  const label = provider === "gemini" ? "Gemini" : "Groq";
 
   if (mode === "single_fallback" && batchError) {
-    lines.push({ status: "warning", message: `Batch call failed — retried topics individually: ${batchError}` });
+    lines.push({ status: "warning", message: `${label} batch failed — retried topics individually: ${batchError}` });
   } else if (mode === "multi") {
-    lines.push({ status: "success", message: `Multi-topic Gemini batch (${results.length} saved)` });
+    lines.push({ status: "success", message: `Multi-topic ${label} batch (${results.length} saved)` });
   }
 
   for (const r of results) {
@@ -424,13 +476,15 @@ function buildBatchActivity({ results, errors, mode, batchError }) {
 }
 
 /**
- * Process next chunk of topics in one Gemini call (up to topicsPerCall).
+ * Process next chunk of topics in one LLM call (up to topicsPerCall). Default: Groq.
  */
 export async function generateFactsBatch({
   topicsPerCall = TOPICS_PER_GEMINI_CALL,
   replaceExisting = false,
+  useGeminiFallback = false,
 } = {}) {
   const perCall = Math.min(Math.max(Number.parseInt(topicsPerCall, 10) || TOPICS_PER_GEMINI_CALL, 1), 20);
+  const provider = resolveHooksProvider(useGeminiFallback);
   const pending = await resolveTopicsQueue({ replaceExisting });
   const queueTotal = pending.length;
   const batchItems = pending.slice(0, perCall);
@@ -441,7 +495,9 @@ export async function generateFactsBatch({
   if (!topics.length) {
     return {
       topicsPerCall: perCall,
+      provider,
       mode: "idle",
+      needsGeminiFallback: false,
       processed: 0,
       succeeded: 0,
       failed: 0,
@@ -458,37 +514,62 @@ export async function generateFactsBatch({
     };
   }
 
-  const { results, errors, mode, model, batchError } = await generateFactsWithBatchFallback(topics, {
-    replaceExisting,
-  });
+  if (provider === "groq" && !isGroqConfigured()) {
+    const failure = buildGroqFailureResult({
+      queueTotal,
+      perCall,
+      groqError: "GROQ_API_KEY is not configured on the server.",
+    });
+    failure.coveredTopics = await listTopicIdsWithFacts().then((ids) => ids.length);
+    return failure;
+  }
 
-  const remaining = Math.max(0, queueTotal - batchItems.length);
-  const totalBatches = Math.ceil(queueTotal / perCall) || 1;
-  const batchIndex = totalBatches - Math.ceil(remaining / perCall);
+  try {
+    const { results, errors, mode, model, batchError } = await generateFactsWithBatchFallback(topics, {
+      replaceExisting,
+      provider,
+    });
 
-  const fallbackCount = results.filter((r) => r.mode === "single_fallback").length;
+    const remaining = Math.max(0, queueTotal - batchItems.length);
+    const totalBatches = Math.ceil(queueTotal / perCall) || 1;
+    const batchIndex = totalBatches - Math.ceil(remaining / perCall);
+    const fallbackCount = results.filter((r) => r.mode === "single_fallback").length;
 
-  return {
-    topicsPerCall: perCall,
-    mode,
-    model: model || null,
-    batchError: batchError || null,
-    processed: batchItems.length,
-    succeeded: results.length,
-    failed: errors.length,
-    skipped: Math.max(0, batchItems.length - results.length - errors.length),
-    fallbackCount,
-    remaining,
-    queueTotal,
-    totalBatches,
-    batchIndex,
-    completedTopics: queueTotal - remaining,
-    totalTopics: getOrderedRoadmapTopics().length,
-    coveredTopics: (await listTopicIdsWithFacts()).length,
-    results,
-    errors,
-    activity: buildBatchActivity({ results, errors, mode, batchError }),
-  };
+    return {
+      topicsPerCall: perCall,
+      provider,
+      mode,
+      model: model || null,
+      batchError: batchError || null,
+      needsGeminiFallback: false,
+      processed: batchItems.length,
+      succeeded: results.length,
+      failed: errors.length,
+      skipped: Math.max(0, batchItems.length - results.length - errors.length),
+      fallbackCount,
+      remaining,
+      queueTotal,
+      totalBatches,
+      batchIndex,
+      completedTopics: queueTotal - remaining,
+      totalTopics: getOrderedRoadmapTopics().length,
+      coveredTopics: (await listTopicIdsWithFacts()).length,
+      results,
+      errors,
+      activity: buildBatchActivity({ results, errors, mode, batchError, provider }),
+    };
+  } catch (err) {
+    if (provider === "groq" && !useGeminiFallback) {
+      const failure = buildGroqFailureResult({
+        queueTotal,
+        perCall,
+        groqError: err?.message || "Groq request failed.",
+      });
+      failure.coveredTopics = await listTopicIdsWithFacts().then((ids) => ids.length);
+      return failure;
+    }
+    throw err;
+  }
 }
 
 export async function getLearningFactsPoolStats() {
@@ -508,5 +589,7 @@ export async function getLearningFactsPoolStats() {
     totalActiveFacts: totalFacts,
     factsPerTopicTarget: FACTS_PER_TOPIC,
     topicsPerGeminiCall: TOPICS_PER_GEMINI_CALL,
+    hooksProviderDefault: "groq",
+    groqConfigured: isGroqConfigured(),
   };
 }

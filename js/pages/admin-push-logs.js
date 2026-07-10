@@ -377,8 +377,8 @@ export default {
       appendGenLogEntry(genLogEl, {
         status: "info",
         message: replaceExisting
-          ? "Regenerating all topics (18 per Gemini call)…"
-          : "Generating missing hooks (18 topics per Gemini call)…",
+          ? "Regenerating all topics via Groq (18 per call)…"
+          : "Generating missing hooks via Groq (18 topics per call)…",
       });
 
       let remaining = 1;
@@ -389,12 +389,47 @@ export default {
       let cumulativeSkipped = 0;
       const batchDurations = [];
       let stopped = false;
+      let useGeminiFallback = false;
 
       try {
         while (remaining > 0 && !generationAbort) {
           const batchStart = Date.now();
 
-          const data = await generateLearningFactsBatch({ topicsPerCall: 18, replaceExisting });
+          const data = await generateLearningFactsBatch({
+            topicsPerCall: 18,
+            replaceExisting,
+            useGeminiFallback,
+          });
+
+          if (data?.needsGeminiFallback && !useGeminiFallback) {
+            const groqErr = data.groqError || data.result?.groqError || "Groq unavailable";
+            appendGenLogEntry(genLogEl, { status: "warning", message: `Groq failed: ${groqErr}` });
+
+            const approved = window.confirm(
+              `Groq could not generate hooks:\n\n${groqErr}\n\nSwitch to Gemini for the rest of this run?\n(This will use your Gemini API quota.)`,
+            );
+
+            if (!approved) {
+              stopped = true;
+              appendGenLogEntry(genLogEl, { status: "warning", message: "Gemini fallback declined — generation stopped." });
+              showToast(Toast({
+                title: "Generation paused",
+                text: "Groq failed. Gemini fallback was not approved.",
+                variant: "warning",
+              }));
+              break;
+            }
+
+            useGeminiFallback = true;
+            appendGenLogEntry(genLogEl, { status: "info", message: "Admin approved Gemini fallback." });
+            showToast(Toast({
+              title: "Switched to Gemini",
+              text: "Continuing hook generation with Gemini.",
+              variant: "warning",
+            }));
+            continue;
+          }
+
           const batch = data.result;
 
           if (batch.mode === "idle" || batch.queueTotal === 0) {
@@ -427,6 +462,10 @@ export default {
             skipped: cumulativeSkipped,
             etaSeconds,
           });
+
+          if (batch.provider === "gemini" && useGeminiFallback) {
+            appendGenLogEntry(genLogEl, { status: "info", message: "Running batch on Gemini (approved fallback)." });
+          }
 
           for (const line of batch.activity || []) {
             appendGenLogEntry(genLogEl, line);
