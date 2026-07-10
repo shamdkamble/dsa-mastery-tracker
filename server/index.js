@@ -74,6 +74,11 @@ import { deliverUndeliveredAccessPushes } from "./push-access-delivery.js";
 import { listPushDeliveryLogs, getPushDeliveryLogStats } from "./push-delivery-log-db.js";
 import { seedPilotLearningFacts } from "./topic-learning-facts-db.js";
 import {
+  generateFactsBatch,
+  generateFactsForTopic,
+  getLearningFactsPoolStats,
+} from "./learning-fact-generator.js";
+import {
   deliverLearningFactToUser,
   previewLearningFactForUser,
 } from "./learning-fact-delivery.js";
@@ -538,6 +543,50 @@ app.post("/api/auth/admin/learning-facts/seed", requireAdmin, async (_req, res) 
   } catch (err) {
     console.error("[/api/auth/admin/learning-facts/seed]", err);
     res.status(500).json({ error: { message: "Failed to seed learning facts.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/auth/admin/learning-facts/stats", requireAdmin, async (_req, res) => {
+  try {
+    const stats = await getLearningFactsPoolStats();
+    res.json({ stats });
+  } catch (err) {
+    console.error("[/api/auth/admin/learning-facts/stats]", err);
+    res.status(500).json({ error: { message: "Failed to load fact pool stats.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/auth/admin/learning-facts/generate-batch", requireAdmin, async (req, res) => {
+  try {
+    const { limit = 6, replaceExisting = true } = req.body ?? {};
+    const result = await generateFactsBatch({
+      limit: Number.parseInt(limit, 10) || 6,
+      replaceExisting: replaceExisting !== false,
+    });
+    res.json({ ok: true, result });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/auth/admin/learning-facts/generate-batch]", err);
+    const status = err?.status || 500;
+    res.status(status).json({
+      error: { message: err?.message || "Batch generation failed.", code: err?.code || "SERVER_ERROR" },
+    });
+  }
+});
+
+app.post("/api/auth/admin/learning-facts/generate/:topicId", requireAdmin, async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const { replaceExisting = true } = req.body ?? {};
+    const result = await generateFactsForTopic(topicId, { replaceExisting: replaceExisting !== false });
+    res.json({ ok: true, result });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/auth/admin/learning-facts/generate/:topicId]", err);
+    const status = err?.status || 500;
+    res.status(status).json({
+      error: { message: err?.message || "Generation failed.", code: err?.code || "SERVER_ERROR" },
+    });
   }
 });
 

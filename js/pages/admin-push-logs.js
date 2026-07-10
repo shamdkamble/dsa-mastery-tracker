@@ -4,6 +4,8 @@ import { Badge, EmptyState, SkeletonTable } from "../components/ui/index.js";
 import {
   getPushDeliveryLogs,
   seedLearningFacts,
+  getLearningFactsPoolStats,
+  generateLearningFactsBatch,
   deliverLearningFactToMe,
   deliverLearningFactToUser,
   previewLearningFactAnchor,
@@ -193,19 +195,21 @@ export default {
           <section class="card learning-facts-guide">
             <div class="card__body learning-facts-guide__body">
               <div>
-                <h2 class="learning-facts-guide__title">Learning facts — how to push</h2>
+                <h2 class="learning-facts-guide__title">Learning facts — catchy push pool</h2>
                 <ol class="learning-facts-guide__steps">
-                  <li><strong>Seed facts</strong> — loads pilot facts into the database (you did this).</li>
-                  <li><strong>Send fact</strong> — picks the user's current roadmap topic and sends bell + system push.</li>
-                  <li><strong>Student taps notification</strong> — opens that topic's AI lesson on the roadmap.</li>
+                  <li><strong>Generate all facts (AI)</strong> — builds 3 Zomato-style hooks per roadmap topic into the shared pool.</li>
+                  <li><strong>Send fact</strong> — uses the student's <em>next</em> incomplete topic and personalizes: "Hey Sham 👋 … Tap to learn →".</li>
+                  <li><strong>Student taps</strong> — opens that topic's lesson on the roadmap.</li>
                 </ol>
-                <p class="learning-facts-guide__note text-secondary">
-                  Automatic hourly delivery comes in Phase 2. For now, send manually with the buttons below.
-                </p>
-                <p class="learning-facts-guide__anchor text-tertiary" id="learning-facts-anchor-preview">Your anchor topic: loading…</p>
+                <p class="learning-facts-guide__pool text-secondary" id="learning-facts-pool-stats">Fact pool: loading…</p>
+                <p class="learning-facts-guide__anchor text-tertiary" id="learning-facts-anchor-preview">Preview: loading…</p>
               </div>
               <div class="learning-facts-guide__actions">
-                <button type="button" class="btn btn--primary btn--sm" id="learning-facts-send-me">
+                <button type="button" class="btn btn--primary btn--sm" id="learning-facts-generate-all">
+                  ${icon("zap")}
+                  <span>Generate all facts (AI)</span>
+                </button>
+                <button type="button" class="btn btn--ghost btn--sm" id="learning-facts-send-me">
                   ${icon("bell")}
                   <span>Send fact to me</span>
                 </button>
@@ -286,6 +290,8 @@ export default {
     const sourceFilter = container.querySelector("#push-logs-source");
     const refreshBtn = container.querySelector("#push-logs-refresh");
     const seedFactsBtn = container.querySelector("#push-logs-seed-facts");
+    const generateAllBtn = container.querySelector("#learning-facts-generate-all");
+    const poolStatsEl = container.querySelector("#learning-facts-pool-stats");
     const sendMeBtn = container.querySelector("#learning-facts-send-me");
     const sendUserBtn = container.querySelector("#learning-facts-send-user");
     const userIdInput = container.querySelector("#learning-facts-user-id");
@@ -353,20 +359,88 @@ export default {
 
     refreshBtn?.addEventListener("click", () => { void loadLogs(); });
 
+    async function loadPoolStats() {
+      if (!poolStatsEl) return;
+      try {
+        const stats = await getLearningFactsPoolStats();
+        poolStatsEl.textContent = `Fact pool: ${stats.topicsWithFacts}/${stats.totalTopics} topics covered · ${stats.totalActiveFacts} active hooks · ${stats.topicsMissingFacts} topics still need AI generation`;
+      } catch {
+        poolStatsEl.textContent = "Fact pool: could not load stats";
+      }
+    }
+
     async function loadAnchorPreview() {
       if (!anchorPreview) return;
       try {
         const data = await previewLearningFactAnchor();
         if (!data.anchor) {
-          anchorPreview.textContent = "Your anchor topic: none (admin may have completed all topics)";
+          anchorPreview.textContent = "Preview: no next topic (all complete or locked)";
           return;
         }
-        const next = data.fact ? ` · next fact: "${data.fact.title}"` : " · no new facts left for this topic";
-        anchorPreview.textContent = `Your anchor topic: ${data.anchor.topicName} (${data.anchor.topicId})${next}`;
+        if (data.previewMessage) {
+          anchorPreview.textContent = `Preview for ${data.anchor.topicName}: "${data.previewMessage.title} ${data.previewMessage.body}"`;
+          return;
+        }
+        anchorPreview.textContent = `Next topic: ${data.anchor.topicName} — no unused facts in pool yet (generate AI facts)`;
       } catch {
-        anchorPreview.textContent = "Your anchor topic: could not load";
+        anchorPreview.textContent = "Preview: could not load";
       }
     }
+
+    async function runGenerateAllFacts() {
+      if (!generateAllBtn) return;
+      generateAllBtn.disabled = true;
+      const originalLabel = generateAllBtn.querySelector("span")?.textContent;
+
+      try {
+        let remaining = 1;
+        let totalProcessed = 0;
+
+        while (remaining > 0) {
+          if (generateAllBtn.querySelector("span")) {
+            generateAllBtn.querySelector("span").textContent = `Generating… (${totalProcessed} done)`;
+          }
+
+          const data = await generateLearningFactsBatch({ limit: 6, replaceExisting: true });
+          const batch = data.result;
+          totalProcessed += batch.succeeded || 0;
+          remaining = batch.remaining ?? 0;
+
+          if (batch.failed > 0 && batch.succeeded === 0) {
+            throw new AuthApiError(batch.errors?.[0]?.message || "AI generation failed.", {
+              status: 502,
+              details: batch,
+            });
+          }
+
+          if (remaining > 0) {
+            await new Promise((r) => { setTimeout(r, 800); });
+          }
+        }
+
+        showToast(Toast({
+          title: "All topic facts generated",
+          text: `Catchy hooks are ready in the shared pool for every roadmap topic.`,
+          variant: "success",
+        }));
+        void loadPoolStats();
+        void loadAnchorPreview();
+      } catch (err) {
+        showToast(Toast({
+          title: "Generation stopped",
+          text: err instanceof AuthApiError ? err.message : "Could not finish generating all facts.",
+          variant: "danger",
+        }));
+        void loadPoolStats();
+      } finally {
+        if (generateAllBtn.querySelector("span") && originalLabel) {
+          generateAllBtn.querySelector("span").textContent = originalLabel;
+        }
+        generateAllBtn.disabled = false;
+      }
+    }
+
+    generateAllBtn?.addEventListener("click", () => { void runGenerateAllFacts(); });
 
     function formatDeliverResult(data) {
       const push = data.pushDelivery;
@@ -378,7 +452,7 @@ export default {
 
     function formatDeliverError(err, data) {
       if (data?.reason === "no_facts") {
-        return "No facts for this user's topic. Seed facts first, or user anchor is past the 5 pilot topics.";
+        return "No facts for this user's next topic. Click Generate all facts (AI) first.";
       }
       if (data?.reason === "already_delivered") {
         return "This user already received all facts for their current topic. They need to complete a topic or wait for more facts.";
@@ -444,6 +518,7 @@ export default {
       }
     });
 
+    void loadPoolStats();
     void loadAnchorPreview();
 
     seedFactsBtn?.addEventListener("click", async () => {

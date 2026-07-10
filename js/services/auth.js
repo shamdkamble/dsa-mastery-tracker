@@ -112,6 +112,28 @@ export async function getAllUsers() {
   return data.users;
 }
 
+export async function getLearningFactsPoolStats() {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/learning-facts/stats`, {
+    headers: authHeaders(),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data.stats;
+}
+
+export async function generateLearningFactsBatch({ limit = 6, replaceExisting = true } = {}) {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/learning-facts/generate-batch`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ limit, replaceExisting }),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}
+
 export async function seedLearningFacts() {
   const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/learning-facts/seed`, {
     method: "POST",

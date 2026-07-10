@@ -13,6 +13,8 @@ import {
   listDeliveredFactIdsForUser,
   recordUserFactDelivery,
 } from "./user-fact-deliveries-db.js";
+import { personalizeLearningFactMessage } from "./learning-fact-personalize.js";
+import { resolveUserDisplayName } from "./learning-fact-users.js";
 
 /**
  * Pick the next fact for a user at their anchor topic that they have not seen.
@@ -58,9 +60,15 @@ export async function deliverLearningFactToUser(userId, { factId, sendPush = tru
     return { ok: false, reason: "already_delivered", anchor, fact };
   }
 
+  const userName = await resolveUserDisplayName(userId);
+  const message = personalizeLearningFactMessage(fact, {
+    userName,
+    topicName: anchor.topicName,
+  });
+
   const notification = await createUserNotification(userId, {
-    title: fact.title,
-    text: fact.body,
+    title: message.title,
+    text: message.body,
     variant: "accent",
     href: fact.deepLink,
   }, {
@@ -70,8 +78,8 @@ export async function deliverLearningFactToUser(userId, { factId, sendPush = tru
   let push = null;
   if (sendPush) {
     push = await sendPushToUser(userId, {
-      title: fact.title,
-      body: fact.body,
+      title: message.title,
+      body: message.body,
       url: fact.deepLink,
       tag: `learning-fact-${anchor.topicId}`,
     }, {
@@ -96,6 +104,7 @@ export async function deliverLearningFactToUser(userId, { factId, sendPush = tru
     ok: true,
     anchor,
     fact,
+    message,
     notification,
     push,
   };
@@ -117,10 +126,15 @@ export async function previewLearningFactForUser(userId) {
 
   const delivered = new Set(deliveredIds);
   const fact = facts.find((f) => !delivered.has(f.id)) || null;
+  const userName = await resolveUserDisplayName(userId);
+  const previewMessage = fact
+    ? personalizeLearningFactMessage(fact, { userName, topicName: anchor.topicName })
+    : null;
 
   return {
     anchor,
     fact,
+    previewMessage,
     availableFacts: facts.length,
     deliveredCount: deliveredIds.length,
   };

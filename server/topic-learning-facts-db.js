@@ -82,6 +82,22 @@ export async function countFactsForTopic(topicId) {
   return TopicLearningFact.countDocuments({ topicId, active: true });
 }
 
+export async function listTopicIdsWithFacts() {
+  await connectDB();
+  return TopicLearningFact.distinct("topicId", { active: true });
+}
+
+export async function deactivateFactsForTopic(topicId, { sources } = {}) {
+  if (!topicId) return 0;
+
+  await connectDB();
+  const query = { topicId, active: true };
+  if (sources?.length) query.source = { $in: sources };
+
+  const result = await TopicLearningFact.updateMany(query, { $set: { active: false } });
+  return result.modifiedCount;
+}
+
 export async function seedPilotLearningFacts() {
   await connectDB();
 
