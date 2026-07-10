@@ -10,6 +10,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { TeachApiError, resolveApiKey, resolveModel } from "./gemini.js";
 import { isGroqConfigured, resolveGroqModel } from "./groq.js";
+import { getSystemArchitectureLiveSnapshot } from "./system-architecture-live.js";
 import { detectProblemPattern, analyzeSolutionComplexity } from "./problem-ai.js";
 import { fetchLeetcodeProblem, LeetcodeApiError, parseLeetcodeSlug } from "./leetcode.js";
 import {
@@ -589,6 +590,16 @@ app.get("/api/auth/admin/learning-facts/dashboard", requireAdmin, async (req, re
   } catch (err) {
     console.error("[/api/auth/admin/learning-facts/dashboard]", err);
     res.status(500).json({ error: { message: "Failed to load Daily Wisdom dashboard.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/auth/admin/system-architecture", requireAdmin, async (_req, res) => {
+  try {
+    const snapshot = await getSystemArchitectureLiveSnapshot();
+    res.json({ snapshot });
+  } catch (err) {
+    console.error("[/api/auth/admin/system-architecture]", err);
+    res.status(500).json({ error: { message: "Failed to load architecture snapshot.", code: "SERVER_ERROR" } });
   }
 });
 

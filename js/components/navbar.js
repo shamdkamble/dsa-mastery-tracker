@@ -108,7 +108,7 @@ const ROUTE_TITLES = {
   register: "Create Account",
   admin: "Admin Panel",
   "admin-push-logs": "Push Delivery Log",
-  "admin-notifications": "Notification Architecture",
+  "admin-notifications": "System Architecture",
 };
 
 function escapeHtml(str) {

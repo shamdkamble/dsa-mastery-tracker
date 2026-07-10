@@ -7,7 +7,7 @@ import { icon } from "./icons.js";
 export const ADMIN_NAV = [
   { id: "users", path: "admin", label: "Users", icon: "user" },
   { id: "push-logs", path: "admin-push-logs", label: "Push Log", icon: "bell" },
-  { id: "notifications", path: "admin-notifications", label: "Architecture", icon: "layers" },
+  { id: "notifications", path: "admin-notifications", label: "System Architecture", icon: "layers" },
 ];
 
 export function adminSubnav(active) {

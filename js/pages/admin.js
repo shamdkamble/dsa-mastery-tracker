@@ -285,8 +285,8 @@ export default {
             ${adminQuickCard({
               path: "admin-notifications",
               iconName: "layers",
-              title: "Notification Architecture",
-              text: "Visual map of triggers, pipelines, and MongoDB collections.",
+              title: "System Architecture",
+              text: "Expandable map of every platform domain with live diagrams and metrics.",
               accent: "violet",
             })}
           </div>

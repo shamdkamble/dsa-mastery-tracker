@@ -132,6 +132,16 @@ export async function getDailyWisdomDashboard() {
   return data.dashboard;
 }
 
+export async function getSystemArchitectureLive() {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/system-architecture`, {
+    headers: authHeaders(),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data.snapshot;
+}
+
 export async function generateLearningFactsBatch({
   topicsPerCall = 18,
   replaceExisting = false,
