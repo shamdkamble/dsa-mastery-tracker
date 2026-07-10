@@ -356,10 +356,10 @@ export default {
       };
 
       statsEl.innerHTML = `
-        ${statCard({ iconName: "user", value: counts.total, label: "Total users" })}
-        ${statCard({ iconName: "clock", value: counts.pending, label: "Pending", variant: "warning" })}
-        ${statCard({ iconName: "check", value: counts.approved, label: "Approved", variant: "success" })}
-        ${statCard({ iconName: "alertCircle", value: counts.suspended, label: "Suspended", variant: "info" })}
+        ${adminStatCard({ iconName: "user", value: counts.total, label: "Total users" })}
+        ${adminStatCard({ iconName: "clock", value: counts.pending, label: "Pending", variant: "warning" })}
+        ${adminStatCard({ iconName: "check", value: counts.approved, label: "Approved", variant: "success" })}
+        ${adminStatCard({ iconName: "alertCircle", value: counts.suspended, label: "Suspended", variant: "info" })}
       `;
     }
 
