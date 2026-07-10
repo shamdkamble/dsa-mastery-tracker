@@ -86,7 +86,11 @@ export default {
         <div class="settings-layout">
           <nav class="settings-nav" aria-label="Settings sections">
             ${SETTINGS_NAV.map((item, i) => `
-              <a href="#${item.id}" class="settings-nav__item${i === 0 ? " is-active" : ""}">
+              <a
+                href="#/settings/${item.id}"
+                class="settings-nav__item${i === 0 ? " is-active" : ""}"
+                data-settings-section="${item.id}"
+              >
                 ${icon(item.icon)}
                 ${item.label}
               </a>
@@ -297,6 +301,16 @@ export default {
   },
   onMount(container) {
     bindPageHandlers(container);
+    import("../router.js").then(({ getCurrentSection, SETTINGS_SECTION_IDS }) => {
+      const section = getCurrentSection();
+      if (section && SETTINGS_SECTION_IDS.has(section)) {
+        const el = document.getElementById(section);
+        el?.scrollIntoView({ block: "start" });
+        container.querySelectorAll(".settings-nav__item").forEach((item) => {
+          item.classList.toggle("is-active", item.dataset.settingsSection === section);
+        });
+      }
+    });
     import("../push-notifications.js").then(({ bindPushSettingsUI, bindPushTestButton, bindPushToggleHandler }) => {
       bindPushToggleHandler(container);
       void bindPushSettingsUI(container);

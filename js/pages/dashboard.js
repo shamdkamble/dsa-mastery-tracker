@@ -103,7 +103,7 @@ function renderPendingApprovalHero() {
             ${icon("bell")}
             <span>Enable notifications</span>
           </button>
-          <a href="#/settings" class="btn btn--secondary">Notification settings</a>
+          <a href="#/settings/notifications" class="btn btn--secondary">Notification settings</a>
         </div>
       </div>
     </section>

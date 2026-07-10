@@ -16,7 +16,12 @@ import {
   clearAllData,
   addSearchRecent,
 } from "../storage/db.js";
-import { navigate, getCurrentPath, refreshRouteContent } from "../router.js";
+import {
+  navigate,
+  getCurrentPath,
+  refreshRouteContent,
+  SETTINGS_SECTION_IDS as SETTINGS_SECTIONS,
+} from "../router.js";
 import { openProblemModal } from "../components/problem-modal.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getTheme, setTheme, toggleTheme } from "../theme.js";
@@ -295,7 +300,8 @@ export function bindSettingsHandlers(root) {
         if (!visible) return;
         const id = visible.target.id;
         navItems.forEach((item) => {
-          item.classList.toggle("is-active", item.getAttribute("href") === `#${id}`);
+          const target = item.dataset.settingsSection || "";
+          item.classList.toggle("is-active", target === id);
         });
       },
       { rootMargin: "-20% 0px -60% 0px", threshold: [0, 0.25, 0.5, 1] },
@@ -304,7 +310,7 @@ export function bindSettingsHandlers(root) {
   }
 }
 
-const SETTINGS_SECTION_IDS = ["profile", "subscription", "appearance", "notifications", "data", "about"];
+const SETTINGS_SECTION_IDS = [...SETTINGS_SECTIONS];
 
 function syncUserState() {
   const u = getUser();

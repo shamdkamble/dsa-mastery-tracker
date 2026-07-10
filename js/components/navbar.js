@@ -313,6 +313,10 @@ function renderNavbar(state) {
               ${icon("user")}
               <span>Profile &amp; Settings</span>
             </button>
+            <button type="button" class="navbar-profile-menu__item" role="menuitem" data-profile-action="notifications">
+              ${icon("bell")}
+              <span>Notifications</span>
+            </button>
             <button type="button" class="navbar-profile-menu__item" role="menuitem" data-profile-action="theme">
               ${icon("palette")}
               <span>Toggle theme</span>
@@ -567,6 +571,7 @@ function bindEvents(container) {
     if (!action) return;
     closeProfileMenu(container);
     if (action === "settings") navigate("settings");
+    else if (action === "notifications") navigate("settings/notifications");
     else if (action === "theme") toggleTheme();
     else if (action === "logout") {
       logout();

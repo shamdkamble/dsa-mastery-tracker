@@ -8,6 +8,16 @@ import { pageTitle } from "./constants/branding.js";
 
 const routes = new Map();
 
+/** Settings sub-sections — #/settings/notifications etc. */
+export const SETTINGS_SECTION_IDS = new Set([
+  "profile",
+  "subscription",
+  "appearance",
+  "notifications",
+  "data",
+  "about",
+]);
+
 export function registerRoute(path, config) {
   routes.set(path, config);
 }
@@ -18,9 +28,22 @@ export function registerRoutes(routeMap) {
   });
 }
 
-function normalizePath(hash) {
-  const path = (hash || "#/login").replace(/^#\/?/, "").split("?")[0];
-  return path || "login";
+/**
+ * Parse #/settings/notifications → { path: "settings", section: "notifications" }
+ * Legacy #notifications (broken) → settings + notifications section
+ */
+export function parseRoute(hash = window.location.hash) {
+  const raw = (hash || "#/login").replace(/^#\/?/, "").split("?")[0];
+  const parts = raw.split("/").filter(Boolean);
+  let path = parts[0] || "login";
+  let section = parts[1] || null;
+
+  if (SETTINGS_SECTION_IDS.has(path)) {
+    section = path;
+    path = "settings";
+  }
+
+  return { path, section };
 }
 
 function getRouteConfig(path) {
@@ -29,12 +52,16 @@ function getRouteConfig(path) {
 }
 
 export function navigate(path) {
-  const normalized = path.replace(/^\/?/, "");
+  const normalized = path.replace(/^\/?/, "").replace(/^#+\/?/, "");
   window.location.hash = `#/${normalized}`;
 }
 
 export function getCurrentPath() {
-  return normalizePath(window.location.hash);
+  return parseRoute().path;
+}
+
+export function getCurrentSection() {
+  return parseRoute().section;
 }
 
 let authGuard = null;
@@ -45,6 +72,20 @@ export function setAuthGuard(fn) {
 
 let lastRenderedPath = "";
 let lastRenderedHtml = "";
+
+function scrollToSettingsSection(sectionId) {
+  if (!sectionId || !SETTINGS_SECTION_IDS.has(sectionId)) return;
+
+  const el = document.getElementById(sectionId);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  document.querySelectorAll(".settings-nav__item").forEach((item) => {
+    const target = item.dataset.settingsSection || "";
+    item.classList.toggle("is-active", target === sectionId);
+  });
+}
 
 async function renderRouteContent(path, container) {
   const config = getRouteConfig(path);
@@ -79,7 +120,7 @@ async function renderRouteContent(path, container) {
   return config;
 }
 
-export async function renderRoute(path, container) {
+export async function renderRoute(path, container, { section = null } = {}) {
   if (authGuard) {
     const allowed = await authGuard(path);
     if (!allowed) return;
@@ -89,8 +130,14 @@ export async function renderRoute(path, container) {
   if (!config) return;
 
   setState({ currentRoute: path });
-  dispatch("route:change", { path, config });
+  dispatch("route:change", { path, section, config });
   document.title = pageTitle(config.title);
+
+  if (path === "settings" && section) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => scrollToSettingsSection(section));
+    });
+  }
 }
 
 /** Re-render the current page content without auth checks or route events. */
@@ -100,8 +147,8 @@ export async function refreshRouteContent(path, container) {
 
 export function initRouter(container) {
   const handleRoute = () => {
-    const path = getCurrentPath();
-    renderRoute(path, container);
+    const { path, section } = parseRoute();
+    renderRoute(path, container, { section });
   };
 
   window.addEventListener("hashchange", handleRoute);

@@ -33,7 +33,7 @@ function mapServerNotification(item) {
     text: item.text,
     variant: item.variant || "info",
     time: formatRelativeTime(item.createdAt),
-    href: item.href || "#/settings",
+    href: item.href || "#/settings/notifications",
     read: Boolean(item.read),
   };
 }
@@ -56,7 +56,7 @@ function buildLocalNotificationItems() {
       text: "Your registration is waiting for admin review.",
       variant: "warning",
       time: "Active",
-      href: "#/settings",
+      href: "#/settings/notifications",
     });
   }
 
