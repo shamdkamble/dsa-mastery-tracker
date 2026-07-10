@@ -85,7 +85,95 @@
 }
 
 @media (display-mode: standalone) {
-  .pwa-install:not(.pwa-install--push) {
+  .pwa-install:not(.pwa-install--push),
+  .pwa-install-modal {
     display: none !important;
   }
+}
+
+/* ── Mobile install modal ── */
+
+body.pwa-install-modal-open {
+  overflow: hidden;
+}
+
+.pwa-install-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: max(var(--space-4), env(safe-area-inset-top, 0px))
+    max(var(--space-4), env(safe-area-inset-right, 0px))
+    max(var(--space-4), env(safe-area-inset-bottom, 0px))
+    max(var(--space-4), env(safe-area-inset-left, 0px));
+  animation: fade-in var(--duration-normal) var(--ease-out);
+}
+
+.pwa-install-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--color-bg) 35%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.pwa-install-modal__card {
+  position: relative;
+  width: min(100%, 420px);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-xl);
+  padding: var(--space-6);
+  animation: fade-in-up var(--duration-slow) var(--ease-out);
+}
+
+.pwa-install-modal__hero {
+  text-align: center;
+}
+
+.pwa-install-modal__icon {
+  display: block;
+  margin: 0 auto var(--space-4);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--color-accent) 28%, transparent);
+}
+
+.pwa-install-modal__title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+}
+
+.pwa-install-modal__text {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+.pwa-install-steps {
+  margin: var(--space-5) 0 0;
+  padding-left: var(--space-5);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.pwa-install-steps li + li {
+  margin-top: var(--space-2);
+}
+
+.pwa-install-modal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.pwa-install-modal__actions .btn {
+  width: 100%;
+  justify-content: center;
 }

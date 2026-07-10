@@ -96,6 +96,15 @@ export async function isPushSubscribedOnServer() {
   }
 }
 
+async function isInstallPromptBlockingPush() {
+  try {
+    const { isPwaInstallPromptVisible } = await import("./pwa.js");
+    return isPwaInstallPromptVisible();
+  } catch {
+    return false;
+  }
+}
+
 function createPushEnableBanner() {
   if (pushEnableBanner || wasPushPromptDismissedRecently()) return;
 
@@ -159,6 +168,7 @@ function createPushEnableBanner() {
 
 export async function maybePromptPushEnable() {
   if (!supportsPush() || wasPushPromptDismissedRecently()) return;
+  if (await isInstallPromptBlockingPush()) return;
 
   const env = getPushEnvironment();
   if (!env.signedIn || env.iosNeedsInstall) return;
