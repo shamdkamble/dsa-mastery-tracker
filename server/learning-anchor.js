@@ -16,6 +16,23 @@ function canOpenLessonForUser(user, topicId) {
 }
 
 /**
+ * Most recently completed topic in roadmap order.
+ * @param {string[]} completedTopicIds
+ */
+export function getLastCompletedTopic(completedTopicIds = []) {
+  const completed = new Set(completedTopicIds);
+  const ordered = getOrderedRoadmapTopics();
+
+  let last = null;
+  for (const topic of ordered) {
+    if (completed.has(topic.id)) {
+      last = enrichTopic(topic);
+    }
+  }
+  return last;
+}
+
+/**
  * @param {string} userId
  * @returns {Promise<object|null>}
  */

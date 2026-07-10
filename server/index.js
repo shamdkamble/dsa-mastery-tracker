@@ -70,6 +70,7 @@ import {
   upsertNotificationPreferences,
 } from "./notification-preferences-db.js";
 import { runScheduledPushReminders } from "./push-reminders.js";
+import { runDailyWisdomDelivery } from "./learning-wisdom-daily.js";
 import { deliverUndeliveredAccessPushes } from "./push-access-delivery.js";
 import { listPushDeliveryLogs, getPushDeliveryLogStats } from "./push-delivery-log-db.js";
 import { seedPilotLearningFacts } from "./topic-learning-facts-db.js";
@@ -456,8 +457,11 @@ app.get("/api/cron/push-reminders", async (req, res) => {
   }
 
   try {
-    const result = await runScheduledPushReminders();
-    res.json({ ok: true, result });
+    const [reminders, dailyWisdom] = await Promise.all([
+      runScheduledPushReminders(),
+      runDailyWisdomDelivery(),
+    ]);
+    res.json({ ok: true, reminders, dailyWisdom });
   } catch (err) {
     console.error("[/api/cron/push-reminders]", err);
     res.status(500).json({ error: { message: "Cron job failed.", code: "SERVER_ERROR" } });
@@ -552,7 +556,7 @@ app.get("/api/auth/admin/learning-facts/stats", requireAdmin, async (_req, res) 
     res.json({ stats });
   } catch (err) {
     console.error("[/api/auth/admin/learning-facts/stats]", err);
-    res.status(500).json({ error: { message: "Failed to load fact pool stats.", code: "SERVER_ERROR" } });
+    res.status(500).json({ error: { message: "Failed to load Mantra Feed stats.", code: "SERVER_ERROR" } });
   }
 });
 
@@ -625,6 +629,7 @@ app.post("/api/auth/admin/learning-facts/deliver", requireAdmin, async (req, res
       userId,
       anchor: result.anchor,
       fact: result.fact,
+      message: result.message,
       notification: result.notification,
       pushDelivery: result.push,
     });
@@ -653,6 +658,7 @@ app.post("/api/learning-facts/deliver-next", requireAuth, async (req, res) => {
       ok: true,
       anchor: result.anchor,
       fact: result.fact,
+      message: result.message,
       notification: result.notification,
       pushDelivery: result.push,
     });

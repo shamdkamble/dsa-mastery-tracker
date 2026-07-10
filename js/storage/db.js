@@ -40,6 +40,7 @@ function defaultDB() {
         streakAlert: true,
         reviewDue: true,
         weeklySummary: false,
+        dailyWisdom: true,
       },
     },
     problems: [],

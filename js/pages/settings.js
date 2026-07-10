@@ -246,6 +246,7 @@ export default {
                 ${settingsRow("Streak at risk alert", "8:00 PM — if you have not solved today", Toggle({ checked: settings.notifications.streakAlert, attrs: 'data-setting="notif.streakAlert"' }))}
                 ${settingsRow("Review due notifications", "9:00 AM — spaced repetition reviews due", Toggle({ checked: settings.notifications.reviewDue, attrs: 'data-setting="notif.reviewDue"' }))}
                 ${settingsRow("Weekly progress summary", "Sunday 6:00 PM — weekly recap", Toggle({ checked: settings.notifications.weeklySummary, attrs: 'data-setting="notif.weeklySummary"' }))}
+                ${settingsRow("Daily Wisdom", "9:00 AM — personalized insight for your next roadmap topic", Toggle({ checked: settings.notifications.dailyWisdom !== false, attrs: 'data-setting="notif.dailyWisdom"' }))}
               </div>
             </section>
 

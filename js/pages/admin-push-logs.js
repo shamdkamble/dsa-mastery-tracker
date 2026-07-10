@@ -56,7 +56,7 @@ function sourceBadge(source) {
     test: "Test",
     reminder: "Reminder",
     redelivery: "Redelivery",
-    "learning-fact": "Learning fact",
+    "learning-fact": "Daily Wisdom",
   };
   return Badge({
     label: labels[source] || source,
@@ -195,23 +195,23 @@ export default {
           <section class="card learning-facts-guide">
             <div class="card__body learning-facts-guide__body">
               <div>
-                <h2 class="learning-facts-guide__title">Learning facts — catchy push pool</h2>
+                <h2 class="learning-facts-guide__title">Daily Wisdom — Mantra Feed</h2>
                 <ol class="learning-facts-guide__steps">
-                  <li><strong>Generate all facts (AI)</strong> — builds 3 Zomato-style hooks per roadmap topic into the shared pool.</li>
-                  <li><strong>Send fact</strong> — uses the student's <em>next</em> incomplete topic and personalizes: "Hey Sham 👋 … Tap to learn →".</li>
+                  <li><strong>Generate Mantra Feed (AI)</strong> — builds 5 value-first hooks per topic (insight, common mistake, interview tip).</li>
+                  <li><strong>Send Daily Wisdom</strong> — picks the student's next topic and personalizes with progress: streak, last completed topic, tone.</li>
                   <li><strong>Student taps</strong> — opens that topic's lesson on the roadmap.</li>
                 </ol>
-                <p class="learning-facts-guide__pool text-secondary" id="learning-facts-pool-stats">Fact pool: loading…</p>
+                <p class="learning-facts-guide__pool text-secondary" id="learning-facts-pool-stats">Mantra Feed: loading…</p>
                 <p class="learning-facts-guide__anchor text-tertiary" id="learning-facts-anchor-preview">Preview: loading…</p>
               </div>
               <div class="learning-facts-guide__actions">
                 <button type="button" class="btn btn--primary btn--sm" id="learning-facts-generate-all">
                   ${icon("zap")}
-                  <span>Generate all facts (AI)</span>
+                  <span>Generate Mantra Feed (AI)</span>
                 </button>
                 <button type="button" class="btn btn--ghost btn--sm" id="learning-facts-send-me">
                   ${icon("bell")}
-                  <span>Send fact to me</span>
+                  <span>Send Daily Wisdom to me</span>
                 </button>
                 <div class="learning-facts-guide__user-send">
                   <input
@@ -266,9 +266,9 @@ export default {
                   ${icon("repeat")}
                   <span>Refresh</span>
                 </button>
-                <button class="btn btn--ghost btn--sm" type="button" id="push-logs-seed-facts" title="Seed pilot learning facts into MongoDB">
+                <button class="btn btn--ghost btn--sm" type="button" id="push-logs-seed-facts" title="Seed pilot Daily Wisdom hooks into MongoDB">
                   ${icon("database")}
-                  <span>Seed facts</span>
+                  <span>Seed pilot</span>
                 </button>
                 <span class="push-logs__updated text-tertiary" id="push-logs-updated" aria-live="polite"></span>
               </div>
@@ -363,9 +363,9 @@ export default {
       if (!poolStatsEl) return;
       try {
         const stats = await getLearningFactsPoolStats();
-        poolStatsEl.textContent = `Fact pool: ${stats.topicsWithFacts}/${stats.totalTopics} topics covered · ${stats.totalActiveFacts} active hooks · ${stats.topicsMissingFacts} topics still need AI generation`;
+        poolStatsEl.textContent = `Mantra Feed: ${stats.topicsWithFacts}/${stats.totalTopics} topics · ${stats.totalActiveFacts} hooks (${stats.factsPerTopicTarget}/topic target) · ${stats.topicsMissingFacts} topics need generation`;
       } catch {
-        poolStatsEl.textContent = "Fact pool: could not load stats";
+        poolStatsEl.textContent = "Mantra Feed: could not load stats";
       }
     }
 
@@ -377,11 +377,18 @@ export default {
           anchorPreview.textContent = "Preview: no next topic (all complete or locked)";
           return;
         }
+        const ctx = data.context;
+        const ctxBits = [];
+        if (ctx?.lastCompleted?.topicName) ctxBits.push(`after ${ctx.lastCompleted.topicName}`);
+        if (ctx?.streak >= 2) ctxBits.push(`${ctx.streak}-day streak`);
+        if (ctx?.tone) ctxBits.push(`${ctx.tone} tone`);
+        const ctxLabel = ctxBits.length ? ` (${ctxBits.join(" · ")})` : "";
+
         if (data.previewMessage) {
-          anchorPreview.textContent = `Preview for ${data.anchor.topicName}: "${data.previewMessage.title} ${data.previewMessage.body}"`;
+          anchorPreview.textContent = `Preview for ${data.anchor.topicName}${ctxLabel}: "${data.previewMessage.title} — ${data.previewMessage.body}"`;
           return;
         }
-        anchorPreview.textContent = `Next topic: ${data.anchor.topicName} — no unused facts in pool yet (generate AI facts)`;
+        anchorPreview.textContent = `Next topic: ${data.anchor.topicName}${ctxLabel} — no unused hooks yet (generate Mantra Feed)`;
       } catch {
         anchorPreview.textContent = "Preview: could not load";
       }
@@ -419,8 +426,8 @@ export default {
         }
 
         showToast(Toast({
-          title: "All topic facts generated",
-          text: `Catchy hooks are ready in the shared pool for every roadmap topic.`,
+          title: "Mantra Feed complete",
+          text: "Daily Wisdom hooks are ready for every roadmap topic.",
           variant: "success",
         }));
         void loadPoolStats();
@@ -452,10 +459,10 @@ export default {
 
     function formatDeliverError(err, data) {
       if (data?.reason === "no_facts") {
-        return "No facts for this user's next topic. Click Generate all facts (AI) first.";
+        return "No hooks for this user's next topic. Click Generate Mantra Feed (AI) first.";
       }
       if (data?.reason === "already_delivered") {
-        return "This user already received all facts for their current topic. They need to complete a topic or wait for more facts.";
+        return "This user already received all Daily Wisdom hooks for their current topic.";
       }
       if (data?.reason === "no_anchor") {
         return "Could not determine this user's current roadmap topic.";
@@ -468,8 +475,8 @@ export default {
       try {
         const data = await deliverLearningFactToMe({ sendPush: true });
         showToast(Toast({
-          title: "Fact sent to you",
-          text: `${data.fact?.title || "Learning fact"} — ${formatDeliverResult(data)}`,
+          title: "Daily Wisdom sent",
+          text: `${data.message?.title || data.fact?.title || "Wisdom"} — ${formatDeliverResult(data)}`,
           variant: "success",
         }));
         void loadLogs();
@@ -477,7 +484,7 @@ export default {
       } catch (err) {
         const details = err instanceof AuthApiError ? err.details : null;
         showToast(Toast({
-          title: "Could not send fact",
+          title: "Could not send Daily Wisdom",
           text: formatDeliverError(err, details),
           variant: "danger",
         }));
@@ -501,8 +508,8 @@ export default {
       try {
         const data = await deliverLearningFactToUser(userId, { sendPush: true });
         showToast(Toast({
-          title: "Fact sent to student",
-          text: `${data.fact?.title || "Learning fact"} — ${formatDeliverResult(data)}`,
+          title: "Daily Wisdom sent",
+          text: `${data.message?.title || data.fact?.title || "Wisdom"} — ${formatDeliverResult(data)}`,
           variant: "success",
         }));
         void loadLogs();
@@ -526,8 +533,8 @@ export default {
       try {
         const data = await seedLearningFacts();
         showToast(Toast({
-          title: "Pilot facts seeded",
-          text: `${data.result?.total ?? 0} facts across ${data.result?.topicIds?.length ?? 0} topics.`,
+          title: "Pilot Mantra Feed seeded",
+          text: `${data.result?.total ?? 0} hooks across ${data.result?.topicIds?.length ?? 0} topics.`,
           variant: "success",
         }));
       } catch (err) {

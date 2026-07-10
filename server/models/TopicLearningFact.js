@@ -28,8 +28,12 @@ const topicLearningFactSchema = new mongoose.Schema(
     },
     hookStyle: {
       type: String,
-      enum: ["curiosity", "interview", "analogy", "history", "seed", "admin", "snack"],
-      default: "curiosity",
+      enum: [
+        "insight", "mistake", "interview_tip",
+        "curiosity", "interview", "analogy", "history",
+        "seed", "admin", "snack",
+      ],
+      default: "insight",
     },
     title: {
       type: String,

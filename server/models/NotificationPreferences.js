@@ -28,6 +28,10 @@ const notificationPreferencesSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    dailyWisdom: {
+      type: Boolean,
+      default: true,
+    },
     timezone: {
       type: String,
       default: "Asia/Kolkata",

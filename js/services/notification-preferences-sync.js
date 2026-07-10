@@ -6,7 +6,7 @@ import { fetchPushPreferences, updatePushPreferences } from "../api/pushApi.js";
 import { getToken } from "../auth/session.js";
 import { getSettings, updateSettings } from "../storage/db.js";
 
-export const STUDY_PREF_KEYS = ["dailyReminder", "streakAlert", "reviewDue", "weeklySummary"];
+export const STUDY_PREF_KEYS = ["dailyReminder", "streakAlert", "reviewDue", "weeklySummary", "dailyWisdom"];
 
 export async function hydrateNotificationPreferencesFromServer() {
   if (!getToken()) return;
@@ -50,6 +50,7 @@ export async function syncAllStudyPreferencesToServer() {
       streakAlert: Boolean(notifications.streakAlert),
       reviewDue: Boolean(notifications.reviewDue),
       weeklySummary: Boolean(notifications.weeklySummary),
+      dailyWisdom: notifications.dailyWisdom !== false,
     });
   } catch (err) {
     console.warn("[notification-prefs] bulk sync failed:", err?.message || err);

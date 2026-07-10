@@ -10,6 +10,7 @@ const DEFAULT_PREFS = {
   streakAlert: true,
   reviewDue: true,
   weeklySummary: false,
+  dailyWisdom: true,
   timezone: "Asia/Kolkata",
 };
 
@@ -21,6 +22,7 @@ function normalize(doc) {
     streakAlert: d.streakAlert ?? DEFAULT_PREFS.streakAlert,
     reviewDue: d.reviewDue ?? DEFAULT_PREFS.reviewDue,
     weeklySummary: d.weeklySummary ?? DEFAULT_PREFS.weeklySummary,
+    dailyWisdom: d.dailyWisdom ?? DEFAULT_PREFS.dailyWisdom,
     timezone: d.timezone || DEFAULT_PREFS.timezone,
   };
 }
@@ -43,6 +45,7 @@ export async function upsertNotificationPreferences(userId, patch = {}) {
   if (patch.streakAlert !== undefined) updates.streakAlert = Boolean(patch.streakAlert);
   if (patch.reviewDue !== undefined) updates.reviewDue = Boolean(patch.reviewDue);
   if (patch.weeklySummary !== undefined) updates.weeklySummary = Boolean(patch.weeklySummary);
+  if (patch.dailyWisdom !== undefined) updates.dailyWisdom = Boolean(patch.dailyWisdom);
   if (patch.timezone !== undefined) updates.timezone = String(patch.timezone || DEFAULT_PREFS.timezone).slice(0, 64);
 
   const doc = await NotificationPreferences.findOneAndUpdate(

@@ -4,7 +4,6 @@
 
 import { createUserNotification, markNotificationPushSent } from "./notifications-db.js";
 import { sendPushToUser } from "./push-service.js";
-import { getLearningAnchor } from "./learning-anchor.js";
 import {
   listFactsForTopic,
   getFactById,
@@ -14,7 +13,7 @@ import {
   recordUserFactDelivery,
 } from "./user-fact-deliveries-db.js";
 import { personalizeLearningFactMessage } from "./learning-fact-personalize.js";
-import { resolveUserDisplayName } from "./learning-fact-users.js";
+import { getWisdomDeliveryContext } from "./learning-wisdom-context.js";
 
 /**
  * Pick the next fact for a user at their anchor topic that they have not seen.
@@ -36,9 +35,10 @@ export async function pickNextFactForUser(userId, topicId) {
  * @param {{ factId?: string, sendPush?: boolean }} options
  */
 export async function deliverLearningFactToUser(userId, { factId, sendPush = true } = {}) {
-  const anchor = await getLearningAnchor(userId);
+  const context = await getWisdomDeliveryContext(userId);
+  const anchor = context.anchor;
   if (!anchor) {
-    return { ok: false, reason: "no_anchor", anchor: null, fact: null };
+    return { ok: false, reason: "no_anchor", anchor: null, fact: null, context };
   }
 
   let fact = null;
@@ -60,11 +60,7 @@ export async function deliverLearningFactToUser(userId, { factId, sendPush = tru
     return { ok: false, reason: "already_delivered", anchor, fact };
   }
 
-  const userName = await resolveUserDisplayName(userId);
-  const message = personalizeLearningFactMessage(fact, {
-    userName,
-    topicName: anchor.topicName,
-  });
+  const message = personalizeLearningFactMessage(fact, context);
 
   const notification = await createUserNotification(userId, {
     title: message.title,
@@ -105,6 +101,7 @@ export async function deliverLearningFactToUser(userId, { factId, sendPush = tru
     anchor,
     fact,
     message,
+    context,
     notification,
     push,
   };
@@ -114,9 +111,17 @@ export async function deliverLearningFactToUser(userId, { factId, sendPush = tru
  * Preview anchor + next fact without delivering.
  */
 export async function previewLearningFactForUser(userId) {
-  const anchor = await getLearningAnchor(userId);
+  const context = await getWisdomDeliveryContext(userId);
+  const anchor = context.anchor;
   if (!anchor) {
-    return { anchor: null, fact: null, availableFacts: 0, deliveredCount: 0 };
+    return {
+      anchor: null,
+      fact: null,
+      previewMessage: null,
+      context,
+      availableFacts: 0,
+      deliveredCount: 0,
+    };
   }
 
   const [facts, deliveredIds] = await Promise.all([
@@ -126,15 +131,19 @@ export async function previewLearningFactForUser(userId) {
 
   const delivered = new Set(deliveredIds);
   const fact = facts.find((f) => !delivered.has(f.id)) || null;
-  const userName = await resolveUserDisplayName(userId);
-  const previewMessage = fact
-    ? personalizeLearningFactMessage(fact, { userName, topicName: anchor.topicName })
-    : null;
+  const previewMessage = fact ? personalizeLearningFactMessage(fact, context) : null;
 
   return {
     anchor,
     fact,
     previewMessage,
+    context: {
+      firstName: context.firstName,
+      lastCompleted: context.lastCompleted,
+      streak: context.streak,
+      tone: context.tone,
+      completedCount: context.completedCount,
+    },
     availableFacts: facts.length,
     deliveredCount: deliveredIds.length,
   };

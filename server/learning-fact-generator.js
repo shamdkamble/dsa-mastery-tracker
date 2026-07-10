@@ -17,12 +17,14 @@ import {
   deactivateFactsForTopic,
 } from "./topic-learning-facts-db.js";
 
-const FACTS_PER_TOPIC = 3;
-const MIN_FACTS_PER_TOPIC = 2;
+const FACTS_PER_TOPIC = 5;
+const MIN_FACTS_PER_TOPIC = 5;
 const HOOK_MAX_LEN = 90;
 
-const FACT_SYSTEM_PROMPT = `You write push notification hooks for DSAMantra, a FAANG DSA learning app.
-Style: catchy like Zomato or Swiggy alerts — playful, urgent, surprising, never boring.
+const VALUE_HOOK_STYLES = ["insight", "mistake", "interview_tip"];
+
+const FACT_SYSTEM_PROMPT = `You write Daily Wisdom hooks for DSAMantra, a FAANG DSA learning app.
+Each hook must deliver real value — not filler. Style: catchy like Zomato/Swiggy alerts (playful, surprising) but every line teaches something specific.
 Output valid JSON only. No markdown.`;
 
 function generateFactId(topicId, index) {
@@ -42,26 +44,26 @@ function buildFactPrompt(topic) {
   return `Topic: "${topic.name}" (id: ${topic.id}, Phase ${topic.phase}, ${topic.difficulty})
 Track: ${trackLabel}
 
-Write exactly ${FACTS_PER_TOPIC} ultra-short notification hooks for this topic.
+Write exactly ${FACTS_PER_TOPIC} ultra-short Daily Wisdom hooks for this topic.
 
 Rules:
 - Do NOT include any person's name (personalization is added later).
 - Each hook max ${HOOK_MAX_LEN} characters.
-- One surprising, counter-intuitive, or interview-relevant insight per hook.
+- Every hook must teach something concrete about THIS topic.
+- Mix hook types: ~2 insights, ~1-2 common mistakes, ~1-2 interview tips.
 - Feel like a food-delivery promo: punchy, curiosity gap, light emoji ok (0-1 per hook).
 - No "click here", no "welcome", no generic filler.
-- Hooks must be specific to THIS topic.
 
 Return JSON:
 {
   "facts": [
-    { "hookStyle": "curiosity", "hook": "..." },
-    { "hookStyle": "interview", "hook": "..." },
-    { "hookStyle": "analogy", "hook": "..." }
+    { "hookStyle": "insight", "hook": "..." },
+    { "hookStyle": "mistake", "hook": "..." },
+    { "hookStyle": "interview_tip", "hook": "..." }
   ]
 }
 
-hookStyle must be one of: curiosity, interview, analogy, history`;
+hookStyle must be one of: insight, mistake, interview_tip`;
 }
 
 function parseGeneratedFacts(payload, topic) {
@@ -70,13 +72,21 @@ function parseGeneratedFacts(payload, topic) {
     throw new TeachApiError("Gemini returned invalid facts JSON.", { status: 502, code: "INVALID_AI_RESPONSE" });
   }
 
-  const allowedStyles = new Set(["curiosity", "interview", "analogy", "history"]);
+  const allowedStyles = new Set([...VALUE_HOOK_STYLES, "curiosity", "interview", "analogy", "history"]);
+  const legacyStyleMap = {
+    curiosity: "insight",
+    interview: "interview_tip",
+    analogy: "insight",
+    history: "insight",
+  };
 
   return raw
     .map((item, index) => {
       const hook = truncateHook(item?.hook || item?.body || item?.text);
       if (!hook) return null;
-      const hookStyle = allowedStyles.has(item?.hookStyle) ? item.hookStyle : "curiosity";
+      let hookStyle = item?.hookStyle || "insight";
+      if (!allowedStyles.has(hookStyle)) hookStyle = "insight";
+      if (legacyStyleMap[hookStyle]) hookStyle = legacyStyleMap[hookStyle];
       return {
         id: generateFactId(topic.id, index),
         topicId: topic.id,
