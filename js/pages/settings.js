@@ -211,7 +211,17 @@ export default {
               <h2 class="settings-group__title">Notifications</h2>
               <p class="settings-group__desc">Push alerts for account updates; study reminders are stored locally for now.</p>
               <div class="settings-card">
-                ${settingsRow("Push notifications", "Get system alerts when your account is approved", Toggle({ checked: settings.notifications.pushEnabled, attrs: 'data-setting="notif.pushEnabled"' }))}
+                <div class="settings-push-ios-callout" id="push-ios-callout" hidden>
+                  <p class="settings-push-ios-callout__title">For iOS users</p>
+                  <p class="settings-push-ios-callout__text">Open the app from Home Screen, then enable notifications in Settings.</p>
+                  <ol class="settings-push-ios-callout__steps">
+                    <li>In Safari, tap <strong>Share</strong> → <strong>Add to Home Screen</strong></li>
+                    <li>Open <strong>DSAMantra</strong> from your Home Screen</li>
+                    <li>Return here and turn on <strong>Push notifications</strong></li>
+                    <li>Tap <strong>Allow</strong> when iOS asks for permission</li>
+                  </ol>
+                </div>
+                ${settingsRow("Push notifications", "Allow system alerts when your account is approved", Toggle({ checked: settings.notifications.pushEnabled, id: "push-notifications-toggle", attrs: 'data-setting="notif.pushEnabled"' }))}
                 <p class="settings-push-status" id="push-status-text" aria-live="polite"></p>
                 ${settingsRow("Daily mission reminder", "Get notified at 9:00 AM", Toggle({ checked: settings.notifications.dailyReminder, attrs: 'data-setting="notif.dailyReminder"' }))}
                 ${settingsRow("Streak at risk alert", "Warn when streak is about to break", Toggle({ checked: settings.notifications.streakAlert, attrs: 'data-setting="notif.streakAlert"' }))}
@@ -272,8 +282,8 @@ export default {
   },
   onMount(container) {
     bindPageHandlers(container);
-    import("../push-notifications.js").then(({ refreshPushStatusLabel }) => {
-      void refreshPushStatusLabel(container);
+    import("../push-notifications.js").then(({ bindPushSettingsUI }) => {
+      void bindPushSettingsUI(container);
     });
   },
 };

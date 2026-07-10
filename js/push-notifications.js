@@ -13,8 +13,11 @@ import {
 import { Toast } from "./components/ui/index.js";
 import { showToast } from "./components/ui/interactions.js";
 
+const IOS_INSTALL_MESSAGE = "For iOS users: Open the app from Home Screen, then enable notifications in Settings.";
+
 let cachedPublicKey = null;
 let activeEndpoint = null;
+let settingsUiBound = false;
 
 function supportsPush() {
   return "serviceWorker" in navigator
@@ -22,18 +25,46 @@ function supportsPush() {
     && "Notification" in window;
 }
 
-function isIOS() {
-  return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+export function isIOSDevice() {
+  return /iphone|ipad|ipod/i.test(window.navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
-function isStandalone() {
+export function isStandaloneMode() {
   return window.matchMedia("(display-mode: standalone)").matches
     || window.navigator.standalone === true;
 }
 
-async function getServiceWorkerRegistration() {
-  const registration = await navigator.serviceWorker.ready;
+export function getPushEnvironment() {
+  const signedIn = Boolean(getToken());
+  const ios = isIOSDevice();
+  const standalone = isStandaloneMode();
+
+  return {
+    supportsPush: supportsPush(),
+    isIOS: ios,
+    isStandalone: standalone,
+    iosNeedsInstall: ios && !standalone,
+    permission: supportsPush() ? Notification.permission : "unsupported",
+    signedIn,
+    canEnablePush: supportsPush()
+      && signedIn
+      && (!ios || standalone)
+      && Notification.permission !== "denied",
+  };
+}
+
+async function ensureServiceWorkerReady() {
+  const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+  await navigator.serviceWorker.ready;
   return registration;
+}
+
+async function getServiceWorkerRegistration() {
+  if (navigator.serviceWorker.controller) {
+    return navigator.serviceWorker.ready;
+  }
+  return ensureServiceWorkerReady();
 }
 
 async function getVapidPublicKey() {
@@ -55,43 +86,63 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 export function getPushSupportMessage() {
-  if (!supportsPush()) {
+  const env = getPushEnvironment();
+
+  if (!env.supportsPush) {
     return "Push notifications are not supported in this browser.";
   }
-  if (isIOS() && !isStandalone()) {
-    return "On iPhone, install DSAMantra to your Home Screen first, then enable push notifications.";
+  if (env.iosNeedsInstall) {
+    return IOS_INSTALL_MESSAGE;
   }
-  if (Notification.permission === "denied") {
-    return "Notifications are blocked. Enable them in your browser or device settings.";
+  if (env.permission === "denied") {
+    return "Notifications are blocked. Open iOS Settings → DSAMantra → Notifications and allow alerts.";
+  }
+  if (!env.signedIn) {
+    return "Sign in to enable push notifications.";
   }
   return "";
 }
 
+function getIosPermissionHint() {
+  if (!isIOSDevice() || !isStandaloneMode()) return "";
+  if (Notification.permission === "granted") return "";
+  if (Notification.permission === "denied") {
+    return "Notifications are blocked. Open iOS Settings → DSAMantra → Notifications to allow alerts.";
+  }
+  return "Turn on the toggle below — iOS will ask you to allow notifications.";
+}
+
 export async function enableWebPush() {
-  if (!getToken()) {
+  const env = getPushEnvironment();
+
+  if (!env.signedIn) {
     throw new Error("Sign in to enable push notifications.");
   }
 
-  if (!supportsPush()) {
+  if (!env.supportsPush) {
     throw new Error(getPushSupportMessage() || "Push is not supported.");
   }
 
-  if (isIOS() && !isStandalone()) {
-    throw new Error(getPushSupportMessage());
+  if (env.iosNeedsInstall) {
+    throw new Error(IOS_INSTALL_MESSAGE);
   }
 
-  const publicKey = await getVapidPublicKey();
-  if (!publicKey) {
-    throw new Error("Push notifications are not configured on the server yet.");
-  }
-
+  // Request permission early while the user gesture is still active (critical on iOS).
   let permission = Notification.permission;
   if (permission === "default") {
     permission = await Notification.requestPermission();
   }
 
   if (permission !== "granted") {
-    throw new Error(getPushSupportMessage() || "Notification permission was not granted.");
+    const deniedMsg = isIOSDevice()
+      ? "Notification permission was not granted. You can enable alerts later in iOS Settings."
+      : "Notification permission was not granted.";
+    throw new Error(deniedMsg);
+  }
+
+  const publicKey = await getVapidPublicKey();
+  if (!publicKey) {
+    throw new Error("Push notifications are not configured on the server yet.");
   }
 
   const registration = await getServiceWorkerRegistration();
@@ -138,7 +189,8 @@ export async function disableWebPush() {
 }
 
 export async function syncPushSubscription() {
-  if (!getToken() || !supportsPush()) return;
+  const env = getPushEnvironment();
+  if (!env.signedIn || !env.supportsPush || env.iosNeedsInstall) return;
 
   const settings = getSettings();
   if (!settings.notifications?.pushEnabled) return;
@@ -159,20 +211,41 @@ export async function teardownPushOnLogout() {
   }
 }
 
+function setPushToggleState(container, { enabled, checked }) {
+  const toggle = container?.querySelector('[data-setting="notif.pushEnabled"]');
+  if (!toggle) return;
+
+  toggle.disabled = !enabled;
+  toggle.setAttribute("aria-disabled", String(!enabled));
+  toggle.checked = Boolean(checked);
+  toggle.closest(".settings-row")?.classList.toggle("settings-row--disabled", !enabled);
+}
+
+function setIosCalloutVisibility(container) {
+  const callout = container?.querySelector("#push-ios-callout");
+  if (!callout) return;
+
+  const show = getPushEnvironment().iosNeedsInstall;
+  callout.hidden = !show;
+}
+
 export async function refreshPushStatusLabel(container) {
   const statusEl = container?.querySelector("#push-status-text");
   if (!statusEl) return;
 
+  const env = getPushEnvironment();
   const supportMessage = getPushSupportMessage();
+
   if (supportMessage) {
     statusEl.hidden = false;
     statusEl.textContent = supportMessage;
     return;
   }
 
-  if (!getToken()) {
+  const iosHint = getIosPermissionHint();
+  if (iosHint) {
     statusEl.hidden = false;
-    statusEl.textContent = "Sign in to enable push notifications.";
+    statusEl.textContent = iosHint;
     return;
   }
 
@@ -203,13 +276,49 @@ export async function refreshPushStatusLabel(container) {
   }
 }
 
+export async function bindPushSettingsUI(container) {
+  if (!container) return;
+
+  const env = getPushEnvironment();
+  setIosCalloutVisibility(container);
+
+  const pushEnabled = Boolean(getSettings().notifications?.pushEnabled);
+  const isActive = pushEnabled && Notification.permission === "granted";
+
+  setPushToggleState(container, {
+    enabled: env.canEnablePush,
+    checked: isActive || (pushEnabled && env.canEnablePush),
+  });
+
+  if (env.canEnablePush) {
+    void getVapidPublicKey().catch(() => {});
+  }
+
+  await refreshPushStatusLabel(container);
+}
+
 export async function handlePushSettingToggle(enabled, toggleEl) {
+  const container = toggleEl?.closest(".settings-card") || document;
+
+  if (enabled && getPushEnvironment().iosNeedsInstall) {
+    if (toggleEl) toggleEl.checked = false;
+    showToast(Toast({
+      title: "Install DSAMantra first",
+      text: IOS_INSTALL_MESSAGE,
+      variant: "warning",
+    }));
+    await bindPushSettingsUI(container);
+    return;
+  }
+
   try {
     if (enabled) {
       await enableWebPush();
       showToast(Toast({
         title: "Push notifications enabled",
-        text: "You will receive alerts for important account updates.",
+        text: isIOSDevice()
+          ? "You will receive alerts from DSAMantra on this device."
+          : "You will receive alerts for important account updates.",
         variant: "success",
       }));
     } else {
@@ -227,6 +336,8 @@ export async function handlePushSettingToggle(enabled, toggleEl) {
       text: err?.message || "Try again later.",
       variant: "danger",
     }));
+  } finally {
+    await bindPushSettingsUI(container);
   }
 }
 
@@ -242,7 +353,25 @@ function bindNotificationNavigation() {
   });
 }
 
+function bindGlobalPushUiRefresh() {
+  if (settingsUiBound) return;
+  settingsUiBound = true;
+
+  window.matchMedia("(display-mode: standalone)").addEventListener("change", () => {
+    const section = document.getElementById("notifications");
+    if (section) void bindPushSettingsUI(section.closest(".settings-card")?.parentElement || document);
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    const section = document.getElementById("notifications");
+    if (section) void bindPushSettingsUI(section.closest(".settings-card")?.parentElement || document);
+  });
+}
+
 export function initPushNotifications() {
+  bindGlobalPushUiRefresh();
+
   if (!supportsPush()) return;
 
   bindNotificationNavigation();
@@ -253,5 +382,8 @@ export function initPushNotifications() {
     } else {
       void teardownPushOnLogout();
     }
+
+    const section = document.getElementById("notifications");
+    if (section) void bindPushSettingsUI(section.closest(".settings-card")?.parentElement || document);
   });
 }
