@@ -12,89 +12,116 @@
 .product-tour__backdrop {
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, var(--color-bg-inverse, #0f172a) 38%, transparent);
+  background: color-mix(in srgb, var(--color-bg-inverse, #0f172a) 32%, transparent);
   pointer-events: auto;
-  animation: product-tour-fade-in var(--duration-normal) var(--ease-out);
-  transition: opacity var(--duration-fast) var(--ease-out);
+  animation: product-tour-fade-in 220ms var(--ease-out);
 }
 
-.product-tour__spotlight {
-  position: fixed;
-  border-radius: var(--radius-xl);
-  border: 2px solid color-mix(in srgb, var(--color-accent) 70%, white);
-  box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--color-accent) 18%, transparent),
-    0 0 0 9999px color-mix(in srgb, var(--color-bg-inverse, #0f172a) 38%, transparent);
-  pointer-events: none;
-  transition:
-    top 280ms var(--ease-out),
-    left 280ms var(--ease-out),
-    width 280ms var(--ease-out),
-    height 280ms var(--ease-out),
-    opacity 200ms var(--ease-out);
-  z-index: 1;
-}
-
+/* Direct highlight on the target element */
 .product-tour__target {
   position: relative;
-  z-index: calc(var(--z-tour) + 1) !important;
+  z-index: calc(var(--z-tour) + 2) !important;
+  border-radius: inherit;
+  animation: product-tour-highlight-pulse 2.2s ease-in-out infinite;
+  box-shadow:
+    0 0 0 2px var(--color-accent),
+    0 0 0 6px color-mix(in srgb, var(--color-accent) 22%, transparent),
+    0 0 28px 4px color-mix(in srgb, var(--color-accent) 32%, transparent) !important;
 }
 
-.product-tour__card {
+.sidebar__nav.product-tour__target,
+.navbar__new-btn.product-tour__target,
+.navbar__action.product-tour__target,
+.btn.product-tour__target {
+  border-radius: var(--radius-lg);
+}
+
+.mission-hero.product-tour__target,
+.dash-stats.product-tour__target,
+.page-header.product-tour__target {
+  border-radius: var(--radius-xl);
+}
+
+@keyframes product-tour-highlight-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 2px var(--color-accent),
+      0 0 0 5px color-mix(in srgb, var(--color-accent) 18%, transparent),
+      0 0 22px 2px color-mix(in srgb, var(--color-accent) 28%, transparent) !important;
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--color-accent) 85%, white),
+      0 0 0 9px color-mix(in srgb, var(--color-accent) 28%, transparent),
+      0 0 36px 8px color-mix(in srgb, var(--color-accent) 42%, transparent) !important;
+  }
+}
+
+/* Anchored tooltip */
+.product-tour__tooltip {
   position: fixed;
-  z-index: 2;
+  z-index: calc(var(--z-tour) + 3);
   pointer-events: auto;
-  transition:
-    top 280ms var(--ease-out),
-    left 280ms var(--ease-out),
-    bottom 280ms var(--ease-out),
-    opacity 200ms var(--ease-out);
+  max-width: min(320px, calc(100vw - 24px));
 }
 
-.product-tour__card-inner {
+.product-tour__tooltip.is-entering {
+  animation: product-tour-tooltip-in 240ms var(--ease-out);
+}
+
+.product-tour__tooltip--center.is-entering {
+  animation: product-tour-scale-in 260ms var(--ease-out);
+}
+
+.product-tour__tooltip-inner {
+  position: relative;
   padding: var(--space-4);
-  background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  background: var(--color-bg-elevated);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, var(--color-accent) 15%);
   border-radius: var(--radius-xl);
   box-shadow:
-    0 12px 40px color-mix(in srgb, var(--color-bg-inverse) 18%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--color-accent) 8%, transparent);
-  backdrop-filter: blur(12px);
+    0 16px 40px color-mix(in srgb, var(--color-bg-inverse) 16%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 6%, transparent);
 }
 
-.product-tour__card--center {
-  top: 50%;
-  left: 50%;
-  width: min(400px, calc(100vw - var(--space-8)));
-  transform: translate(-50%, -50%);
-  animation: product-tour-scale-in var(--duration-normal) var(--ease-out);
+.product-tour__arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--color-bg-elevated);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, var(--color-accent) 15%);
+  transform: rotate(45deg);
+  z-index: -1;
 }
 
-.product-tour__card--center .product-tour__card-inner {
-  padding: var(--space-5);
+.product-tour__arrow--bottom {
+  border-top-color: transparent;
+  border-left-color: transparent;
 }
 
-.product-tour__card--dock {
-  bottom: max(var(--space-4), env(safe-area-inset-bottom, 0px));
-  animation: product-tour-dock-in var(--duration-normal) var(--ease-out);
+.product-tour__arrow--top {
+  border-bottom-color: transparent;
+  border-right-color: transparent;
 }
 
-.product-tour__card--top,
-.product-tour__card--bottom,
-.product-tour__card--left,
-.product-tour__card--right {
-  width: min(360px, calc(100vw - var(--space-8)));
-  animation: product-tour-fade-up var(--duration-normal) var(--ease-out);
+.product-tour__arrow--right {
+  border-top-color: transparent;
+  border-left-color: transparent;
 }
 
-.product-tour__card-head {
+.product-tour__arrow--left {
+  border-bottom-color: transparent;
+  border-right-color: transparent;
+}
+
+.product-tour__tooltip-head {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
 }
 
-.product-tour__head-text {
+.product-tour__head-copy {
   flex: 1;
   min-width: 0;
 }
@@ -103,17 +130,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-lg);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
   background: var(--color-accent-subtle);
   color: var(--color-accent);
   flex-shrink: 0;
 }
 
 .product-tour__icon svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
 }
 
 .product-tour__close {
@@ -130,7 +157,7 @@
   height: 14px;
 }
 
-.product-tour__progress-text {
+.product-tour__step {
   display: block;
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
@@ -155,8 +182,8 @@
   height: 100%;
   width: 0;
   border-radius: var(--radius-full);
-  background: linear-gradient(90deg, var(--color-accent), color-mix(in srgb, var(--color-accent) 70%, #8b5cf6));
-  transition: width 320ms var(--ease-out);
+  background: linear-gradient(90deg, var(--color-accent), color-mix(in srgb, var(--color-accent) 65%, #8b5cf6));
+  transition: width 280ms var(--ease-out);
 }
 
 .product-tour__title {
@@ -178,7 +205,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .product-tour__nav {
@@ -187,21 +214,19 @@
   gap: var(--space-2);
 }
 
-body.tour-active {
-  overflow: hidden;
-}
-
+/* Allow scrolling while tour is active */
 body.tour-active .content {
-  scroll-padding-bottom: 240px;
-}
-
-body.tour-active[data-tour-card-mode="dock"] .content,
-body.tour-active .content {
-  scroll-padding-top: 80px;
+  overflow-y: auto;
+  scroll-padding: 88px 12px 24px;
 }
 
 body.tour-active .navbar,
 body.tour-active .sidebar {
+  z-index: calc(var(--z-tour) + 1);
+  pointer-events: auto;
+}
+
+body.tour-active .product-tour__target {
   pointer-events: auto;
 }
 
@@ -210,10 +235,10 @@ body.tour-active .sidebar {
   to { opacity: 1; }
 }
 
-@keyframes product-tour-fade-up {
+@keyframes product-tour-tooltip-in {
   from {
     opacity: 0;
-    translate: 0 6px;
+    translate: 0 8px;
   }
   to {
     opacity: 1;
@@ -232,37 +257,12 @@ body.tour-active .sidebar {
   }
 }
 
-@keyframes product-tour-dock-in {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-@media (max-width: 768px) {
-  .product-tour__card--dock {
-    width: calc(100vw - var(--space-6)) !important;
-    left: 50% !important;
-    right: auto !important;
-    bottom: max(var(--space-3), env(safe-area-inset-bottom, 0px)) !important;
-    transform: translateX(-50%) !important;
+@media (max-width: 640px) {
+  .product-tour__tooltip {
+    max-width: calc(100vw - 20px);
   }
 
-  .product-tour__card--top,
-  .product-tour__card--bottom,
-  .product-tour__card--left,
-  .product-tour__card--right {
-    left: var(--space-3) !important;
-    right: var(--space-3);
-    width: auto !important;
-    transform: none !important;
-  }
-
-  .product-tour__card-inner {
+  .product-tour__tooltip-inner {
     padding: var(--space-3) var(--space-4);
   }
 

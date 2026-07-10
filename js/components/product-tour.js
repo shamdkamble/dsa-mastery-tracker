@@ -1,5 +1,5 @@
 /**
- * Product tour / walkthrough engine
+ * Product tour — direct element highlight + anchored tooltip
  */
 
 import { icon } from "./icons.js";
@@ -11,10 +11,9 @@ import { isAuthenticated } from "../auth/session.js";
 import { isPublicRoute } from "../auth/guards.js";
 import { $ } from "../utils.js";
 
-const SPOTLIGHT_PAD = 10;
-const CARD_GAP = 20;
-const VIEWPORT_MARGIN = 16;
-const NAVBAR_CLEARANCE = 72;
+const TOOLTIP_GAP = 14;
+const VIEWPORT_PAD = 12;
+const NAVBAR_PAD = 64;
 const WAIT_MS = 4000;
 
 let active = false;
@@ -22,8 +21,10 @@ let stepIndex = 0;
 let steps = [];
 let root = null;
 let resizeObserver = null;
-let scrollHandler = null;
-let currentCardMode = "auto";
+let repositionHandler = null;
+let scrollContainer = null;
+let currentTarget = null;
+let currentStep = null;
 
 function ensureRoot() {
   if (root) return root;
@@ -33,20 +34,20 @@ function ensureRoot() {
   root.className = "product-tour";
   root.setAttribute("hidden", "");
   root.innerHTML = `
-    <div class="product-tour__backdrop" data-tour-action="backdrop"></div>
-    <div class="product-tour__spotlight" aria-hidden="true"></div>
+    <div class="product-tour__backdrop" data-tour-action="backdrop" aria-hidden="true"></div>
     <div
-      class="product-tour__card"
+      class="product-tour__tooltip"
       role="dialog"
       aria-modal="true"
       aria-labelledby="product-tour-title"
       aria-describedby="product-tour-body"
     >
-      <div class="product-tour__card-inner">
-        <div class="product-tour__card-head">
+      <div class="product-tour__arrow" aria-hidden="true"></div>
+      <div class="product-tour__tooltip-inner">
+        <div class="product-tour__tooltip-head">
           <div class="product-tour__icon" id="product-tour-icon" aria-hidden="true"></div>
-          <div class="product-tour__head-text">
-            <span class="product-tour__progress-text" id="product-tour-progress-text"></span>
+          <div class="product-tour__head-copy">
+            <span class="product-tour__step" id="product-tour-progress-text"></span>
             <h2 class="product-tour__title" id="product-tour-title"></h2>
           </div>
           <button
@@ -101,16 +102,13 @@ function wait(ms) {
 }
 
 function waitForRoute(path) {
-  const current = getCurrentPath();
-  if (current === path) {
-    return wait(100);
-  }
+  if (getCurrentPath() === path) return wait(120);
 
   return new Promise((resolve) => {
     const handler = (e) => {
       if (e.detail?.path === path) {
         document.removeEventListener("route:change", handler);
-        wait(150).then(resolve);
+        wait(160).then(resolve);
       }
     };
     document.addEventListener("route:change", handler);
@@ -140,7 +138,7 @@ async function resolveTarget(step) {
 }
 
 function getScrollContainer() {
-  return document.querySelector("#content") || document.documentElement;
+  return document.querySelector("#content") || null;
 }
 
 function prepareSidebar(step) {
@@ -151,220 +149,208 @@ function prepareSidebar(step) {
     return;
   }
 
-  const { sidebarCollapsed } = getState();
-  if (sidebarCollapsed) {
+  if (getState().sidebarCollapsed) {
     setState({ sidebarCollapsed: false });
   }
 }
 
-function getSpotlightRect(target, step) {
-  if (!target || step.placement === "center") return null;
-
-  const rect = target.getBoundingClientRect();
-  const pad = step.spotlightPad ?? SPOTLIGHT_PAD;
-  let height = rect.height + pad * 2;
-  const maxHeight = window.innerHeight * (step.maxSpotlightRatio ?? 0.42);
-
-  if (step.compactSpotlight && height > maxHeight) {
-    height = maxHeight;
-  }
-
-  return {
-    top: Math.max(VIEWPORT_MARGIN, rect.top - pad),
-    left: Math.max(VIEWPORT_MARGIN, rect.left - pad),
-    width: Math.min(rect.width + pad * 2, window.innerWidth - VIEWPORT_MARGIN * 2),
-    height,
-  };
+function getTargetRect(target) {
+  if (!target) return null;
+  return target.getBoundingClientRect();
 }
 
-function positionSpotlight(spotlightEl, backdropEl, rect) {
-  if (!rect) {
-    spotlightEl.style.display = "none";
-    if (backdropEl) backdropEl.style.opacity = "1";
-    return;
-  }
-
-  if (backdropEl) backdropEl.style.opacity = "0";
-  spotlightEl.style.display = "block";
-  spotlightEl.style.top = `${rect.top}px`;
-  spotlightEl.style.left = `${rect.left}px`;
-  spotlightEl.style.width = `${rect.width}px`;
-  spotlightEl.style.height = `${rect.height}px`;
-}
-
-function getDockReserve(cardEl) {
-  if (!cardEl) return 200;
-  return cardEl.getBoundingClientRect().height + 28;
-}
-
-function positionCardDocked(cardEl) {
-  cardEl.classList.add("product-tour__card--dock");
-  cardEl.style.top = "auto";
-  cardEl.style.bottom = "";
-  cardEl.style.left = "50%";
-  cardEl.style.right = "auto";
-  cardEl.style.transform = "translateX(-50%)";
-  cardEl.style.width = `min(440px, calc(100vw - ${VIEWPORT_MARGIN * 2}px))`;
-}
-
-function positionCardAnchored(cardEl, rect, placement) {
+function computeTooltipPlacement(rect, tooltipRect, preferred) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const cardRect = cardEl.getBoundingClientRect();
-  let top = 0;
-  let left = 0;
-  let resolvedPlacement = placement;
+  const placements = [...new Set([preferred, "bottom", "top", "right", "left"])];
 
-  const fitsBelow = rect.top + rect.height + CARD_GAP + cardRect.height < vh - VIEWPORT_MARGIN;
-  const fitsAbove = rect.top - CARD_GAP - cardRect.height > NAVBAR_CLEARANCE;
-  const fitsRight = rect.left + rect.width + CARD_GAP + cardRect.width < vw - VIEWPORT_MARGIN;
-  const fitsLeft = rect.left - CARD_GAP - cardRect.width > VIEWPORT_MARGIN;
+  for (const side of placements) {
+    let top = 0;
+    let left = 0;
 
-  if (placement === "bottom" && !fitsBelow && fitsAbove) resolvedPlacement = "top";
-  if (placement === "top" && !fitsAbove && fitsBelow) resolvedPlacement = "bottom";
-  if (placement === "right" && !fitsRight && fitsLeft) resolvedPlacement = "left";
-  if (placement === "left" && !fitsLeft && fitsRight) resolvedPlacement = "right";
+    if (side === "bottom") {
+      top = rect.bottom + TOOLTIP_GAP;
+      left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+      if (top + tooltipRect.height <= vh - VIEWPORT_PAD
+        && left >= VIEWPORT_PAD
+        && left + tooltipRect.width <= vw - VIEWPORT_PAD) {
+        return { side, top, left };
+      }
+    }
 
-  if (!fitsBelow && !fitsAbove && !fitsRight && !fitsLeft) {
-    positionCardDocked(cardEl);
-    return "dock";
+    if (side === "top") {
+      top = rect.top - TOOLTIP_GAP - tooltipRect.height;
+      left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+      if (top >= NAVBAR_PAD
+        && left >= VIEWPORT_PAD
+        && left + tooltipRect.width <= vw - VIEWPORT_PAD) {
+        return { side, top, left };
+      }
+    }
+
+    if (side === "right") {
+      top = rect.top + rect.height / 2 - tooltipRect.height / 2;
+      left = rect.right + TOOLTIP_GAP;
+      if (left + tooltipRect.width <= vw - VIEWPORT_PAD
+        && top >= NAVBAR_PAD
+        && top + tooltipRect.height <= vh - VIEWPORT_PAD) {
+        return { side, top, left };
+      }
+    }
+
+    if (side === "left") {
+      top = rect.top + rect.height / 2 - tooltipRect.height / 2;
+      left = rect.left - TOOLTIP_GAP - tooltipRect.width;
+      if (left >= VIEWPORT_PAD
+        && top >= NAVBAR_PAD
+        && top + tooltipRect.height <= vh - VIEWPORT_PAD) {
+        return { side, top, left };
+      }
+    }
   }
 
-  if (resolvedPlacement === "bottom") {
-    top = rect.top + rect.height + CARD_GAP;
-    left = rect.left + rect.width / 2 - cardRect.width / 2;
-    cardEl.classList.add("product-tour__card--bottom");
-  } else if (resolvedPlacement === "top") {
-    top = rect.top - CARD_GAP - cardRect.height;
-    left = rect.left + rect.width / 2 - cardRect.width / 2;
-    cardEl.classList.add("product-tour__card--top");
-  } else if (resolvedPlacement === "right") {
-    top = rect.top + rect.height / 2 - cardRect.height / 2;
-    left = rect.left + rect.width + CARD_GAP;
-    cardEl.classList.add("product-tour__card--right");
-  } else if (resolvedPlacement === "left") {
-    top = rect.top + rect.height / 2 - cardRect.height / 2;
-    left = rect.left - CARD_GAP - cardRect.width;
-    cardEl.classList.add("product-tour__card--left");
-  }
-
-  left = Math.max(VIEWPORT_MARGIN, Math.min(left, vw - cardRect.width - VIEWPORT_MARGIN));
-  top = Math.max(NAVBAR_CLEARANCE, Math.min(top, vh - cardRect.height - VIEWPORT_MARGIN));
-
-  cardEl.style.top = `${top}px`;
-  cardEl.style.left = `${left}px`;
-  cardEl.style.bottom = "auto";
-  cardEl.style.right = "auto";
-  cardEl.style.transform = "";
-  cardEl.style.width = "";
-
-  return resolvedPlacement;
-}
-
-function positionCard(cardEl, rect, step) {
-  cardEl.classList.remove(
-    "product-tour__card--center",
-    "product-tour__card--top",
-    "product-tour__card--bottom",
-    "product-tour__card--left",
-    "product-tour__card--right",
-    "product-tour__card--dock",
+  const top = Math.max(NAVBAR_PAD, Math.min(rect.bottom + TOOLTIP_GAP, vh - tooltipRect.height - VIEWPORT_PAD));
+  const left = Math.max(
+    VIEWPORT_PAD,
+    Math.min(rect.left + rect.width / 2 - tooltipRect.width / 2, vw - tooltipRect.width - VIEWPORT_PAD),
   );
 
-  cardEl.style.top = "";
-  cardEl.style.left = "";
-  cardEl.style.right = "";
-  cardEl.style.bottom = "";
-  cardEl.style.transform = "";
-  cardEl.style.width = "";
-
-  const cardMode = step.cardMode || "auto";
-
-  if (!rect || step.placement === "center") {
-    cardEl.classList.add("product-tour__card--center");
-    currentCardMode = "center";
-    return;
-  }
-
-  if (cardMode === "dock" || window.innerWidth <= 768) {
-    positionCardDocked(cardEl);
-    currentCardMode = "dock";
-    return;
-  }
-
-  const result = positionCardAnchored(cardEl, rect, step.placement);
-  currentCardMode = result === "dock" ? "dock" : "anchored";
+  return { side: "bottom", top, left, fallback: true };
 }
 
-async function scrollTargetIntoView(target, step) {
+function positionArrow(arrowEl, side, rect, tooltipRect, tooltipTop, tooltipLeft) {
+  if (!arrowEl) return;
+
+  arrowEl.className = `product-tour__arrow product-tour__arrow--${side}`;
+
+  const arrowSize = 10;
+  let arrowTop = 0;
+  let arrowLeft = 0;
+
+  if (side === "bottom") {
+    arrowTop = -arrowSize;
+    arrowLeft = rect.left + rect.width / 2 - tooltipLeft - arrowSize;
+  } else if (side === "top") {
+    arrowTop = tooltipRect.height - 1;
+    arrowLeft = rect.left + rect.width / 2 - tooltipLeft - arrowSize;
+  } else if (side === "right") {
+    arrowTop = rect.top + rect.height / 2 - tooltipTop - arrowSize;
+    arrowLeft = -arrowSize;
+  } else if (side === "left") {
+    arrowTop = rect.top + rect.height / 2 - tooltipTop - arrowSize;
+    arrowLeft = tooltipRect.width - 1;
+  }
+
+  arrowLeft = Math.max(16, Math.min(arrowLeft, tooltipRect.width - 32));
+  arrowEl.style.top = `${arrowTop}px`;
+  arrowEl.style.left = `${arrowLeft}px`;
+}
+
+function positionTooltipCenter(tooltipEl) {
+  tooltipEl.className = "product-tour__tooltip product-tour__tooltip--center";
+  tooltipEl.style.top = "50%";
+  tooltipEl.style.left = "50%";
+  tooltipEl.style.transform = "translate(-50%, -50%)";
+  tooltipEl.style.width = `min(380px, calc(100vw - ${VIEWPORT_PAD * 2}px))`;
+}
+
+function positionTooltipAnchored(tooltipEl, arrowEl, target, step) {
+  const rect = getTargetRect(target);
+  if (!rect) return;
+
+  tooltipEl.className = "product-tour__tooltip";
+  tooltipEl.style.transform = "";
+  tooltipEl.style.width = `min(320px, calc(100vw - ${VIEWPORT_PAD * 2}px))`;
+  tooltipEl.style.visibility = "hidden";
+  tooltipEl.style.top = "0";
+  tooltipEl.style.left = "0";
+
+  const tooltipRect = tooltipEl.getBoundingClientRect();
+  const preferred = window.innerWidth <= 640 ? "bottom" : (step.placement || "bottom");
+  const { side, top, left } = computeTooltipPlacement(rect, tooltipRect, preferred);
+
+  tooltipEl.style.visibility = "";
+  tooltipEl.style.top = `${top}px`;
+  tooltipEl.style.left = `${left}px`;
+  tooltipEl.dataset.placement = side;
+
+  positionArrow(arrowEl, side, rect, tooltipRect, top, left);
+}
+
+function updateLayout() {
+  if (!active || !root) return;
+
+  const tooltipEl = $(".product-tour__tooltip", root);
+  const arrowEl = $(".product-tour__arrow", root);
+  if (!tooltipEl) return;
+
+  if (!currentTarget || currentStep?.placement === "center") {
+    positionTooltipCenter(tooltipEl);
+    return;
+  }
+
+  positionTooltipAnchored(tooltipEl, arrowEl, currentTarget, currentStep);
+}
+
+async function scrollTargetIntoView(target) {
   if (!target) return;
 
   const container = getScrollContainer();
-  const cardMode = step.cardMode === "dock" || window.innerWidth <= 768 ? "dock" : step.cardMode;
-  const cardEl = $(".product-tour__card", root);
+  const tooltipEl = $(".product-tour__tooltip", root);
+  const tooltipHeight = tooltipEl?.offsetHeight || 180;
 
-  target.scrollIntoView({ block: "start", inline: "nearest", behavior: "auto" });
+  target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+  await wait(20);
 
-  await wait(16);
-
-  const dockReserve = cardMode === "dock" ? getDockReserve(cardEl) : 32;
   const rect = target.getBoundingClientRect();
-  const idealTop = NAVBAR_CLEARANCE;
-  const maxBottom = window.innerHeight - dockReserve;
+  const minTop = NAVBAR_PAD + 8;
+  const maxBottom = window.innerHeight - tooltipHeight - VIEWPORT_PAD - TOOLTIP_GAP;
 
-  let scrollDelta = 0;
-  if (rect.top < idealTop) {
-    scrollDelta = rect.top - idealTop;
-  } else if (rect.bottom > maxBottom) {
-    scrollDelta = rect.bottom - maxBottom;
-  }
+  let delta = 0;
+  if (rect.top < minTop) delta = rect.top - minTop;
+  else if (rect.bottom > maxBottom) delta = rect.bottom - maxBottom;
 
-  if (Math.abs(scrollDelta) > 6) {
-    if (container === document.documentElement) {
-      window.scrollBy({ top: scrollDelta, behavior: "smooth" });
-    } else {
-      container.scrollBy({ top: scrollDelta, behavior: "smooth" });
-      await wait(280);
-    }
+  if (Math.abs(delta) > 4 && container) {
+    container.scrollBy({ top: delta, behavior: "smooth" });
+    await wait(240);
   }
 }
 
 function bindReposition(target, step) {
   unbindReposition();
 
-  const reposition = () => {
-    if (!active) return;
-    const spotlightEl = $(".product-tour__spotlight", root);
-    const backdropEl = $(".product-tour__backdrop", root);
-    const cardEl = $(".product-tour__card", root);
-    if (!spotlightEl || !cardEl) return;
-    const rect = getSpotlightRect(target, step);
-    positionSpotlight(spotlightEl, backdropEl, rect);
-    positionCard(cardEl, rect, step);
-  };
+  currentTarget = target;
+  currentStep = step;
+  scrollContainer = getScrollContainer();
 
-  scrollHandler = reposition;
-  window.addEventListener("resize", reposition);
-  window.addEventListener("scroll", reposition, true);
+  repositionHandler = () => updateLayout();
 
-  const cardEl = $(".product-tour__card", root);
+  window.addEventListener("resize", repositionHandler, { passive: true });
+  window.addEventListener("scroll", repositionHandler, { passive: true, capture: true });
+  scrollContainer?.addEventListener("scroll", repositionHandler, { passive: true });
+
   if (typeof ResizeObserver !== "undefined") {
-    resizeObserver = new ResizeObserver(reposition);
+    resizeObserver = new ResizeObserver(repositionHandler);
     if (target) resizeObserver.observe(target);
-    if (cardEl) resizeObserver.observe(cardEl);
+    const tooltipEl = $(".product-tour__tooltip", root);
+    if (tooltipEl) resizeObserver.observe(tooltipEl);
   }
 
-  reposition();
+  updateLayout();
 }
 
 function unbindReposition() {
-  if (scrollHandler) {
-    window.removeEventListener("resize", scrollHandler);
-    window.removeEventListener("scroll", scrollHandler, true);
-    scrollHandler = null;
+  if (repositionHandler) {
+    window.removeEventListener("resize", repositionHandler);
+    window.removeEventListener("scroll", repositionHandler, true);
+    scrollContainer?.removeEventListener("scroll", repositionHandler);
+    repositionHandler = null;
   }
   resizeObserver?.disconnect();
   resizeObserver = null;
+  scrollContainer = null;
+  currentTarget = null;
+  currentStep = null;
 }
 
 function renderStepUI(step, index) {
@@ -385,12 +371,9 @@ function renderStepUI(step, index) {
   if (progressTextEl) progressTextEl.textContent = `Step ${index + 1} of ${steps.length}`;
 
   if (backBtn) backBtn.disabled = index === 0;
-  if (nextBtn) {
-    nextBtn.textContent = index === steps.length - 1 ? "Finish" : "Next";
-  }
+  if (nextBtn) nextBtn.textContent = index === steps.length - 1 ? "Finish" : "Next";
 
   root?.setAttribute("aria-label", `Tour: ${step.title}`);
-  root.dataset.cardMode = step.cardMode || "auto";
 }
 
 async function showStep(index) {
@@ -400,40 +383,29 @@ async function showStep(index) {
   stepIndex = index;
   prepareSidebar(step);
 
-  if (step.route) {
-    await waitForRoute(step.route);
-  }
+  if (step.route) await waitForRoute(step.route);
 
+  clearTargetHighlight();
   const target = await resolveTarget(step);
 
   renderStepUI(step, index);
 
   if (target) {
-    await scrollTargetIntoView(target, step);
+    target.classList.add("product-tour__target");
+    await scrollTargetIntoView(target);
   }
 
-  const spotlightEl = $(".product-tour__spotlight", root);
-  const backdropEl = $(".product-tour__backdrop", root);
-  const cardEl = $(".product-tour__card", root);
-  const rect = getSpotlightRect(target, step);
+  root.dataset.tourTarget = target ? step.id : (step.placement === "center" ? "center" : "missing");
+  document.body.classList.toggle("tour-active--anchored", Boolean(target && step.placement !== "center"));
 
-  positionSpotlight(spotlightEl, backdropEl, rect);
-  positionCard(cardEl, rect, step);
+  const tooltipEl = $(".product-tour__tooltip", root);
+  tooltipEl?.classList.add("is-entering");
+  window.setTimeout(() => tooltipEl?.classList.remove("is-entering"), 280);
 
   requestAnimationFrame(() => {
-    positionCard(cardEl, getSpotlightRect(target, step), step);
     bindReposition(target, step);
+    requestAnimationFrame(updateLayout);
   });
-
-  clearTargetHighlight();
-  if (target) {
-    target.classList.add("product-tour__target");
-    root.dataset.tourTarget = step.id;
-  } else {
-    root.dataset.tourTarget = step.placement === "center" ? "center" : "missing";
-  }
-
-  document.body.dataset.tourCardMode = currentCardMode;
 }
 
 function clearTargetHighlight() {
@@ -453,8 +425,7 @@ function closeTourUI() {
   unbindReposition();
   clearTargetHighlight();
   root?.setAttribute("hidden", "");
-  document.body.classList.remove("tour-active");
-  delete document.body.dataset.tourCardMode;
+  document.body.classList.remove("tour-active", "tour-active--anchored");
   active = false;
 
   if (window.innerWidth <= 768) {
@@ -483,7 +454,6 @@ export async function startTour({ fromStep = 0 } = {}) {
 
   steps = getTourSteps();
   stepIndex = Math.max(0, Math.min(fromStep, steps.length - 1));
-
   openTourUI();
   await showStep(stepIndex);
 }
@@ -518,8 +488,7 @@ export function initProductTour() {
   });
 
   document.addEventListener("route:change", () => {
-    const navbar = $(".navbar");
-    navbar?.classList.remove("navbar--help-open");
+    $(".navbar")?.classList.remove("navbar--help-open");
   });
 }
 
@@ -528,13 +497,9 @@ export function maybeAutoStartTour() {
 
   const { completed, dismissed } = getTourState();
   if (completed || dismissed) return;
-
-  const path = getCurrentPath();
-  if (isPublicRoute(path)) return;
+  if (isPublicRoute(getCurrentPath())) return;
 
   window.setTimeout(() => {
-    if (!isTourActive()) {
-      void startTour({ fromStep: 0 });
-    }
+    if (!isTourActive()) void startTour({ fromStep: 0 });
   }, 900);
 }
