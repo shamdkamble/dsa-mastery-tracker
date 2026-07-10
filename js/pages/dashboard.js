@@ -9,7 +9,7 @@ import {
   computeRecentActivity,
   computeTopicProgress,
 } from "../storage/computed.js";
-import { formatGreeting, formatLongDate } from "../storage/helpers.js";
+import { formatGreeting } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 import { bindTeachTopicHandlers } from "../components/teach-modal.js";
 import {
@@ -185,9 +185,6 @@ export default {
     const continueTopic = getContinueLearningTopic(sessionUser);
     const displayName = sessionUser?.name || profile.name || "Learner";
     const firstName = displayName.split(" ")[0] || "there";
-    const accountLabel = sessionUser?.email
-      ? `<span class="text-tertiary">${escapeHtml(sessionUser.email)}</span>`
-      : "";
     const doneCount = mission.filter((m) => m.done).length;
     const missionPercent = mission.length ? Math.round((doneCount / mission.length) * 100) : 0;
 
@@ -195,19 +192,11 @@ export default {
       title: "",
       children: `
         <div class="page-greeting page-greeting--dash animate-fade-in-up">
-          <div>
-            <h1 class="page-greeting__title">${formatGreeting()}, ${escapeHtml(firstName)}</h1>
-            <p class="page-greeting__subtitle">
-              ${stats.currentStreak > 0
-                ? `${stats.currentStreak}-day streak — keep showing up.`
-                : "Consistency beats intensity. One step today is enough."}
-            </p>
-            <div class="page-greeting__meta">
-              ${formatLongDate()}
-              <span aria-hidden="true">·</span>
-              ${stats.studyTimeToday} studied
-              ${accountLabel ? `<span aria-hidden="true">·</span> ${accountLabel}` : ""}
-            </div>
+          <div class="page-greeting__copy">
+            <p class="page-greeting__eyebrow">${formatGreeting()}</p>
+            <h1 class="page-greeting__title">
+              <span class="page-greeting__name">${escapeHtml(firstName)}</span>
+            </h1>
           </div>
         </div>
 
