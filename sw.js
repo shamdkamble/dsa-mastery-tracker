@@ -2,7 +2,7 @@
  * DSAMantra service worker — offline shell + static asset caching
  */
 
-const CACHE_VERSION = "dsamantra-v7";
+const CACHE_VERSION = "dsamantra-v8";
 const PRECACHE_URLS = [
   "/",
   "/index.html",
@@ -22,6 +22,10 @@ function isApiRequest(url) {
 
 function isStaticAsset(url) {
   return /\.(css|js|svg|png|jpg|jpeg|webp|woff2?|ico|webmanifest|json)$/i.test(url.pathname);
+}
+
+function isAppScript(url) {
+  return url.pathname.startsWith("/js/");
 }
 
 self.addEventListener("install", (event) => {
@@ -64,6 +68,21 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (!isStaticAsset(url) && !OFFLINE_URLS.has(url.pathname)) return;
+
+  if (isAppScript(url)) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request)),
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {

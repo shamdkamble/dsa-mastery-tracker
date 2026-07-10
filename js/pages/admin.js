@@ -291,6 +291,18 @@ export default {
       children: `
         <div class="admin-page user-mgmt">
           ${adminSubnav("users")}
+
+          <a href="#/admin-push-logs" class="card admin-push-cta" data-route="admin-push-logs">
+            <div class="card__body admin-push-cta__body">
+              <div class="admin-push-cta__icon" aria-hidden="true">${icon("bell")}</div>
+              <div>
+                <div class="admin-push-cta__title">Push Delivery Log</div>
+                <p class="admin-push-cta__text text-secondary">Track every system push — which user, success or failure, and error details.</p>
+              </div>
+              <span class="admin-push-cta__arrow" aria-hidden="true">${icon("chevronLeft")}</span>
+            </div>
+          </a>
+
           <div id="admin-alert" class="admin-page__alert"></div>
 
           <div class="admin-stats user-mgmt__stats" id="admin-stats">

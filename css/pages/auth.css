@@ -602,6 +602,61 @@
   background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
+.admin-push-cta {
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-push-cta:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.admin-push-cta__body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.admin-push-cta__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.admin-push-cta__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.admin-push-cta__title {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-lg);
+}
+
+.admin-push-cta__text {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+}
+
+.admin-push-cta__arrow {
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  transform: rotate(180deg);
+  flex-shrink: 0;
+}
+
+.admin-push-cta__arrow svg {
+  width: 18px;
+  height: 18px;
+}
+
 /* ── Push delivery log ── */
 
 .push-logs__stats {
