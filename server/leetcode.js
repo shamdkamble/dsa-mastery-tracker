@@ -5,31 +5,11 @@
  * Last resort: slug-derived offline metadata
  */
 
-import { PATTERN_CATALOG } from "../js/storage/patterns-catalog.js";
-
 const LEETCODE_GRAPHQL = "https://leetcode.com/graphql";
 const ALFA_API_BASE = "https://alfa-leetcode-api.onrender.com";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 500;
-
-const TAG_PATTERN_MAP = {
-  "hash-table": "Hash Map",
-  "dynamic-programming": "Dynamic Programming",
-  "binary-search": "Binary Search",
-  "depth-first-search": "BFS / DFS",
-  "breadth-first-search": "BFS / DFS",
-  "tree": "BFS / DFS",
-  "graph": "Graph Algorithms",
-  "union-find": "Union Find",
-  "trie": "Trie",
-  "heap-priority-queue": "Heap / Priority Queue",
-  "stack": "Stack",
-  "monotonic-stack": "Monotonic Stack",
-  "two-pointers": "Two Pointers",
-  "sliding-window": "Sliding Window",
-  "backtracking": "Backtracking",
-};
 
 const DIFFICULTY_TIME = { Easy: 20, Medium: 35, Hard: 50 };
 
@@ -103,21 +83,6 @@ function normalizeDifficulty(difficulty) {
   return "Medium";
 }
 
-function matchPatternFromTags(tags = []) {
-  for (const tag of tags) {
-    const mapped = TAG_PATTERN_MAP[tag.slug];
-    if (mapped) return mapped;
-  }
-
-  for (const tag of tags) {
-    const name = tag.name?.toLowerCase();
-    const found = PATTERN_CATALOG.find((p) => p.name.toLowerCase() === name);
-    if (found) return found.name;
-  }
-
-  return "";
-}
-
 function mapTopicFromTags(tags = []) {
   if (!tags.length) return "";
   return tags.slice(0, 2).map((t) => t.name).join(" · ");
@@ -141,7 +106,6 @@ function normalizeProblemPayload(slug, data, source) {
     leetcodeId: data.questionFrontendId || data.questionId || "",
     difficulty,
     topic: mapTopicFromTags(tags),
-    pattern: matchPatternFromTags(tags),
     topicTags: tags.map((t) => t.name),
     estimatedMinutes: DIFFICULTY_TIME[difficulty] || 30,
     isPaidOnly: Boolean(data.isPaidOnly),

@@ -403,7 +403,8 @@ function applyMetadata(host, meta) {
 
   updateProblemHero(host, meta);
   if (meta.topic) setVal("topic", meta.topic);
-  if (meta.pattern) setSelect("problem-pattern", meta.pattern);
+  const patternSelect = form.querySelector("#problem-pattern");
+  if (patternSelect) patternSelect.value = "";
   if (meta.estimatedMinutes) setVal("estimatedMinutes", meta.estimatedMinutes);
   if (meta.leetcodeUrl) setVal("leetcodeUrl", meta.leetcodeUrl);
   if (meta.leetcodeSlug) setVal("leetcodeSlug", meta.leetcodeSlug);
