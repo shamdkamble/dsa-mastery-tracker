@@ -493,22 +493,58 @@
 }
 
 .dw-console__activity {
-  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border);
 }
 
-.dw-console__activity-head {
+.dw-console__activity-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.dw-console__activity-summary::-webkit-details-marker {
+  display: none;
+}
+
+.dw-console__activity-summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 6px solid var(--color-text-tertiary);
+  margin-right: var(--space-2);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.dw-console__activity[open] .dw-console__activity-summary::before {
+  transform: rotate(90deg);
+}
+
+.dw-console__activity[open] .dw-console__activity-summary {
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-secondary) 35%, transparent);
 }
 
 .dw-console__activity-title {
   margin: 0;
+  flex: 1;
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
+}
+
+.dw-console__activity-body {
+  padding: var(--space-3) var(--space-5) var(--space-4);
 }
 
 .dw-console__activity-empty {

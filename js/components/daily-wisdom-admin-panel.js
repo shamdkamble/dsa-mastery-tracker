@@ -117,18 +117,20 @@ export function renderDailyWisdomPanelShell() {
         <ul class="dw-gen-log" id="dw-gen-log"></ul>
       </div>
 
-      <div class="dw-console__activity">
-        <div class="dw-console__activity-head">
-          <h3 class="dw-console__activity-title">Recent activity</h3>
+      <details class="dw-console__activity" id="dw-activity-panel">
+        <summary class="dw-console__activity-summary">
+          <span class="dw-console__activity-title">Recent activity</span>
           <button type="button" class="btn btn--ghost btn--sm" id="dw-refresh-activity">
             ${icon("repeat")}
             <span>Refresh</span>
           </button>
+        </summary>
+        <div class="dw-console__activity-body">
+          <div class="dw-console__activity-list" id="dw-activity-list">
+            <p class="dw-console__activity-empty text-tertiary">Loading activity…</p>
+          </div>
         </div>
-        <div class="dw-console__activity-list" id="dw-activity-list">
-          <p class="dw-console__activity-empty text-tertiary">Loading activity…</p>
-        </div>
-      </div>
+      </details>
 
       <details class="dw-console__advanced">
         <summary class="dw-console__advanced-toggle">

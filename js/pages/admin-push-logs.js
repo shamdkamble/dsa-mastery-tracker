@@ -26,6 +26,7 @@ import { Toast } from "../components/ui/index.js";
 
 const STATUS_FILTERS = ["all", "sent", "failed", "skipped"];
 const SOURCE_FILTERS = ["all", "access", "test", "reminder", "redelivery", "learning-fact"];
+const BATCH_COOLDOWN_SEC = 15;
 
 function escapeHtml(str) {
   return String(str)
@@ -366,6 +367,26 @@ export default {
       if (genStopBtn) genStopBtn.disabled = true;
     });
 
+    refreshActivityBtn?.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      void loadDashboard();
+    });
+
+    async function waitBatchCooldown() {
+      appendGenLogEntry(genLogEl, {
+        status: "info",
+        message: `Cooling down ${BATCH_COOLDOWN_SEC}s before next batch (rate-limit safety)…`,
+      });
+
+      for (let sec = BATCH_COOLDOWN_SEC; sec > 0; sec -= 1) {
+        if (generationAbort) return;
+        if (genStatusEl) genStatusEl.textContent = `Cooling down… ${sec}s`;
+        if (genEtaEl) genEtaEl.textContent = `Rate-limit pause · ${sec}s remaining`;
+        await new Promise((r) => { setTimeout(r, 1000); });
+      }
+    }
+
     async function runGenerateBatch(btn, { replaceExisting = false } = {}) {
       if (!btn) return;
 
@@ -450,7 +471,7 @@ export default {
           batchDurations.push(Date.now() - batchStart);
           const avgBatchMs = batchDurations.reduce((a, b) => a + b, 0) / batchDurations.length;
           const batchesLeft = Math.ceil(remaining / 18);
-          const etaSeconds = (avgBatchMs / 1000) * batchesLeft;
+          const etaSeconds = batchesLeft * ((avgBatchMs / 1000) + BATCH_COOLDOWN_SEC);
 
           updateGenProgressUI({
             batchIndex: batch.batchIndex || Math.ceil((queueTotal - remaining) / 18),
@@ -479,7 +500,7 @@ export default {
           }
 
           if (remaining > 0 && !generationAbort) {
-            await new Promise((r) => { setTimeout(r, 400); });
+            await waitBatchCooldown();
           }
         }
 
@@ -523,8 +544,6 @@ export default {
       if (!confirm("Regenerate hooks for ALL topics? This replaces existing Mantra Feed content.")) return;
       void runGenerateBatch(regenerateAllBtn, { replaceExisting: true });
     });
-
-    refreshActivityBtn?.addEventListener("click", () => { void loadDashboard(); });
 
     cronRunBtn?.addEventListener("click", async () => {
       cronRunBtn.disabled = true;
