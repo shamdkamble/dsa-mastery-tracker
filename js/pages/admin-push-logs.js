@@ -1,6 +1,7 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
 import { Badge, EmptyState, SkeletonTable } from "../components/ui/index.js";
+import { adminSubnav, adminHero, adminStatCard } from "../components/admin-shell.js";
 import {
   getPushDeliveryLogs,
   seedLearningFacts,
@@ -9,6 +10,7 @@ import {
   deliverLearningFactToMe,
   deliverLearningFactToUser,
   previewLearningFactAnchor,
+  runDailyWisdomCronNow,
   AuthApiError,
 } from "../services/auth.js";
 import { showToast } from "../components/ui/interactions.js";
@@ -63,29 +65,6 @@ function sourceBadge(source) {
     variant: "default",
     size: "sm",
   });
-}
-
-function statCard({ iconName, value, label, variant = "accent" }) {
-  return `
-    <div class="card admin-stat-card admin-stat-card--${variant}">
-      <div class="card__body admin-stat-card__body">
-        <div class="admin-stat-card__icon" aria-hidden="true">${icon(iconName)}</div>
-        <div>
-          <div class="admin-stat-card__value">${value}</div>
-          <div class="admin-stat-card__label">${label}</div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function adminSubnav(active) {
-  return `
-    <nav class="admin-subnav" aria-label="Admin sections">
-      <a href="#/admin" class="admin-subnav__link${active === "users" ? " is-active" : ""}">User Management</a>
-      <a href="#/admin-push-logs" class="admin-subnav__link${active === "push-logs" ? " is-active" : ""}">Push Delivery Log</a>
-    </nav>
-  `;
 }
 
 function deviceLabel(userAgent) {
@@ -189,13 +168,19 @@ export default {
       description: "Track every system push attempt — who it was sent to, whether it succeeded, and why it failed.",
       iconName: "bell",
       children: `
-        <div class="admin-page push-logs">
+        <div class="admin-page admin-page--modern push-logs">
+          ${adminHero({
+            title: "Push Delivery Log",
+            description: "Track every system push, manage Daily Wisdom, and run the cron on demand for testing.",
+            badge: "Notifications",
+          })}
           ${adminSubnav("push-logs")}
 
-          <section class="card learning-facts-guide">
+          <section class="card admin-wisdom-panel learning-facts-guide">
             <div class="card__body learning-facts-guide__body">
               <div>
-                <h2 class="learning-facts-guide__title">Daily Wisdom — Mantra Feed</h2>
+                <span class="admin-wisdom-panel__badge">${icon("zap")}<span>Daily Wisdom</span></span>
+                <h2 class="admin-wisdom-panel__title">Mantra Feed</h2>
                 <ol class="learning-facts-guide__steps">
                   <li><strong>Generate Mantra Feed (AI)</strong> — builds 5 value-first hooks per topic (insight, common mistake, interview tip).</li>
                   <li><strong>Send Daily Wisdom</strong> — picks the student's next topic and personalizes with progress: streak, last completed topic, tone.</li>
@@ -226,15 +211,24 @@ export default {
                     <span>Send to student</span>
                   </button>
                 </div>
+                <div class="admin-wisdom-panel__cron">
+                  <button type="button" class="btn btn--secondary btn--sm" id="daily-wisdom-cron-run">
+                    ${icon("repeat")}
+                    <span>Run Daily Wisdom cron now</span>
+                  </button>
+                  <span class="admin-wisdom-panel__cron-hint" id="daily-wisdom-cron-result">
+                    Simulates the daily job for all subscribed students (bypasses timezone &amp; daily dedup).
+                  </span>
+                </div>
               </div>
             </div>
           </section>
 
           <div class="admin-stats push-logs__stats" id="push-logs-stats">
-            ${statCard({ iconName: "bell", value: "—", label: "Total attempts" })}
-            ${statCard({ iconName: "check", value: "—", label: "Delivered", variant: "success" })}
-            ${statCard({ iconName: "close", value: "—", label: "Failed", variant: "danger" })}
-            ${statCard({ iconName: "alertCircle", value: "—", label: "Skipped", variant: "warning" })}
+            ${adminStatCard({ iconName: "bell", value: "—", label: "Total attempts" })}
+            ${adminStatCard({ iconName: "check", value: "—", label: "Delivered", variant: "success" })}
+            ${adminStatCard({ iconName: "close", value: "—", label: "Failed", variant: "danger" })}
+            ${adminStatCard({ iconName: "alertCircle", value: "—", label: "Skipped", variant: "warning" })}
           </div>
 
           <section class="admin-section push-logs__panel">
@@ -296,6 +290,8 @@ export default {
     const sendUserBtn = container.querySelector("#learning-facts-send-user");
     const userIdInput = container.querySelector("#learning-facts-user-id");
     const anchorPreview = container.querySelector("#learning-facts-anchor-preview");
+    const cronRunBtn = container.querySelector("#daily-wisdom-cron-run");
+    const cronResultEl = container.querySelector("#daily-wisdom-cron-result");
     const updatedEl = container.querySelector("#push-logs-updated");
 
     let search = "";
@@ -448,6 +444,35 @@ export default {
     }
 
     generateAllBtn?.addEventListener("click", () => { void runGenerateAllFacts(); });
+
+    cronRunBtn?.addEventListener("click", async () => {
+      cronRunBtn.disabled = true;
+      if (cronResultEl) cronResultEl.textContent = "Running cron for all eligible students…";
+
+      try {
+        const data = await runDailyWisdomCronNow({ force: true, skipTimezone: true });
+        const r = data.result || {};
+        const summary = `Done — sent: ${r.sent ?? 0}, checked: ${r.checked ?? 0}, skipped: ${r.skipped ?? 0}, failed: ${r.failed ?? 0}`;
+        if (cronResultEl) cronResultEl.textContent = summary;
+
+        showToast(Toast({
+          title: "Daily Wisdom cron finished",
+          text: summary,
+          variant: (r.sent ?? 0) > 0 ? "success" : "warning",
+        }));
+        void loadLogs();
+      } catch (err) {
+        const message = err instanceof AuthApiError ? err.message : "Cron run failed.";
+        if (cronResultEl) cronResultEl.textContent = message;
+        showToast(Toast({
+          title: "Cron failed",
+          text: message,
+          variant: "danger",
+        }));
+      } finally {
+        cronRunBtn.disabled = false;
+      }
+    });
 
     function formatDeliverResult(data) {
       const push = data.pushDelivery;

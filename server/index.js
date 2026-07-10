@@ -550,6 +550,21 @@ app.post("/api/auth/admin/learning-facts/seed", requireAdmin, async (_req, res) 
   }
 });
 
+app.post("/api/auth/admin/cron/daily-wisdom", requireAdmin, async (req, res) => {
+  try {
+    const { force = true, skipTimezone = true, userId } = req.body ?? {};
+    const result = await runDailyWisdomDelivery({
+      force: force !== false,
+      skipTimezone: skipTimezone !== false,
+      userId: userId || null,
+    });
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error("[/api/auth/admin/cron/daily-wisdom]", err);
+    res.status(500).json({ error: { message: "Daily Wisdom cron failed.", code: "SERVER_ERROR" } });
+  }
+});
+
 app.get("/api/auth/admin/learning-facts/stats", requireAdmin, async (_req, res) => {
   try {
     const stats = await getLearningFactsPoolStats();

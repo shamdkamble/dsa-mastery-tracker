@@ -1,5 +1,6 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
+import { adminSubnav, adminHero, adminStatCard, adminQuickCard } from "../components/admin-shell.js";
 import { Badge, Button, EmptyState, Alert, SkeletonTable, Toast } from "../components/ui/index.js";
 import { initDropdowns, showToast } from "../components/ui/interactions.js";
 import {
@@ -67,29 +68,6 @@ function accessBadge(level) {
 function isExpired(expiresAt) {
   if (!expiresAt) return false;
   return new Date(expiresAt).getTime() <= Date.now();
-}
-
-function adminSubnav(active) {
-  return `
-    <nav class="admin-subnav" aria-label="Admin sections">
-      <a href="#/admin" class="admin-subnav__link${active === "users" ? " is-active" : ""}">User Management</a>
-      <a href="#/admin-push-logs" class="admin-subnav__link${active === "push-logs" ? " is-active" : ""}">Push Delivery Log</a>
-    </nav>
-  `;
-}
-
-function statCard({ iconName, value, label, variant = "accent" }) {
-  return `
-    <div class="card admin-stat-card admin-stat-card--${variant}">
-      <div class="card__body admin-stat-card__body">
-        <div class="admin-stat-card__icon" aria-hidden="true">${icon(iconName)}</div>
-        <div>
-          <div class="admin-stat-card__value">${value}</div>
-          <div class="admin-stat-card__label">${label}</div>
-        </div>
-      </div>
-    </div>
-  `;
 }
 
 function isActionDisabled(action, status) {
@@ -289,27 +267,38 @@ export default {
       description: "Manage learner accounts, access levels, and expiry dates from one place.",
       iconName: "shield",
       children: `
-        <div class="admin-page user-mgmt">
+        <div class="admin-page admin-page--modern user-mgmt">
+          ${adminHero({
+            title: "User Management",
+            description: "Approve learners, manage access levels, and jump to push tools or the notification architecture map.",
+            badge: "Control center",
+          })}
           ${adminSubnav("users")}
 
-          <a href="#/admin-push-logs" class="card admin-push-cta" data-route="admin-push-logs">
-            <div class="card__body admin-push-cta__body">
-              <div class="admin-push-cta__icon" aria-hidden="true">${icon("bell")}</div>
-              <div>
-                <div class="admin-push-cta__title">Push Delivery Log</div>
-                <p class="admin-push-cta__text text-secondary">Track every system push — which user, success or failure, and error details.</p>
-              </div>
-              <span class="admin-push-cta__arrow" aria-hidden="true">${icon("chevronLeft")}</span>
-            </div>
-          </a>
+          <div class="admin-quick-grid">
+            ${adminQuickCard({
+              path: "admin-push-logs",
+              iconName: "bell",
+              title: "Push Delivery Log",
+              text: "Daily Wisdom, delivery audit trail, and manual cron trigger.",
+              accent: "accent",
+            })}
+            ${adminQuickCard({
+              path: "admin-notifications",
+              iconName: "layers",
+              title: "Notification Architecture",
+              text: "Visual map of triggers, pipelines, and MongoDB collections.",
+              accent: "violet",
+            })}
+          </div>
 
           <div id="admin-alert" class="admin-page__alert"></div>
 
           <div class="admin-stats user-mgmt__stats" id="admin-stats">
-            ${statCard({ iconName: "user", value: "—", label: "Total users" })}
-            ${statCard({ iconName: "clock", value: "—", label: "Pending", variant: "warning" })}
-            ${statCard({ iconName: "check", value: "—", label: "Approved", variant: "success" })}
-            ${statCard({ iconName: "alertCircle", value: "—", label: "Suspended", variant: "info" })}
+            ${adminStatCard({ iconName: "user", value: "—", label: "Total users" })}
+            ${adminStatCard({ iconName: "clock", value: "—", label: "Pending", variant: "warning" })}
+            ${adminStatCard({ iconName: "check", value: "—", label: "Approved", variant: "success" })}
+            ${adminStatCard({ iconName: "alertCircle", value: "—", label: "Suspended", variant: "info" })}
           </div>
 
           <section class="admin-section user-mgmt__panel">

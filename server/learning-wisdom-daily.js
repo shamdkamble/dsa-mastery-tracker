@@ -65,8 +65,12 @@ async function markDailyWisdomSent(userId, dateKey) {
 
 /**
  * Deliver one personalized Daily Wisdom push per eligible user per day.
+ * @param {{ force?: boolean, skipTimezone?: boolean, userId?: string }} options
+ *   force — bypass daily dedup (admin testing)
+ *   skipTimezone — deliver immediately regardless of local hour
+ *   userId — limit to one user
  */
-export async function runDailyWisdomDelivery() {
+export async function runDailyWisdomDelivery({ force = false, skipTimezone = false, userId = null } = {}) {
   const subscribedUserIds = await listDistinctUserIdsWithPushSubscriptions();
   if (!subscribedUserIds.length) {
     return { sent: 0, checked: 0, skipped: 0, failed: 0 };
@@ -79,7 +83,11 @@ export async function runDailyWisdomDelivery() {
     role: { $ne: "admin" },
   }).select({ id: 1 }).lean();
 
-  const userIds = approvedUsers.map((u) => u.id);
+  let userIds = approvedUsers.map((u) => u.id);
+  if (userId) {
+    userIds = userIds.filter((id) => id === userId);
+  }
+
   const prefsMap = await listNotificationPreferencesForUsers(userIds);
 
   let sent = 0;
@@ -87,22 +95,22 @@ export async function runDailyWisdomDelivery() {
   let skipped = 0;
   let failed = 0;
 
-  for (const userId of userIds) {
-    const prefs = prefsMap.get(userId) || {};
-    if (prefs.dailyWisdom === false) continue;
+  for (const uid of userIds) {
+    const prefs = prefsMap.get(uid) || {};
+    if (prefs.dailyWisdom === false && !force) continue;
 
     const zoned = getZonedParts(new Date(), prefs.timezone || "Asia/Kolkata");
-    if (!isDailyWisdomDue(zoned)) continue;
+    if (!skipTimezone && !isDailyWisdomDue(zoned)) continue;
 
     checked += 1;
 
-    if (await wasDailyWisdomSent(userId, zoned.dateKey)) {
+    if (!force && await wasDailyWisdomSent(uid, zoned.dateKey)) {
       skipped += 1;
       continue;
     }
 
     try {
-      const result = await deliverLearningFactToUser(userId, { sendPush: true });
+      const result = await deliverLearningFactToUser(uid, { sendPush: true });
 
       if (!result.ok) {
         skipped += 1;
@@ -110,7 +118,9 @@ export async function runDailyWisdomDelivery() {
       }
 
       if (result.push?.sent > 0) {
-        await markDailyWisdomSent(userId, zoned.dateKey);
+        if (!force) {
+          await markDailyWisdomSent(uid, zoned.dateKey);
+        }
         sent += 1;
       } else {
         skipped += 1;
@@ -120,5 +130,5 @@ export async function runDailyWisdomDelivery() {
     }
   }
 
-  return { sent, checked, skipped, failed };
+  return { sent, checked, skipped, failed, forced: Boolean(force) };
 }

@@ -179,6 +179,18 @@ export async function previewLearningFactAnchor() {
   return data;
 }
 
+export async function runDailyWisdomCronNow({ force = true, skipTimezone = true, userId } = {}) {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/cron/daily-wisdom`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ force, skipTimezone, userId }),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}
+
 export async function getPushDeliveryLogs({ limit = 100, status, source, userId, search } = {}) {
   const params = new URLSearchParams();
   if (limit) params.set("limit", String(limit));

@@ -54,6 +54,7 @@ function getNavSections() {
       items: [
         { path: "admin", label: "Admin Panel", icon: "shield" },
         { path: "admin-push-logs", label: "Push Delivery Log", icon: "bell" },
+        { path: "admin-notifications", label: "Notification Architecture", icon: "layers" },
       ],
     }] : []),
   ];

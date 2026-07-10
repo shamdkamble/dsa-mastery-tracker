@@ -35,6 +35,7 @@
 /* Pages */
 @import url("pages/pages.css");
 @import url("pages/auth.css");
+@import url("pages/admin-modern.css");
 
 /* Responsive (must load last) */
 @import url("responsive.css");
