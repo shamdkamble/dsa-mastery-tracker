@@ -21,6 +21,7 @@ function normalize(doc) {
     variant: d.variant || "info",
     href: d.href || "#/settings",
     read: Boolean(d.read),
+    pushSent: Boolean(d.pushSent),
     createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : new Date().toISOString(),
   };
 }
@@ -70,4 +71,26 @@ export async function markAllUserNotificationsRead(userId) {
   await connectDB();
   await UserNotification.updateMany({ userId, read: false }, { $set: { read: true } });
   return { ok: true };
+}
+
+export async function listUndeliveredPushNotifications(userId, { limit = 10 } = {}) {
+  await connectDB();
+  const docs = await UserNotification.find({
+    userId,
+    read: false,
+    pushSent: { $ne: true },
+  })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+
+  return docs.map(normalize);
+}
+
+export async function markNotificationPushSent(notificationId, userId) {
+  await connectDB();
+  await UserNotification.updateOne(
+    { id: notificationId, userId },
+    { $set: { pushSent: true } },
+  );
 }

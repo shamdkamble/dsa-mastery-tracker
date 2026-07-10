@@ -28,7 +28,12 @@ import {
 import { hydrateServerNotifications } from "./services/notifications.js";
 import { initProductTour, maybeAutoStartTour } from "./components/product-tour.js";
 import { initPWA } from "./pwa.js";
-import { initPushNotifications, maybePromptPushEnable, syncPushSubscription } from "./push-notifications.js";
+import {
+  initPushNotifications,
+  maybePromptPushEnable,
+  syncPushSubscription,
+  tryDeliverUnreadAccessPushes,
+} from "./push-notifications.js";
 import { hydrateNotificationPreferencesFromServer } from "./services/notification-preferences-sync.js";
 
 import dashboard from "./pages/dashboard.js";
@@ -183,6 +188,7 @@ async function init() {
     });
     void hydrateNotificationPreferencesFromServer();
     void syncPushSubscription();
+    void tryDeliverUnreadAccessPushes();
     window.setTimeout(() => { void maybePromptPushEnable(); }, 1500);
     maybeAutoStartTour();
   }

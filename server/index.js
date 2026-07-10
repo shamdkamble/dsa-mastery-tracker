@@ -70,6 +70,7 @@ import {
   upsertNotificationPreferences,
 } from "./notification-preferences-db.js";
 import { runScheduledPushReminders } from "./push-reminders.js";
+import { deliverUndeliveredAccessPushes } from "./push-access-delivery.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -326,7 +327,9 @@ app.post("/api/push/subscribe", requireAuth, async (req, res) => {
       return;
     }
 
-    res.json({ ok: true, subscription: record });
+    const delivery = await deliverUndeliveredAccessPushes(req.auth.sub);
+
+    res.json({ ok: true, subscription: record, delivery });
   } catch (err) {
     if (handleAuthError(res, err)) return;
     console.error("[/api/push/subscribe]", err);
@@ -349,6 +352,35 @@ app.delete("/api/push/unsubscribe", requireAuth, async (req, res) => {
     if (handleAuthError(res, err)) return;
     console.error("[/api/push/unsubscribe]", err);
     res.status(500).json({ error: { message: "Failed to remove push subscription.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/push/deliver-unread", requireAuth, async (req, res) => {
+  try {
+    if (!isPushConfigured()) {
+      res.status(503).json({
+        error: { message: "Push notifications are not configured on the server.", code: "PUSH_NOT_CONFIGURED" },
+      });
+      return;
+    }
+
+    const subscribed = await hasPushSubscription(req.auth.sub);
+    if (!subscribed) {
+      res.status(400).json({
+        error: {
+          message: "Enable system notifications first.",
+          code: "NOT_SUBSCRIBED",
+        },
+      });
+      return;
+    }
+
+    const result = await deliverUndeliveredAccessPushes(req.auth.sub);
+    res.json({ ok: true, result });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/push/deliver-unread]", err);
+    res.status(500).json({ error: { message: "Failed to deliver notifications.", code: "SERVER_ERROR" } });
   }
 });
 

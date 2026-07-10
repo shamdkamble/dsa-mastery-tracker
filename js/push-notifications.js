@@ -10,6 +10,7 @@ import {
   removePushSubscription,
   savePushSubscription,
   sendTestPush,
+  deliverUnreadAccessPushes,
 } from "./api/pushApi.js";
 import { ensureAppServiceWorker } from "./service-worker-register.js";
 import { icon } from "./components/icons.js";
@@ -271,8 +272,20 @@ export async function enableWebPush() {
   import("./services/notification-preferences-sync.js").then(({ syncAllStudyPreferencesToServer }) => {
     void syncAllStudyPreferencesToServer();
   });
+  void tryDeliverUnreadAccessPushes();
   dismissPushEnableBanner();
   return subscription;
+}
+
+export async function tryDeliverUnreadAccessPushes() {
+  if (!getToken()) return;
+  try {
+    const status = await fetchPushStatus();
+    if (!status.configured || !status.subscribed) return;
+    await deliverUnreadAccessPushes();
+  } catch (err) {
+    console.warn("[push] deliver unread failed:", err?.message || err);
+  }
 }
 
 export async function sendTestPushNotification() {

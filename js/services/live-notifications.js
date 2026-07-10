@@ -73,16 +73,19 @@ export async function refreshLiveNotifications({ toastNew = false } = {}) {
 
     if (toastNew) {
       let sawAccountApproved = false;
+      let sawNewAccessAlert = false;
       serverItems.forEach((item) => {
         const isNew = !prevIds.has(item.id) && !item.read;
         if (isNew) {
           toastServerNotification(item);
+          sawNewAccessAlert = true;
           if (item.title === "Account approved") sawAccountApproved = true;
         }
       });
-      if (sawAccountApproved) {
-        import("../push-notifications.js").then(({ maybePromptPushEnable }) => {
-          void maybePromptPushEnable();
+      if (sawNewAccessAlert) {
+        import("../push-notifications.js").then(({ tryDeliverUnreadAccessPushes, maybePromptPushEnable }) => {
+          void tryDeliverUnreadAccessPushes();
+          if (sawAccountApproved) void maybePromptPushEnable();
         });
       }
     }

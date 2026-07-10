@@ -2,7 +2,7 @@
  * DSAMantra service worker — offline shell + static asset caching
  */
 
-const CACHE_VERSION = "dsamantra-v5";
+const CACHE_VERSION = "dsamantra-v6";
 const PRECACHE_URLS = [
   "/",
   "/index.html",
@@ -103,7 +103,11 @@ self.addEventListener("push", (event) => {
       body: payload.body,
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
-      tag: payload.tag,
+      tag: payload.tag || "dsamantra-notification",
+      renotify: true,
+      requireInteraction: false,
+      vibrate: [120, 60, 120],
+      silent: false,
       data: { url: payload.url },
     }),
   );

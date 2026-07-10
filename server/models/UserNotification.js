@@ -41,6 +41,11 @@ const userNotificationSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    pushSent: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
   {
     collection: "user_notifications",

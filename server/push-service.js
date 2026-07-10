@@ -67,7 +67,11 @@ export async function sendPushToUser(userId, payload) {
     };
 
     try {
-      await webpush.sendNotification(pushSubscription, message);
+      await webpush.sendNotification(pushSubscription, message, {
+        TTL: 60 * 60 * 24,
+        urgency: "high",
+        topic: payload.tag || undefined,
+      });
       await touchPushSubscription(sub.endpoint);
       sent += 1;
     } catch (err) {

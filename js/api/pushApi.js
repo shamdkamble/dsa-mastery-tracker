@@ -104,6 +104,17 @@ export async function fetchPushPreferences() {
   return data;
 }
 
+export async function deliverUnreadAccessPushes() {
+  const res = await fetch(`${resolveBaseUrl()}/api/push/deliver-unread`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}
+
 export async function updatePushPreferences(preferences) {
   const res = await fetch(`${resolveBaseUrl()}/api/push/preferences`, {
     method: "PATCH",

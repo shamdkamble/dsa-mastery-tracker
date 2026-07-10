@@ -3,7 +3,7 @@
  */
 
 import { createUserNotification } from "./notifications-db.js";
-import { sendPushToUser } from "./push-service.js";
+import { deliverPushForNotification } from "./push-access-delivery.js";
 
 function formatExpiryDate(expiresAt) {
   if (!expiresAt) return null;
@@ -40,23 +40,27 @@ function levelLabel(level) {
  * @param {{ tag: string, sendPush?: boolean }} options
  */
 async function notifyUser(userId, payload, { tag, sendPush = true } = {}) {
+  let record = null;
+
   try {
-    await createUserNotification(userId, payload);
+    record = await createUserNotification(userId, payload);
   } catch (err) {
     console.error("[access-notifications] failed to create notification:", err?.message || err);
   }
 
-  if (!sendPush) return;
+  if (!sendPush || !record) return;
 
-  const pushResult = await sendPushToUser(userId, {
+  const pushResult = await deliverPushForNotification(userId, {
+    id: record.id,
     title: payload.title,
-    body: payload.text,
-    url: payload.href || "/#/dashboard",
-    tag: tag || "dsamantra-access",
+    text: payload.text,
+    href: payload.href || "/#/dashboard",
   });
 
   if (pushResult.skipped) {
     console.info("[access-notifications] web push skipped:", userId, tag, pushResult.reason);
+  } else if (pushResult.failed > 0 && pushResult.sent === 0) {
+    console.warn("[access-notifications] web push failed:", userId, tag, pushResult);
   } else {
     console.info("[access-notifications] web push sent:", userId, tag, pushResult);
   }
