@@ -385,7 +385,7 @@
     gap: var(--space-3);
   }
 
-  .leetcode-import {
+  .problem-form__section {
     padding: var(--space-3);
   }
 
@@ -626,11 +626,11 @@
     flex: 1 1 calc(50% - var(--space-1));
   }
 
-  .leetcode-import__row {
+  .problem-form__import-row {
     flex-direction: column;
   }
 
-  .leetcode-import__row .btn {
+  .problem-form__fetch-btn {
     width: 100%;
   }
 

@@ -51,82 +51,57 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;");
 }
 
-function renderLeetcodePreview(meta) {
-  if (!meta) return "";
-  return `
-    <div class="leetcode-preview animate-fade-in" id="leetcode-preview">
-      <div class="leetcode-preview__header">
-        <span class="leetcode-preview__badge">LeetCode</span>
-        ${meta.leetcodeId ? `<span class="leetcode-preview__id">#${meta.leetcodeId}</span>` : ""}
-        ${meta.isPaidOnly ? `<span class="leetcode-preview__premium">Premium</span>` : ""}
-        ${meta.difficulty ? DifficultyBadge(meta.difficulty) : ""}
-      </div>
-      ${meta.topicTags?.length ? `
-        <div class="leetcode-preview__tags">
-          ${meta.topicTags.map((t) => `<span class="badge badge--accent badge--sm">${escapeHtml(t)}</span>`).join("")}
-        </div>
-      ` : ""}
-    </div>
-  `;
+function heroFromProblem(p = {}) {
+  return {
+    title: p.title?.trim() || "",
+    difficulty: p.difficulty || "",
+    topicTags: Array.isArray(p.topicTags) ? p.topicTags : [],
+    leetcodeId: p.leetcodeId || "",
+    isPaidOnly: Boolean(p.isPaidOnly),
+  };
 }
 
-function renderProblemMetaLocked(p = {}) {
-  const hasMeta = Boolean(p.title?.trim());
+function renderProblemHero(p = {}) {
+  const hero = heroFromProblem(p);
+  const ready = Boolean(hero.title);
+
   return `
-    <div class="problem-lc-meta${hasMeta ? " problem-lc-meta--ready" : ""}" id="problem-lc-meta">
-      <input type="hidden" name="title" id="problem-title" value="${escapeAttr(p.title || "")}">
-      <input type="hidden" name="difficulty" id="problem-difficulty" value="${escapeAttr(p.difficulty || "")}">
-      ${hasMeta ? `
-        <div class="problem-lc-meta__row">
-          <div class="problem-lc-meta__main">
-            <span class="problem-lc-meta__label">Problem title</span>
-            <div class="problem-lc-meta__title" id="problem-title-display">${escapeHtml(p.title)}</div>
+    <section class="problem-hero${ready ? " problem-hero--ready" : " problem-hero--empty"}" id="problem-hero" aria-live="polite">
+      <input type="hidden" name="title" id="problem-title" value="${escapeAttr(hero.title)}">
+      <input type="hidden" name="difficulty" id="problem-difficulty" value="${escapeAttr(hero.difficulty)}">
+      ${ready ? `
+        <div class="problem-hero__bar">
+          <div class="problem-hero__meta-chips">
+            <span class="problem-hero__source">LeetCode</span>
+            ${hero.leetcodeId ? `<span class="problem-hero__id">#${escapeHtml(hero.leetcodeId)}</span>` : ""}
+            ${hero.isPaidOnly ? `<span class="problem-hero__premium">Premium</span>` : ""}
           </div>
-          <div class="problem-lc-meta__aside">
-            <span class="problem-lc-meta__label">Difficulty</span>
-            <div id="problem-difficulty-display">${DifficultyBadge(p.difficulty || "Medium")}</div>
-          </div>
+          <div class="problem-hero__difficulty" id="problem-difficulty-display">${DifficultyBadge(hero.difficulty || "Medium")}</div>
         </div>
-        <p class="problem-lc-meta__hint text-tertiary">Loaded from LeetCode — not editable here.</p>
+        <h3 class="problem-hero__title" id="problem-title-display">${escapeHtml(hero.title)}</h3>
+        ${hero.topicTags.length ? `
+          <div class="problem-hero__tags" id="problem-hero-tags">
+            ${hero.topicTags.map((t) => `<span class="badge badge--accent badge--sm">${escapeHtml(t)}</span>`).join("")}
+          </div>
+        ` : `<div class="problem-hero__tags" id="problem-hero-tags" hidden></div>`}
+        <p class="problem-hero__synced">Synced from LeetCode — title and difficulty are read-only.</p>
       ` : `
-        <p class="problem-lc-meta__placeholder text-tertiary">Paste a LeetCode URL above and tap <strong>Fetch</strong> to load the title and difficulty.</p>
+        <div class="problem-hero__empty">
+          <span class="problem-hero__empty-icon" aria-hidden="true">${icon("problems")}</span>
+          <p class="problem-hero__empty-title">Problem details will appear here</p>
+          <p class="problem-hero__empty-text">Fetch a LeetCode URL above to load the title, difficulty, and tags.</p>
+        </div>
       `}
-    </div>
+    </section>
   `;
 }
 
-function updateProblemMetaDisplay(host, meta = {}) {
-  const block = host.querySelector("#problem-lc-meta");
+function updateProblemHero(host, meta = {}) {
+  const block = host.querySelector("#problem-hero");
   if (!block) return;
 
-  const title = meta.title?.trim() || "";
-  const difficulty = meta.difficulty || "";
-
-  const titleInput = host.querySelector("#problem-title");
-  const diffInput = host.querySelector("#problem-difficulty");
-  if (titleInput) titleInput.value = title;
-  if (diffInput) diffInput.value = difficulty;
-
-  block.classList.toggle("problem-lc-meta--ready", Boolean(title));
-  block.innerHTML = `
-    <input type="hidden" name="title" id="problem-title" value="${escapeAttr(title)}">
-    <input type="hidden" name="difficulty" id="problem-difficulty" value="${escapeAttr(difficulty)}">
-    ${title ? `
-      <div class="problem-lc-meta__row">
-        <div class="problem-lc-meta__main">
-          <span class="problem-lc-meta__label">Problem title</span>
-          <div class="problem-lc-meta__title" id="problem-title-display">${escapeHtml(title)}</div>
-        </div>
-        <div class="problem-lc-meta__aside">
-          <span class="problem-lc-meta__label">Difficulty</span>
-          <div id="problem-difficulty-display">${DifficultyBadge(difficulty || "Medium")}</div>
-        </div>
-      </div>
-      <p class="problem-lc-meta__hint text-tertiary">Loaded from LeetCode — not editable here.</p>
-    ` : `
-      <p class="problem-lc-meta__placeholder text-tertiary">Paste a LeetCode URL above and tap <strong>Fetch</strong> to load the title and difficulty.</p>
-    `}
-  `;
+  const hero = heroFromProblem(meta);
+  block.outerHTML = renderProblemHero(hero);
 }
 
 function renderPatternSuggestion() {
@@ -233,9 +208,9 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
   const showDetect = Boolean(p.title && lcUrl);
 
   return `
-    <form id="problem-form" class="stack stack-md">
+    <form id="problem-form" class="problem-form">
       ${aiLocked ? `
-        <div class="access-inline-notice" role="note">
+        <div class="access-inline-notice problem-form__notice" role="note">
           ${icon("lock")}
           <span>AI pattern detection &amp; complexity analysis require <strong>Premium</strong>.</span>
           <button type="button" class="access-inline-notice__link" data-action="upgrade-ai">Upgrade</button>
@@ -246,88 +221,120 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
       <input type="hidden" name="leetcodeId" value="${p.leetcodeId || ""}">
       <input type="hidden" name="topicTags" value="${(p.topicTags || []).join(",")}">
 
-      <div class="leetcode-import">
-        <div class="leetcode-import__header">
-          <label class="field__label" for="leetcode-url">LeetCode link</label>
-          <span class="leetcode-import__hint">Paste a URL to load title, difficulty & tags</span>
-        </div>
-        <div class="leetcode-import__row">
-          <div class="leetcode-import__input-wrap">
-            <span class="search-icon" aria-hidden="true">${icon("link")}</span>
-            <input
-              type="url"
-              class="input leetcode-url-input"
-              id="leetcode-url"
-              name="leetcodeUrl"
-              placeholder="https://leetcode.com/problems/two-sum/"
-              value="${lcUrl}"
-              autocomplete="off"
-            />
+      <section class="problem-form__section">
+        <header class="problem-form__section-head">
+          <span class="problem-form__step" aria-hidden="true">1</span>
+          <div class="problem-form__section-copy">
+            <h3 class="problem-form__section-title">Import from LeetCode</h3>
+            <p class="problem-form__section-desc">Paste a problem URL — we load the official title, difficulty, and tags.</p>
           </div>
-          <button class="btn btn--secondary" type="button" id="leetcode-fetch-btn">
-            ${icon("search")}
-            <span>Fetch</span>
-          </button>
-        </div>
-        <p class="leetcode-import__status" id="leetcode-status" aria-live="polite"></p>
-        <div id="leetcode-preview-host">${p.title && lcUrl ? renderLeetcodePreview({ ...p, topicTags: p.topicTags }) : ""}</div>
-      </div>
-
-      ${renderProblemMetaLocked(p)}
-
-      <div class="divider divider--subtle"></div>
-
-      <div class="ds-grid md:grid-cols-2 gap-4">
-        ${Field({ label: "Topic", children: Input({ placeholder: "e.g. Array · Hash Table", value: p.topic || "", attrs: 'name="topic" id="problem-topic"' }) })}
-        <div class="field">
-          <div class="problem-field-header">
-            <label class="field__label" for="problem-pattern">Pattern</label>
-            ${aiLocked
-              ? `<span id="detect-pattern-btn-wrap" ${showDetect ? "" : "hidden"}>${renderLockedAiButton({ id: "detect-pattern-btn", label: "Auto Detect", size: "xs" })}</span>`
-              : `<button
-                  class="btn btn--ghost btn--xs"
-                  type="button"
-                  id="detect-pattern-btn"
-                  ${showDetect ? "" : "hidden"}
-                >
-                  ${icon("zap")}
-                  <span>Auto Detect</span>
-                </button>`}
+        </header>
+        <div class="problem-form__import">
+          <label class="field__label" for="leetcode-url">Problem URL</label>
+          <div class="problem-form__import-row">
+            <div class="problem-form__import-input">
+              <span class="problem-form__import-icon" aria-hidden="true">${icon("link")}</span>
+              <input
+                type="url"
+                class="input leetcode-url-input"
+                id="leetcode-url"
+                name="leetcodeUrl"
+                placeholder="https://leetcode.com/problems/two-sum/"
+                value="${lcUrl}"
+                autocomplete="off"
+              />
+            </div>
+            <button class="btn btn--secondary problem-form__fetch-btn" type="button" id="leetcode-fetch-btn">
+              ${icon("search")}
+              <span>Fetch</span>
+            </button>
           </div>
-          <select class="select" name="pattern" id="problem-pattern">
-            <option value="">Select pattern</option>
-            ${selectOptions(PATTERN_CATALOG, p.pattern)}
-          </select>
-          ${renderPatternSuggestion()}
+          <p class="leetcode-import__status" id="leetcode-status" aria-live="polite"></p>
         </div>
-      </div>
+      </section>
 
-      <div class="ds-grid md:grid-cols-2 gap-4">
-        ${Field({
-          label: "Status",
-          children: `<select class="select" name="status">${selectOptions(STATUSES, p.status || "todo")}</select>`,
-        })}
-        ${Field({ label: "Est. time (min)", children: Input({ type: "number", value: p.estimatedMinutes || 30, attrs: 'name="estimatedMinutes" id="problem-time" min="5" max="180"' }) })}
-      </div>
-      <div class="ds-grid md:grid-cols-2 gap-4">
-        ${Field({ label: "Attempts", children: Input({ type: "number", value: p.attempts || 0, attrs: 'name="attempts" min="0"' }) })}
-        <div class="field" aria-hidden="true"></div>
-      </div>
-      <div class="ds-grid md:grid-cols-2 gap-4">
-        <label class="checkbox">
-          <input type="checkbox" name="inMission" ${p.inMission ? "checked" : ""}>
-          <span>Add to today's mission</span>
-        </label>
-        ${Field({
-          label: "Mission type",
-          children: `<select class="select" name="missionType">
-            <option value="">None</option>
-            ${selectOptions(MISSION_TYPES, p.missionType || "new")}
-          </select>`,
-        })}
-      </div>
+      ${renderProblemHero(p)}
 
-      ${renderSolutionSection(p, { aiLocked })}
+      <section class="problem-form__section">
+        <header class="problem-form__section-head">
+          <span class="problem-form__step" aria-hidden="true">2</span>
+          <div class="problem-form__section-copy">
+            <h3 class="problem-form__section-title">Classify &amp; track</h3>
+            <p class="problem-form__section-desc">Add your pattern, status, and study metadata.</p>
+          </div>
+        </header>
+
+        <div class="problem-form__grid problem-form__grid--2">
+          ${Field({
+            label: "Topic",
+            hint: "Auto-filled from tags when available",
+            children: Input({
+              placeholder: "e.g. Array · Hash Table",
+              value: p.topic || "",
+              attrs: 'name="topic" id="problem-topic"',
+            }),
+          })}
+          <div class="field">
+            <div class="problem-field-header">
+              <label class="field__label" for="problem-pattern">Pattern</label>
+              ${aiLocked
+                ? `<span id="detect-pattern-btn-wrap" ${showDetect ? "" : "hidden"}>${renderLockedAiButton({ id: "detect-pattern-btn", label: "Auto Detect", size: "xs" })}</span>`
+                : `<button
+                    class="btn btn--ghost btn--xs"
+                    type="button"
+                    id="detect-pattern-btn"
+                    ${showDetect ? "" : "hidden"}
+                  >
+                    ${icon("zap")}
+                    <span>Auto Detect</span>
+                  </button>`}
+            </div>
+            <select class="select" name="pattern" id="problem-pattern">
+              <option value="">Select pattern</option>
+              ${selectOptions(PATTERN_CATALOG, p.pattern)}
+            </select>
+            ${renderPatternSuggestion()}
+          </div>
+        </div>
+
+        <div class="problem-form__grid problem-form__grid--3">
+          ${Field({
+            label: "Status",
+            children: `<select class="select" name="status">${selectOptions(STATUSES, p.status || "todo")}</select>`,
+          })}
+          ${Field({
+            label: "Est. time",
+            hint: "Minutes",
+            children: Input({
+              type: "number",
+              value: p.estimatedMinutes || 30,
+              attrs: 'name="estimatedMinutes" id="problem-time" min="5" max="180"',
+            }),
+          })}
+          ${Field({
+            label: "Attempts",
+            children: Input({ type: "number", value: p.attempts || 0, attrs: 'name="attempts" min="0"' }),
+          })}
+        </div>
+
+        <div class="problem-form__mission">
+          <label class="problem-form__mission-check checkbox">
+            <input type="checkbox" name="inMission" ${p.inMission ? "checked" : ""}>
+            <span>Include in today's mission</span>
+          </label>
+          <div class="problem-form__mission-type field">
+            <label class="field__label" for="problem-mission-type">Mission type</label>
+            <select class="select" name="missionType" id="problem-mission-type">
+              <option value="">None</option>
+              ${selectOptions(MISSION_TYPES, p.missionType || "new")}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="problem-form__section problem-form__section--solution">
+        ${renderSolutionSection(p, { aiLocked })}
+      </section>
     </form>
   `;
 }
@@ -339,18 +346,19 @@ function getModalHTML(problem = null) {
 
   return Modal({
     id: MODAL_ID,
-    title: isEdit ? "Edit Problem" : "Add New Problem",
+    title: isEdit ? "Edit Problem" : "Add Problem",
     size: "lg",
+    className: "modal--problem",
     body: renderForm(problem, { aiLocked }),
     footer: `
-      <div class="modal__footer--between" style="display:flex;width:100%;align-items:center;justify-content:space-between">
-        <div class="cluster">
+      <div class="problem-form__footer">
+        <div class="problem-form__footer-start">
           ${isEdit ? Button({ label: "Delete", variant: "danger", attrs: 'id="problem-delete-btn" type="button"' }) : ""}
-          ${isEdit && lcUrl ? `<a href="${lcUrl}" class="btn btn--outline btn--sm" target="_blank" rel="noopener noreferrer">${icon("externalLink")}<span>Open LeetCode</span></a>` : ""}
+          ${isEdit && lcUrl ? `<a href="${lcUrl}" class="btn btn--outline btn--sm" target="_blank" rel="noopener noreferrer">${icon("externalLink")}<span>Open on LeetCode</span></a>` : ""}
         </div>
-        <div class="cluster">
+        <div class="problem-form__footer-end">
           ${Button({ label: "Cancel", variant: "ghost", attrs: "data-modal-close type='button'" })}
-          ${Button({ label: isEdit ? "Save Changes" : "Add Problem", attrs: 'id="problem-save-btn" type="button"' })}
+          ${Button({ label: isEdit ? "Save Changes" : "Add Problem", variant: "primary", attrs: 'id="problem-save-btn" type="button"' })}
         </div>
       </div>
     `,
@@ -390,7 +398,7 @@ function applyMetadata(host, meta) {
     if (el && val) el.value = val;
   };
 
-  updateProblemMetaDisplay(host, meta);
+  updateProblemHero(host, meta);
   if (meta.topic) setVal("topic", meta.topic);
   if (meta.pattern) setSelect("problem-pattern", meta.pattern);
   if (meta.estimatedMinutes) setVal("estimatedMinutes", meta.estimatedMinutes);
@@ -398,11 +406,6 @@ function applyMetadata(host, meta) {
   if (meta.leetcodeSlug) setVal("leetcodeSlug", meta.leetcodeSlug);
   if (meta.leetcodeId) setVal("leetcodeId", meta.leetcodeId);
   if (meta.topicTags) setVal("topicTags", meta.topicTags.join(","));
-
-  const previewHost = host.querySelector("#leetcode-preview-host");
-  if (previewHost) {
-    previewHost.innerHTML = renderLeetcodePreview(meta);
-  }
 
   host._lastLcMeta = meta;
   showDetectPatternBtn(host, true);
