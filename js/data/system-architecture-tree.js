@@ -20,19 +20,19 @@ export const ARCHITECTURE_DOMAINS = [
       "AI requests stay server-side — API keys never reach the browser",
     ],
     diagram: `flowchart LR
-  subgraph Client["Learner device"]
-    PWA["PWA shell + Service Worker"]
-    SPA["Hash router SPA"]
+  subgraph clientLane [Learner device]
+    PWA[PWA shell and Service Worker]
+    SPA[Hash router SPA]
   end
-  subgraph Vercel["Vercel edge"]
-    CDN["Static CDN"]
-    API["Express API /api"]
-    CRON["Cron trigger"]
+  subgraph vercelLane [Vercel edge]
+    CDN[Static CDN]
+    API[Express API layer]
+    CRON[Cron trigger]
   end
-  subgraph Cloud["Managed services"]
-    MDB[("MongoDB Atlas")]
-    GEM["Gemini API"]
-    GRQ["Groq API"]
+  subgraph cloudLane [Managed services]
+    MDB[(MongoDB Atlas)]
+    GEM[Gemini API]
+    GRQ[Groq API]
   end
   PWA --> CDN
   SPA --> API
@@ -56,9 +56,9 @@ export const ARCHITECTURE_DOMAINS = [
           "push event → show notification + deep link into roadmap",
         ],
         diagram: `flowchart TB
-  SW["Service Worker"] --> PC["Precache static shell"]
-  SW --> PU["Push notification handler"]
-  PU --> DL["Deep link #/roadmap?open=topic"]`,
+  SW[Service Worker] --> PC[Precache static shell]
+  SW --> PU[Push notification handler]
+  PU --> DL[Deep link to roadmap topic]`,
       },
       {
         id: "vercel-deploy",
@@ -75,10 +75,10 @@ export const ARCHITECTURE_DOMAINS = [
           "Cron schedule 03:30 UTC → hourly reminder + wisdom batch",
         ],
         diagram: `flowchart LR
-  GIT["GitHub main"] --> VER["Vercel deploy"]
-  VER --> CDN2["CDN static"]
-  VER --> FN["Serverless API"]
-  CRON2["Cron 03:30 UTC"] --> FN`,
+  GIT[GitHub main branch] --> VER[Vercel deploy]
+  VER --> CDN2[CDN static assets]
+  VER --> FN[Serverless API handler]
+  CRON2[Cron job daily] --> FN`,
       },
     ],
   },

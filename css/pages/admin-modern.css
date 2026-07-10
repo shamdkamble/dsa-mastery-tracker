@@ -1263,36 +1263,153 @@
 
 .sysarch-metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
 }
 
 .sysarch-metric-card {
-  padding: var(--space-4) var(--space-5);
-  border-radius: var(--radius-lg);
+  position: relative;
+  overflow: hidden;
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-radius: var(--radius-xl);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+  min-height: 148px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.sysarch-metric-card__glow {
+  position: absolute;
+  top: -30%;
+  right: -20%;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  opacity: 0.55;
+  filter: blur(28px);
+  pointer-events: none;
+}
+
+.sysarch-metric-card__icon {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  opacity: 0.9;
+}
+
+.sysarch-metric-card__icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .sysarch-metric-card__value {
-  font-size: var(--text-2xl);
-  font-weight: var(--font-bold);
-  line-height: 1.1;
-  background: linear-gradient(135deg, var(--color-text), var(--color-accent));
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  margin-bottom: var(--space-2);
+}
+
+.sysarch-metric-card__value-num {
+  font-size: clamp(2.25rem, 4vw, 3rem);
+  font-weight: 800;
+  background: linear-gradient(145deg, var(--metric-accent, var(--color-accent)) 0%, color-mix(in srgb, var(--metric-accent, var(--color-accent)) 55%, var(--color-text)) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
+.sysarch-metric-card__value-char {
+  font-size: clamp(2rem, 3.5vw, 2.75rem);
+  font-weight: 700;
+  color: var(--color-text-tertiary);
+}
+
+.sysarch-metric-card__value-suffix {
+  font-size: clamp(1.25rem, 2.2vw, 1.75rem);
+  font-weight: 700;
+  color: var(--metric-accent, var(--color-accent));
+  opacity: 0.85;
+  margin-left: 2px;
+}
+
 .sysarch-metric-card__label {
-  margin-top: var(--space-1);
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
+  color: var(--color-text);
+  line-height: var(--leading-snug);
 }
 
 .sysarch-metric-card__sub {
   margin-top: var(--space-1);
   font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  line-height: 1.4;
+}
+
+.sysarch-metric-card--users {
+  --metric-accent: var(--color-info);
+  border-color: color-mix(in srgb, var(--color-info) 28%, var(--color-border));
+}
+
+.sysarch-metric-card--users .sysarch-metric-card__glow {
+  background: var(--color-info);
+}
+
+.sysarch-metric-card--users .sysarch-metric-card__icon {
+  background: color-mix(in srgb, var(--color-info) 16%, transparent);
+  color: var(--color-info);
+}
+
+.sysarch-metric-card--mantra {
+  --metric-accent: #a855f7;
+  border-color: color-mix(in srgb, #a855f7 28%, var(--color-border));
+}
+
+.sysarch-metric-card--mantra .sysarch-metric-card__glow {
+  background: #a855f7;
+}
+
+.sysarch-metric-card--mantra .sysarch-metric-card__icon {
+  background: color-mix(in srgb, #a855f7 16%, transparent);
+  color: #a855f7;
+}
+
+.sysarch-metric-card--lessons {
+  --metric-accent: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
+}
+
+.sysarch-metric-card--lessons .sysarch-metric-card__glow {
+  background: var(--color-accent);
+}
+
+.sysarch-metric-card--lessons .sysarch-metric-card__icon {
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  color: var(--color-accent);
+}
+
+.sysarch-metric-card--wisdom {
+  --metric-accent: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
+}
+
+.sysarch-metric-card--wisdom .sysarch-metric-card__glow {
+  background: var(--color-warning);
+}
+
+.sysarch-metric-card--wisdom .sysarch-metric-card__icon {
+  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
+  color: var(--color-warning);
 }
 
 .sysarch-legend {
@@ -1533,7 +1650,21 @@
   line-height: 1.45;
 }
 
+@media (max-width: 1024px) {
+  .sysarch-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
+  .sysarch-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .sysarch-metric-card {
+    min-height: 132px;
+  }
+
   .sysarch-toolbar__hint {
     margin-left: 0;
     width: 100%;

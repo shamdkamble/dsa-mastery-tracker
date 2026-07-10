@@ -67,6 +67,14 @@ export function renderLiveStatusBar(live) {
   `;
 }
 
+function formatMetricNumber(value, { suffix = "" } = {}) {
+  if (value == null || value === "—") {
+    return `<span class="sysarch-metric-card__value-char">—</span>`;
+  }
+  const raw = String(value);
+  return `<span class="sysarch-metric-card__value-num">${escapeHtml(raw)}</span>${suffix ? `<span class="sysarch-metric-card__value-suffix">${escapeHtml(suffix)}</span>` : ""}`;
+}
+
 export function renderLiveMetricsCards(live) {
   if (!live) return "";
 
@@ -76,26 +84,34 @@ export function renderLiveMetricsCards(live) {
 
   return `
     <div class="sysarch-metrics">
-      <div class="sysarch-metric-card">
-        <div class="sysarch-metric-card__value">${u.total ?? "—"}</div>
+      <article class="sysarch-metric-card sysarch-metric-card--users">
+        <div class="sysarch-metric-card__glow" aria-hidden="true"></div>
+        <div class="sysarch-metric-card__icon" aria-hidden="true">${icon("user")}</div>
+        <div class="sysarch-metric-card__value">${formatMetricNumber(u.total ?? "—")}</div>
         <div class="sysarch-metric-card__label">Registered accounts</div>
-        <div class="sysarch-metric-card__sub text-tertiary">${u.pending ?? 0} pending approval</div>
-      </div>
-      <div class="sysarch-metric-card">
-        <div class="sysarch-metric-card__value">${mf.coveragePct ?? 0}%</div>
+        <div class="sysarch-metric-card__sub">${u.pending ?? 0} pending approval</div>
+      </article>
+      <article class="sysarch-metric-card sysarch-metric-card--mantra">
+        <div class="sysarch-metric-card__glow" aria-hidden="true"></div>
+        <div class="sysarch-metric-card__icon" aria-hidden="true">${icon("database")}</div>
+        <div class="sysarch-metric-card__value">${formatMetricNumber(mf.coveragePct ?? 0, { suffix: "%" })}</div>
         <div class="sysarch-metric-card__label">Mantra Feed coverage</div>
-        <div class="sysarch-metric-card__sub text-tertiary">${mf.topicsWithHooks ?? 0} / ${mf.totalTopics ?? 0} topics</div>
-      </div>
-      <div class="sysarch-metric-card">
-        <div class="sysarch-metric-card__value">${live.counts?.lessonsCached ?? "—"}</div>
+        <div class="sysarch-metric-card__sub">${mf.topicsWithHooks ?? 0} of ${mf.totalTopics ?? 0} topics</div>
+      </article>
+      <article class="sysarch-metric-card sysarch-metric-card--lessons">
+        <div class="sysarch-metric-card__glow" aria-hidden="true"></div>
+        <div class="sysarch-metric-card__icon" aria-hidden="true">${icon("topics")}</div>
+        <div class="sysarch-metric-card__value">${formatMetricNumber(live.counts?.lessonsCached ?? "—")}</div>
         <div class="sysarch-metric-card__label">Cached AI lessons</div>
-        <div class="sysarch-metric-card__sub text-tertiary">Shared across learners</div>
-      </div>
-      <div class="sysarch-metric-card">
-        <div class="sysarch-metric-card__value">${dw.sent ?? 0}</div>
-        <div class="sysarch-metric-card__label">Daily Wisdom pushes (30d)</div>
-        <div class="sysarch-metric-card__sub text-tertiary">${dw.failed ?? 0} failed · ${dw.skipped ?? 0} skipped</div>
-      </div>
+        <div class="sysarch-metric-card__sub">Shared across all learners</div>
+      </article>
+      <article class="sysarch-metric-card sysarch-metric-card--wisdom">
+        <div class="sysarch-metric-card__glow" aria-hidden="true"></div>
+        <div class="sysarch-metric-card__icon" aria-hidden="true">${icon("flame")}</div>
+        <div class="sysarch-metric-card__value">${formatMetricNumber(dw.sent ?? 0)}</div>
+        <div class="sysarch-metric-card__label">Daily Wisdom pushes</div>
+        <div class="sysarch-metric-card__sub">Last 30 days · ${dw.failed ?? 0} failed · ${dw.skipped ?? 0} skipped</div>
+      </article>
     </div>
   `;
 }
@@ -217,12 +233,19 @@ export async function renderMermaidDiagrams(root) {
     index += 1;
 
     try {
-      const { svg } = await mermaid.render(renderId, src);
+      const sanitized = src
+        .replace(/\r\n/g, "\n")
+        .replace(/^\uFEFF/, "")
+        .trim();
+      block.setAttribute("data-mermaid-source", sanitized);
+      const { svg } = await mermaid.render(renderId, sanitized);
+      if (!svg?.trim()) throw new Error("Empty SVG");
       block.innerHTML = svg;
       block.classList.add("is-rendered");
     } catch (err) {
       block.innerHTML = `<div class="sysarch-mermaid-fallback text-tertiary">Diagram preview unavailable. Flow steps above describe the same path.</div>`;
-      console.warn("[sysarch] mermaid render failed", err);
+      block.classList.add("is-rendered");
+      console.warn("[sysarch] mermaid render failed", id, err);
     }
   }
 }

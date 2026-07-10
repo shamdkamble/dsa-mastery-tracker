@@ -84,11 +84,12 @@ export default {
           statusEl.textContent = `Updated ${new Date(live.generatedAt).toLocaleTimeString()}`;
         }
 
-        const openNodes = [...tree.querySelectorAll(".sysarch-node[open]")];
+        tree?.querySelectorAll(".sysarch-mermaid.is-rendered").forEach((block) => {
+          block.classList.remove("is-rendered");
+          const src = block.getAttribute("data-mermaid-source");
+          if (src) block.textContent = src;
+        });
         await renderMermaidDiagrams(tree);
-        for (const node of openNodes) {
-          if (!node.open) node.open = true;
-        }
 
         if (!silent) {
           showToast(Toast({
