@@ -2,7 +2,7 @@
  * DSAMantra service worker — offline shell + static asset caching
  */
 
-const CACHE_VERSION = "dsamantra-v26";
+const CACHE_VERSION = "dsamantra-v27";
 const PRECACHE_URLS = [
   "/",
   "/index.html",

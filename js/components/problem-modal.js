@@ -387,6 +387,121 @@ function setAiStatus(host, id, message, type = "") {
   el.className = `problem-ai-status${type ? ` problem-ai-status--${type}` : ""}`;
 }
 
+function isEasyDifficulty(difficulty) {
+  return String(difficulty || "").trim().toLowerCase() === "easy";
+}
+
+function applyPatternToSelect(host, pattern) {
+  const select = host.querySelector("#problem-pattern");
+  if (!select || !pattern) return false;
+
+  const option = [...select.options].find((opt) => opt.value === pattern);
+  if (option) {
+    select.value = pattern;
+    return true;
+  }
+  return false;
+}
+
+function getPatternDetectContext(host) {
+  const form = host.querySelector("#problem-form");
+  const meta = host._lastLcMeta || {};
+  const title = form?.querySelector("#problem-title")?.value?.trim();
+  const topicTagsRaw = form?.querySelector('[name="topicTags"]')?.value || "";
+  const topicTags = topicTagsRaw
+    ? topicTagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
+    : (meta.topicTags || []);
+
+  return {
+    title,
+    difficulty: form?.querySelector("#problem-difficulty")?.value || meta.difficulty,
+    topic: form?.querySelector("#problem-topic")?.value || meta.topic,
+    topicTags,
+  };
+}
+
+async function runPatternDetection(host, { autoApply = false } = {}) {
+  if (host._aiLocked) {
+    if (!autoApply) openUpgradeModal("ai-features");
+    return null;
+  }
+
+  const btn = host.querySelector("#detect-pattern-btn");
+  const { title, difficulty, topic, topicTags } = getPatternDetectContext(host);
+
+  if (!title) {
+    if (!autoApply) {
+      setAiStatus(host, "#pattern-ai-status", "Enter or fetch a problem title first.", "error");
+    }
+    return null;
+  }
+
+  if (!autoApply) {
+    btn?.classList.add("is-loading");
+    if (btn) btn.disabled = true;
+  }
+
+  hidePatternSuggestion(host);
+  setAiStatus(
+    host,
+    "#pattern-ai-status",
+    autoApply ? "Easy problem — auto-detecting pattern…" : "Detecting pattern with AI…",
+    "loading",
+  );
+
+  try {
+    const result = await detectPattern({ title, difficulty, topic, topicTags });
+
+    if (autoApply) {
+      const applied = applyPatternToSelect(host, result.primary);
+      if (applied) {
+        setAiStatus(host, "#pattern-ai-status", `Pattern auto-selected: ${result.primary}`, "success");
+      } else {
+        setAiStatus(host, "#pattern-ai-status", "Could not match pattern — use Auto Detect or pick manually.", "error");
+        focusManualPattern(host);
+      }
+      return result;
+    }
+
+    showPatternSuggestion(host, result);
+    return result;
+  } catch (err) {
+    const hint = autoApply
+      ? " Tap Auto Detect to try again or pick a pattern manually."
+      : " Select a pattern from the dropdown.";
+    setAiStatus(host, "#pattern-ai-status", `${err.message || "Pattern detection failed."}${hint}`, "error");
+    if (!autoApply) focusManualPattern(host);
+    return null;
+  } finally {
+    if (!autoApply) {
+      btn?.classList.remove("is-loading");
+      if (btn) btn.disabled = false;
+    }
+  }
+}
+
+async function applyPatternPolicyAfterImport(host, meta) {
+  const difficulty = meta?.difficulty
+    || host.querySelector("#problem-difficulty")?.value
+    || "";
+
+  if (isEasyDifficulty(difficulty)) {
+    if (host._aiLocked) {
+      setAiStatus(host, "#pattern-ai-status", "Easy problem — upgrade to Premium for automatic pattern detection.", "info");
+      return;
+    }
+    await runPatternDetection(host, { autoApply: true });
+    return;
+  }
+
+  setAiStatus(
+    host,
+    "#pattern-ai-status",
+    "Medium/Hard — tap Auto Detect when you're ready to choose a pattern.",
+    "info",
+  );
+}
+
 function applyMetadata(host, meta) {
   const form = host.querySelector("#problem-form");
   if (!form || !meta) return;
@@ -394,11 +509,6 @@ function applyMetadata(host, meta) {
   const setVal = (name, val) => {
     const el = form.querySelector(`[name="${name}"]`);
     if (el && val != null && val !== "") el.value = val;
-  };
-
-  const setSelect = (id, val) => {
-    const el = form.querySelector(`#${id}`);
-    if (el && val) el.value = val;
   };
 
   updateProblemHero(host, meta);
@@ -414,6 +524,8 @@ function applyMetadata(host, meta) {
   host._lastLcMeta = meta;
   showDetectPatternBtn(host, true);
   hidePatternSuggestion(host);
+
+  void applyPatternPolicyAfterImport(host, meta);
 }
 
 function showDetectPatternBtn(host, show) {
@@ -579,47 +691,7 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
 }
 
 async function handleDetectPattern(host) {
-  if (host._aiLocked) {
-    openUpgradeModal("ai-features");
-    return;
-  }
-
-  const btn = host.querySelector("#detect-pattern-btn");
-  const form = host.querySelector("#problem-form");
-  const title = form?.querySelector("#problem-title")?.value?.trim();
-
-  if (!title) {
-    setAiStatus(host, "#pattern-ai-status", "Enter or fetch a problem title first.", "error");
-    return;
-  }
-
-  const meta = host._lastLcMeta || {};
-  const topicTagsRaw = form.querySelector('[name="topicTags"]')?.value || "";
-  const topicTags = topicTagsRaw
-    ? topicTagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
-    : (meta.topicTags || []);
-
-  btn?.classList.add("is-loading");
-  btn.disabled = true;
-  hidePatternSuggestion(host);
-  setAiStatus(host, "#pattern-ai-status", "Detecting pattern with AI…", "loading");
-
-  try {
-    const result = await detectPattern({
-      title,
-      difficulty: form.querySelector("#problem-difficulty")?.value || meta.difficulty,
-      topic: form.querySelector("#problem-topic")?.value || meta.topic,
-      topicTags,
-    });
-    showPatternSuggestion(host, result);
-  } catch (err) {
-    const hint = " Select a pattern from the dropdown.";
-    setAiStatus(host, "#pattern-ai-status", `${err.message || "Pattern detection failed."}${hint}`, "error");
-    focusManualPattern(host);
-  } finally {
-    btn?.classList.remove("is-loading");
-    btn.disabled = false;
-  }
+  await runPatternDetection(host, { autoApply: false });
 }
 
 async function handleAnalyzeComplexity(host) {
