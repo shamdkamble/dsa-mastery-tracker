@@ -142,14 +142,34 @@ export function renderDailyWisdomPanelShell() {
             <span class="dw-console__preview-label">Your next preview</span>
             <p class="dw-console__preview-text text-secondary">Loading…</p>
           </div>
+          <div class="dw-console__field dw-console__field--recipients">
+            <span class="dw-console__field-label">Recipients</span>
+            <input
+              type="search"
+              class="input input--sm"
+              id="dw-user-search"
+              placeholder="Search by name or email…"
+              autocomplete="off"
+            />
+            <div class="dw-user-picker" id="dw-user-picker">
+              <label class="dw-user-picker__all">
+                <input type="checkbox" id="dw-select-all-users" />
+                <span>All users</span>
+              </label>
+              <div class="dw-user-picker__list" id="dw-user-list">
+                <p class="dw-user-picker__empty text-tertiary">Loading users…</p>
+              </div>
+            </div>
+            <p class="dw-user-picker__hint text-tertiary" id="dw-user-selection-count">0 selected</p>
+          </div>
+
           <div class="dw-console__advanced-grid">
             <label class="dw-console__field">
-              <span class="dw-console__field-label">Send to student</span>
+              <span class="dw-console__field-label">Send Daily Wisdom</span>
               <div class="dw-console__field-row">
-                <input type="text" class="input input--sm" id="dw-student-id" placeholder="user_173…" autocomplete="off" />
                 <button type="button" class="btn btn--ghost btn--sm" id="dw-send-student">
                   ${icon("user")}
-                  <span>Send</span>
+                  <span>Send to selected</span>
                 </button>
               </div>
             </label>
@@ -167,6 +187,18 @@ export function renderDailyWisdomPanelShell() {
               </div>
             </div>
           </div>
+
+          <label class="dw-console__field dw-console__field--manual">
+            <span class="dw-console__field-label">Custom notification</span>
+            <input type="text" class="input input--sm" id="dw-manual-title" placeholder="Notification title" autocomplete="off" />
+            <textarea class="input input--sm dw-manual-text" id="dw-manual-text" rows="2" placeholder="Message for selected users…"></textarea>
+            <div class="dw-console__field-row">
+              <button type="button" class="btn btn--secondary btn--sm" id="dw-send-manual">
+                ${icon("bell")}
+                <span>Send to selected</span>
+              </button>
+            </div>
+          </label>
         </div>
       </details>
     </section>
@@ -296,6 +328,29 @@ export function appendGenLogEntry(logEl, { status, message }) {
   while (logEl.children.length > 12) {
     logEl.removeChild(logEl.lastChild);
   }
+}
+
+export function renderUserPickerList(users, { search = "" } = {}) {
+  const q = search.trim().toLowerCase();
+  const filtered = users.filter((user) => {
+    if (!q) return true;
+    return user.name.toLowerCase().includes(q)
+      || user.email.toLowerCase().includes(q);
+  });
+
+  if (!filtered.length) {
+    return `<p class="dw-user-picker__empty text-tertiary">No users match your search.</p>`;
+  }
+
+  return filtered.map((user) => `
+    <label class="dw-user-picker__item">
+      <input type="checkbox" class="dw-user-checkbox" value="${escapeHtml(user.id)}" data-user-name="${escapeHtml(user.name)}" />
+      <span class="dw-user-picker__item-main">
+        <span class="dw-user-picker__name">${escapeHtml(user.name)}</span>
+        <span class="dw-user-picker__email text-tertiary">${escapeHtml(user.email)}</span>
+      </span>
+    </label>
+  `).join("");
 }
 
 export function renderPreviewText(preview) {

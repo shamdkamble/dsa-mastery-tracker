@@ -28,6 +28,7 @@ import {
   buildSession,
 } from "./auth.js";
 import { canAccessProblemAi, canAccessTeachTopic, canAccessTeachTopicById } from "./roadmap-access.js";
+import { sendAdminManualNotifications } from "./admin-manual-notifications.js";
 import {
   LessonStoreError,
   getCachedLesson,
@@ -658,34 +659,89 @@ app.get("/api/learning-facts/anchor", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/auth/admin/learning-facts/deliver", requireAdmin, async (req, res) => {
+app.post("/api/auth/admin/notifications/send", requireAdmin, async (req, res) => {
   try {
-    const { userId, sendPush = true } = req.body ?? {};
-    if (!userId) {
-      res.status(400).json({ error: { message: "userId is required.", code: "INVALID_INPUT" } });
-      return;
-    }
+    const {
+      userIds,
+      title,
+      text,
+      variant,
+      href,
+      sendPush = true,
+    } = req.body ?? {};
 
-    const result = await deliverLearningFactToUser(userId, { sendPush: Boolean(sendPush) });
+    const result = await sendAdminManualNotifications(userIds, {
+      title,
+      text,
+      variant,
+      href,
+      sendPush: Boolean(sendPush),
+    });
 
     if (!result.ok) {
-      res.status(409).json({
-        ok: false,
-        reason: result.reason,
-        anchor: result.anchor,
-        fact: result.fact,
+      res.status(400).json({
+        error: { message: result.message, code: result.code || "INVALID_INPUT" },
       });
       return;
     }
 
+    res.json(result);
+  } catch (err) {
+    console.error("[/api/auth/admin/notifications/send]", err);
+    res.status(500).json({ error: { message: "Failed to send notifications.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/auth/admin/learning-facts/deliver", requireAdmin, async (req, res) => {
+  try {
+    const { userId, userIds, sendPush = true } = req.body ?? {};
+    const targets = Array.isArray(userIds) && userIds.length
+      ? userIds
+      : (userId ? [userId] : []);
+
+    if (!targets.length) {
+      res.status(400).json({ error: { message: "Select at least one user.", code: "INVALID_INPUT" } });
+      return;
+    }
+
+    if (targets.length === 1) {
+      const result = await deliverLearningFactToUser(targets[0], { sendPush: Boolean(sendPush) });
+
+      if (!result.ok) {
+        res.status(409).json({
+          ok: false,
+          reason: result.reason,
+          anchor: result.anchor,
+          fact: result.fact,
+        });
+        return;
+      }
+
+      res.json({
+        ok: true,
+        userId: targets[0],
+        anchor: result.anchor,
+        fact: result.fact,
+        message: result.message,
+        notification: result.notification,
+        pushDelivery: result.push,
+      });
+      return;
+    }
+
+    const results = [];
+    for (const uid of targets) {
+      const result = await deliverLearningFactToUser(uid, { sendPush: Boolean(sendPush) });
+      results.push({ userId: uid, ...result });
+    }
+
+    const sent = results.filter((r) => r.ok).length;
     res.json({
       ok: true,
-      userId,
-      anchor: result.anchor,
-      fact: result.fact,
-      message: result.message,
-      notification: result.notification,
-      pushDelivery: result.push,
+      total: targets.length,
+      sent,
+      failed: targets.length - sent,
+      results,
     });
   } catch (err) {
     console.error("[/api/auth/admin/learning-facts/deliver]", err);

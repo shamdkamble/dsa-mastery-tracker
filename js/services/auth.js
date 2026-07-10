@@ -171,10 +171,30 @@ export async function seedLearningFacts() {
 }
 
 export async function deliverLearningFactToUser(userId, { sendPush = true } = {}) {
+  const userIds = Array.isArray(userId) ? userId : [userId];
   const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/learning-facts/deliver`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ userId, sendPush }),
+    body: JSON.stringify({ userIds, sendPush }),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data;
+}
+
+export async function sendAdminManualNotifications({
+  userIds,
+  title,
+  text,
+  sendPush = true,
+  variant = "info",
+  href = "#/dashboard",
+} = {}) {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/notifications/send`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ userIds, title, text, sendPush, variant, href }),
   });
 
   const data = await parseJsonSafe(res);

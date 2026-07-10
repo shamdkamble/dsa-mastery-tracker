@@ -10,14 +10,17 @@ import {
   renderPreviewText,
   renderGenProgress,
   appendGenLogEntry,
+  renderUserPickerList,
 } from "../components/daily-wisdom-admin-panel.js";
 import {
   getPushDeliveryLogs,
+  getAllUsers,
   seedLearningFacts,
   getDailyWisdomDashboard,
   generateLearningFactsBatch,
   deliverLearningFactToMe,
   deliverLearningFactToUser,
+  sendAdminManualNotifications,
   runDailyWisdomCronNow,
   AuthApiError,
 } from "../services/auth.js";
@@ -25,7 +28,7 @@ import { showToast } from "../components/ui/interactions.js";
 import { Toast } from "../components/ui/index.js";
 
 const STATUS_FILTERS = ["all", "sent", "failed", "skipped"];
-const SOURCE_FILTERS = ["all", "access", "test", "reminder", "redelivery", "learning-fact"];
+const SOURCE_FILTERS = ["all", "access", "test", "reminder", "redelivery", "learning-fact", "manual"];
 const BATCH_COOLDOWN_SEC = 15;
 
 function escapeHtml(str) {
@@ -68,6 +71,7 @@ function sourceBadge(source) {
     reminder: "Reminder",
     redelivery: "Redelivery",
     "learning-fact": "Daily Wisdom",
+    manual: "Manual",
   };
   return Badge({
     label: labels[source] || source,
@@ -253,7 +257,13 @@ export default {
     const cronRunBtn = container.querySelector("#dw-run-cron");
     const refreshActivityBtn = container.querySelector("#dw-refresh-activity");
     const sendStudentBtn = container.querySelector("#dw-send-student");
-    const studentIdInput = container.querySelector("#dw-student-id");
+    const sendManualBtn = container.querySelector("#dw-send-manual");
+    const manualTitleInput = container.querySelector("#dw-manual-title");
+    const manualTextInput = container.querySelector("#dw-manual-text");
+    const userSearchInput = container.querySelector("#dw-user-search");
+    const userListEl = container.querySelector("#dw-user-list");
+    const selectAllUsersCheckbox = container.querySelector("#dw-select-all-users");
+    const userSelectionCountEl = container.querySelector("#dw-user-selection-count");
     const seedPilotBtn = container.querySelector("#dw-seed-pilot");
     const regenerateAllBtn = container.querySelector("#dw-regenerate-all");
     const genProgressEl = container.querySelector("#dw-gen-progress");
@@ -270,6 +280,67 @@ export default {
     let source = "all";
     let searchTimer = null;
     let refreshTimer = null;
+    let recipientUsers = [];
+    let userSearch = "";
+
+    function recipientCandidates() {
+      return recipientUsers.filter((u) => u.role !== "admin");
+    }
+
+    function renderUserPicker() {
+      if (!userListEl) return;
+      const previouslySelected = new Set(
+        [...container.querySelectorAll(".dw-user-checkbox:checked")].map((el) => el.value),
+      );
+      userListEl.innerHTML = renderUserPickerList(recipientCandidates(), { search: userSearch });
+
+      if (selectAllUsersCheckbox?.checked) {
+        container.querySelectorAll(".dw-user-checkbox").forEach((box) => {
+          box.checked = false;
+          box.disabled = true;
+        });
+      } else {
+        container.querySelectorAll(".dw-user-checkbox").forEach((box) => {
+          if (previouslySelected.has(box.value)) box.checked = true;
+        });
+      }
+
+      updateSelectionCount();
+    }
+
+    function getSelectedUserIds() {
+      if (selectAllUsersCheckbox?.checked) {
+        return ["all"];
+      }
+      return [...container.querySelectorAll(".dw-user-checkbox:checked")].map((el) => el.value);
+    }
+
+    function updateSelectionCount() {
+      if (!userSelectionCountEl) return;
+      if (selectAllUsersCheckbox?.checked) {
+        const total = recipientCandidates().length;
+        userSelectionCountEl.textContent = `All users (${total})`;
+        return;
+      }
+      const count = container.querySelectorAll(".dw-user-checkbox:checked").length;
+      userSelectionCountEl.textContent = `${count} selected`;
+    }
+
+    async function loadRecipientUsers() {
+      try {
+        recipientUsers = await getAllUsers();
+        renderUserPicker();
+      } catch (err) {
+        if (userListEl) {
+          userListEl.innerHTML = `<p class="dw-user-picker__empty text-tertiary">Could not load users.</p>`;
+        }
+        showToast(Toast({
+          title: "User list unavailable",
+          text: err instanceof AuthApiError ? err.message : "Failed to load users.",
+          variant: "danger",
+        }));
+      }
+    }
 
     function updateStats(stats) {
       if (!statsEl || !stats) return;
@@ -614,12 +685,37 @@ export default {
       }
     });
 
+    userSearchInput?.addEventListener("input", (e) => {
+      userSearch = e.target.value;
+      renderUserPicker();
+    });
+
+    selectAllUsersCheckbox?.addEventListener("change", () => {
+      const checked = selectAllUsersCheckbox.checked;
+      container.querySelectorAll(".dw-user-checkbox").forEach((box) => {
+        box.checked = false;
+        box.disabled = checked;
+      });
+      updateSelectionCount();
+    });
+
+    userListEl?.addEventListener("change", (e) => {
+      if (!e.target.classList.contains("dw-user-checkbox")) return;
+      if (selectAllUsersCheckbox?.checked) {
+        selectAllUsersCheckbox.checked = false;
+        container.querySelectorAll(".dw-user-checkbox").forEach((box) => {
+          box.disabled = false;
+        });
+      }
+      updateSelectionCount();
+    });
+
     sendStudentBtn?.addEventListener("click", async () => {
-      const userId = studentIdInput?.value?.trim();
-      if (!userId) {
+      const userIds = getSelectedUserIds();
+      if (!userIds.length) {
         showToast(Toast({
-          title: "Enter a user ID",
-          text: "Copy a student's userId from User Management.",
+          title: "Select recipients",
+          text: "Choose one or more users, or check All users.",
           variant: "warning",
         }));
         return;
@@ -627,12 +723,24 @@ export default {
 
       sendStudentBtn.disabled = true;
       try {
-        const data = await deliverLearningFactToUser(userId, { sendPush: true });
-        showToast(Toast({
-          title: "Sent to student",
-          text: `${data.message?.title || "Daily Wisdom"} — ${formatDeliverResult(data)}`,
-          variant: "success",
-        }));
+        const data = await deliverLearningFactToUser(userIds, { sendPush: true });
+
+        if (Array.isArray(data.results)) {
+          const sent = data.sent ?? 0;
+          const total = data.total ?? userIds.length;
+          showToast(Toast({
+            title: "Daily Wisdom sent",
+            text: `Delivered to ${sent} of ${total} users.`,
+            variant: sent > 0 ? "success" : "warning",
+          }));
+        } else {
+          showToast(Toast({
+            title: "Sent to student",
+            text: `${data.message?.title || "Daily Wisdom"} — ${formatDeliverResult(data)}`,
+            variant: "success",
+          }));
+        }
+
         void loadLogs();
         void loadDashboard();
       } catch (err) {
@@ -644,6 +752,65 @@ export default {
         }));
       } finally {
         sendStudentBtn.disabled = false;
+      }
+    });
+
+    sendManualBtn?.addEventListener("click", async () => {
+      const userIds = getSelectedUserIds();
+      const title = manualTitleInput?.value?.trim();
+      const text = manualTextInput?.value?.trim();
+
+      if (!userIds.length) {
+        showToast(Toast({
+          title: "Select recipients",
+          text: "Choose one or more users, or check All users.",
+          variant: "warning",
+        }));
+        return;
+      }
+
+      if (!title || !text) {
+        showToast(Toast({
+          title: "Enter notification",
+          text: "Add a title and message before sending.",
+          variant: "warning",
+        }));
+        return;
+      }
+
+      const countLabel = userIds.includes("all")
+        ? `all ${recipientCandidates().length} users`
+        : `${userIds.length} user${userIds.length === 1 ? "" : "s"}`;
+
+      if (!confirm(`Send this notification to ${countLabel}?`)) return;
+
+      sendManualBtn.disabled = true;
+      try {
+        const data = await sendAdminManualNotifications({
+          userIds,
+          title,
+          text,
+          sendPush: true,
+        });
+
+        showToast(Toast({
+          title: "Notification sent",
+          text: `Delivered to ${data.sent ?? 0} of ${data.total ?? userIds.length} users (${data.pushSent ?? 0} push).`,
+          variant: (data.sent ?? 0) > 0 ? "success" : "warning",
+        }));
+
+        if (manualTitleInput) manualTitleInput.value = "";
+        if (manualTextInput) manualTextInput.value = "";
+
+        void loadLogs();
+      } catch (err) {
+        showToast(Toast({
+          title: "Send failed",
+          text: err instanceof AuthApiError ? err.message : "Could not send notification.",
+          variant: "danger",
+        }));
+      } finally {
+        sendManualBtn.disabled = false;
       }
     });
 
@@ -669,6 +836,7 @@ export default {
     });
 
     void loadDashboard();
+    void loadRecipientUsers();
 
     refreshTimer = window.setInterval(() => { void loadLogs(); }, 30000);
 
