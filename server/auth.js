@@ -284,30 +284,48 @@ export async function listAllUsers() {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
+function summarizePushDelivery(push) {
+  if (!push) return { delivered: false, reason: "no_push_attempt" };
+  if (push.skipped) return { delivered: false, reason: push.reason || "skipped" };
+  return {
+    delivered: push.sent > 0,
+    sent: push.sent || 0,
+    failed: push.failed || 0,
+    reason: push.sent > 0 ? "sent" : "delivery_failed",
+  };
+}
+
+function withPushDelivery(user, notificationResult) {
+  return {
+    user: toPublicUser(user),
+    pushDelivery: summarizePushDelivery(notificationResult?.push),
+  };
+}
+
 export async function approveUser(userId) {
   const user = await updateUser(userId, { status: "approved" });
-  await notifyAccountApproved(userId);
-  return toPublicUser(user);
+  const notification = await notifyAccountApproved(userId);
+  return withPushDelivery(user, notification);
 }
 
 export async function rejectUser(userId) {
   const user = await updateUser(userId, { status: "rejected" });
-  await notifyAccountRejected(userId);
-  return toPublicUser(user);
+  const notification = await notifyAccountRejected(userId);
+  return withPushDelivery(user, notification);
 }
 
 export async function suspendUser(userId) {
   const user = await updateUser(userId, { status: "suspended" });
-  await notifyAccountSuspended(userId);
-  return toPublicUser(user);
+  const notification = await notifyAccountSuspended(userId);
+  return withPushDelivery(user, notification);
 }
 
 export async function activateUser(userId) {
   const existing = await findUserById(userId);
   if (!existing) throw new AuthError("User not found.", { status: 404, code: "NOT_FOUND" });
   const user = await updateUser(userId, { status: "approved" });
-  await notifyAccountActivated(userId);
-  return toPublicUser(user);
+  const notification = await notifyAccountActivated(userId);
+  return withPushDelivery(user, notification);
 }
 
 export async function removeUser(userId) {
@@ -346,8 +364,8 @@ export async function patchUserAdmin(userId, { accessLevel, expiresAt }) {
   }
 
   const user = await updateUser(userId, patch);
-  await notifyAccessPatch(existing, user, patch);
-  return toPublicUser(user);
+  const notification = await notifyAccessPatch(existing, user, patch);
+  return withPushDelivery(user, notification);
 }
 
 export async function adminUserAction(userId, action) {
@@ -356,7 +374,10 @@ export async function adminUserAction(userId, action) {
     case "reject": return rejectUser(userId);
     case "suspend": return suspendUser(userId);
     case "activate": return activateUser(userId);
-    case "delete": return removeUser(userId);
+    case "delete": {
+      const deleted = await removeUser(userId);
+      return { user: deleted, pushDelivery: null };
+    }
     default:
       throw new AuthError(`Unknown action "${action}".`, { status: 400, code: "INVALID_INPUT" });
   }

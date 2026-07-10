@@ -46,6 +46,11 @@ const userNotificationSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    pushTag: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   },
   {
     collection: "user_notifications",

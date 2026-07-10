@@ -22,6 +22,7 @@ function normalize(doc) {
     href: d.href || "#/settings",
     read: Boolean(d.read),
     pushSent: Boolean(d.pushSent),
+    pushTag: d.pushTag || null,
     createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : new Date().toISOString(),
   };
 }
@@ -29,8 +30,9 @@ function normalize(doc) {
 /**
  * @param {string} userId
  * @param {{ title: string, text: string, variant?: string, href?: string }} payload
+ * @param {{ pushTag?: string }} options
  */
-export async function createUserNotification(userId, payload) {
+export async function createUserNotification(userId, payload, { pushTag } = {}) {
   if (!userId || !payload?.title || !payload?.text) return null;
 
   await connectDB();
@@ -43,6 +45,7 @@ export async function createUserNotification(userId, payload) {
     variant: payload.variant || "info",
     href: payload.href || "#/settings",
     read: false,
+    pushTag: pushTag || null,
   });
 
   return normalize(doc);

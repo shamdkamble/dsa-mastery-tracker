@@ -38,24 +38,40 @@ function levelLabel(level) {
  * @param {string} userId
  * @param {{ title: string, text: string, variant?: string, href?: string }} payload
  * @param {{ tag: string, sendPush?: boolean }} options
+ * @returns {Promise<{ record: object|null, push: object|null }>}
  */
 async function notifyUser(userId, payload, { tag, sendPush = true } = {}) {
   let record = null;
 
   try {
-    record = await createUserNotification(userId, payload);
+    record = await createUserNotification(userId, payload, { pushTag: tag });
   } catch (err) {
     console.error("[access-notifications] failed to create notification:", err?.message || err);
+    return { record: null, push: null };
   }
 
-  if (!sendPush || !record) return;
+  if (!sendPush || !record) {
+    return { record, push: null };
+  }
 
-  const pushResult = await deliverPushForNotification(userId, {
+  let pushResult = await deliverPushForNotification(userId, {
     id: record.id,
     title: payload.title,
     text: payload.text,
     href: payload.href || "/#/dashboard",
-  });
+    pushTag: tag,
+  }, { eventTag: tag });
+
+  if (pushResult.failed > 0 && pushResult.sent === 0 && !pushResult.skipped) {
+    await new Promise((resolve) => { setTimeout(resolve, 400); });
+    pushResult = await deliverPushForNotification(userId, {
+      id: record.id,
+      title: payload.title,
+      text: payload.text,
+      href: payload.href || "/#/dashboard",
+      pushTag: tag,
+    }, { eventTag: tag });
+  }
 
   if (pushResult.skipped) {
     console.info("[access-notifications] web push skipped:", userId, tag, pushResult.reason);
@@ -64,10 +80,12 @@ async function notifyUser(userId, payload, { tag, sendPush = true } = {}) {
   } else {
     console.info("[access-notifications] web push sent:", userId, tag, pushResult);
   }
+
+  return { record, push: pushResult };
 }
 
 export async function notifyAccountApproved(userId) {
-  await notifyUser(userId, {
+  return notifyUser(userId, {
     title: "Account approved",
     text: "Your account has been approved. Welcome to DSAMantra — start your FAANG prep journey.",
     variant: "success",
@@ -76,7 +94,7 @@ export async function notifyAccountApproved(userId) {
 }
 
 export async function notifyAccountRejected(userId) {
-  await notifyUser(userId, {
+  return notifyUser(userId, {
     title: "Registration declined",
     text: "Your registration was not approved. Contact the administrator if you believe this is a mistake.",
     variant: "danger",
@@ -85,7 +103,7 @@ export async function notifyAccountRejected(userId) {
 }
 
 export async function notifyAccountSuspended(userId) {
-  await notifyUser(userId, {
+  return notifyUser(userId, {
     title: "Access suspended",
     text: "Your account access has been suspended. Contact the administrator to restore access.",
     variant: "danger",
@@ -94,7 +112,7 @@ export async function notifyAccountSuspended(userId) {
 }
 
 export async function notifyAccountActivated(userId) {
-  await notifyUser(userId, {
+  return notifyUser(userId, {
     title: "Account reactivated",
     text: "Your account has been reactivated. Welcome back to DSAMantra.",
     variant: "success",
@@ -109,7 +127,7 @@ export async function notifyAccountActivated(userId) {
  */
 export async function notifyAccessPatch(before, after, patch) {
   const userId = after?.id;
-  if (!userId) return;
+  if (!userId) return { record: null, push: null };
 
   const prevLevel = before?.accessLevel || "standard";
   const nextLevel = after?.accessLevel || "standard";
@@ -117,64 +135,61 @@ export async function notifyAccessPatch(before, after, patch) {
   const nextExpiry = after?.expiresAt || null;
 
   const levelChanged = patch.accessLevel !== undefined && prevLevel !== nextLevel;
-  const expiryChanged = patch.expiresAt !== undefined && prevExpiry !== nextExpiry;
+  const expiryChanged = patch.expiresAt !== undefined && String(prevExpiry || "") !== String(nextExpiry || "");
 
   if (levelChanged && nextLevel === "trial") {
-    await notifyUser(userId, {
+    return notifyUser(userId, {
       title: "Trial access granted",
       text: `You now have Trial access on DSAMantra. ${formatExpiryDetail(nextExpiry)}`,
       variant: "accent",
       href: "#/roadmap",
     }, { tag: "trial-granted" });
-    return;
   }
 
   if (levelChanged && nextLevel === "premium") {
-    await notifyUser(userId, {
+    return notifyUser(userId, {
       title: "Premium access granted",
       text: `Congratulations! You've been granted Premium access. ${formatExpiryDetail(nextExpiry)}`,
       variant: "success",
       href: "#/settings/subscription",
     }, { tag: "premium-granted" });
-    return;
   }
 
   if (levelChanged && (prevLevel === "premium" || prevLevel === "trial") && nextLevel === "standard") {
-    await notifyUser(userId, {
+    return notifyUser(userId, {
       title: "Premium access revoked",
       text: "Your Trial/Premium access has been changed to Standard. Some features may now be locked.",
       variant: "warning",
       href: "#/settings/subscription",
     }, { tag: "premium-revoked" });
-    return;
   }
 
   if (levelChanged) {
-    await notifyUser(userId, {
+    return notifyUser(userId, {
       title: "Access level updated",
       text: `Your access level is now ${levelLabel(nextLevel)}. ${formatExpiryDetail(nextExpiry)}`,
       variant: "info",
       href: "#/settings/subscription",
     }, { tag: "access-level-updated" });
-    return;
   }
 
   if (expiryChanged) {
     if (!nextExpiry) {
-      await notifyUser(userId, {
+      return notifyUser(userId, {
         title: "Access expiry cleared",
         text: `Your ${levelLabel(nextLevel)} access no longer has an expiry date.`,
         variant: "info",
         href: "#/settings/subscription",
       }, { tag: "access-expiry-cleared" });
-      return;
     }
 
-    await notifyUser(userId, {
+    return notifyUser(userId, {
       title: "Access expiry updated",
       text: `Your ${levelLabel(nextLevel)} access expiry has been updated. ${formatExpiryDetail(nextExpiry)}`,
       variant: "info",
       href: "#/settings/subscription",
     }, { tag: "access-expiry-updated" });
   }
+
+  return { record: null, push: null };
 }

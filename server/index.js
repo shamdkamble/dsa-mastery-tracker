@@ -481,7 +481,11 @@ app.post("/api/auth/admin/action", requireAdmin, async (req, res) => {
       return;
     }
     const result = await adminUserAction(userId, action);
-    res.json({ user: result, message: `Action "${action}" completed.` });
+    res.json({
+      user: result.user,
+      pushDelivery: result.pushDelivery ?? null,
+      message: `Action "${action}" completed.`,
+    });
   } catch (err) {
     if (handleAuthError(res, err)) return;
     if (err.message === "USER_NOT_FOUND") {
@@ -497,8 +501,12 @@ app.patch("/api/auth/admin/users/:userId", requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
     const { accessLevel, expiresAt } = req.body ?? {};
-    const user = await patchUserAdmin(userId, { accessLevel, expiresAt });
-    res.json({ user, message: "User updated." });
+    const result = await patchUserAdmin(userId, { accessLevel, expiresAt });
+    res.json({
+      user: result.user,
+      pushDelivery: result.pushDelivery ?? null,
+      message: "User updated.",
+    });
   } catch (err) {
     if (handleAuthError(res, err)) return;
     if (err.message === "USER_NOT_FOUND") {

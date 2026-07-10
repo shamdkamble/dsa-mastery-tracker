@@ -424,6 +424,16 @@ export default {
       await refreshUsers({ showLoading: true });
     }
 
+    function pushDeliveryHint(pushDelivery) {
+      if (!pushDelivery) return "";
+      if (pushDelivery.delivered) return " System notification sent to their device.";
+      if (pushDelivery.reason === "no_subscriptions") {
+        return " No push subscription — user must enable System notifications in Settings.";
+      }
+      if (pushDelivery.reason === "no_push_attempt") return "";
+      return " In-app notification saved; system push was not delivered.";
+    }
+
     function notify(variant, title, text) {
       showToast(Toast({ variant, title, text }));
     }
@@ -441,7 +451,7 @@ export default {
       }
 
       try {
-        await adminUserAction(userId, action);
+        const result = await adminUserAction(userId, action);
         const labels = {
           approve: ["success", "Approved", "User can sign in."],
           reject: ["warning", "Rejected", "Registration rejected."],
@@ -450,7 +460,7 @@ export default {
           delete: ["warning", "Deleted", "User removed."],
         };
         const [variant, title, text] = labels[action] || ["success", "Done", "Action completed."];
-        notify(variant, title, text);
+        notify(variant, title, `${text}${pushDeliveryHint(result.pushDelivery)}`);
         await refreshUsers();
       } catch (err) {
         const message = err instanceof AuthApiError ? err.message : "Action failed.";
@@ -467,11 +477,11 @@ export default {
       const expiresAtRaw = row?.querySelector('[data-field="expiresAt"]')?.value;
 
       try {
-        await updateUserAdmin(userId, {
+        const result = await updateUserAdmin(userId, {
           accessLevel,
           expiresAt: expiresAtRaw || null,
         });
-        notify("success", "Saved", "Access level and expiry updated.");
+        notify("success", "Saved", `Access level and expiry updated.${pushDeliveryHint(result.pushDelivery)}`);
         await refreshUsers();
       } catch (err) {
         const message = err instanceof AuthApiError ? err.message : "Save failed.";
