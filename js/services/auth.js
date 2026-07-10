@@ -132,11 +132,11 @@ export async function getDailyWisdomDashboard() {
   return data.dashboard;
 }
 
-export async function generateLearningFactsBatch({ limit = 6, replaceExisting = true } = {}) {
+export async function generateLearningFactsBatch({ topicsPerCall = 18, replaceExisting = false } = {}) {
   const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/learning-facts/generate-batch`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ limit, replaceExisting }),
+    body: JSON.stringify({ topicsPerCall, replaceExisting }),
   });
 
   const data = await parseJsonSafe(res);

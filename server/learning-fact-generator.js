@@ -1,5 +1,6 @@
 /**
- * Generate catchy learning fact hooks via Gemini (shared pool, no user names)
+ * Generate Daily Wisdom hooks via Gemini (shared Mantra Feed)
+ * Multi-topic batching: ~18 topics per Gemini call (~6 calls for full roadmap)
  */
 
 import crypto from "crypto";
@@ -17,15 +18,18 @@ import {
   deactivateFactsForTopic,
 } from "./topic-learning-facts-db.js";
 
-const FACTS_PER_TOPIC = 5;
-const MIN_FACTS_PER_TOPIC = 5;
+export const FACTS_PER_TOPIC = 5;
+export const MIN_FACTS_PER_TOPIC = 5;
+export const TOPICS_PER_GEMINI_CALL = 18;
 const HOOK_MAX_LEN = 90;
+const MULTI_BATCH_TIMEOUT_MS = 180_000;
+const SINGLE_TOPIC_TIMEOUT_MS = 90_000;
 
 const VALUE_HOOK_STYLES = ["insight", "mistake", "interview_tip"];
 
 const FACT_SYSTEM_PROMPT = `You write Daily Wisdom hooks for DSAMantra, a FAANG DSA learning app.
 Each hook must deliver real value — not filler. Style: catchy like Zomato/Swiggy alerts (playful, surprising) but every line teaches something specific.
-Output valid JSON only. No markdown.`;
+Output valid JSON only. No markdown fences.`;
 
 function generateFactId(topicId, index) {
   return `fact_${topicId}_${Date.now()}_${crypto.randomBytes(3).toString("hex")}_${index}`;
@@ -37,7 +41,69 @@ function truncateHook(text, max = HOOK_MAX_LEN) {
   return `${str.slice(0, max - 1).trim()}…`;
 }
 
-function buildFactPrompt(topic) {
+function normalizeTopicKey(id) {
+  return String(id || "").trim().toLowerCase();
+}
+
+function extractJsonPayload(content) {
+  const raw = String(content || "").trim();
+  if (!raw) throw new TeachApiError("Empty Gemini response.", { status: 502, code: "EMPTY_RESPONSE" });
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) {
+      return JSON.parse(fenced[1].trim());
+    }
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(raw.slice(start, end + 1));
+    }
+    throw new TeachApiError("Could not parse Gemini facts JSON.", { status: 502, code: "PARSE_ERROR" });
+  }
+}
+
+function normalizeHookStyle(raw) {
+  const allowedStyles = new Set([...VALUE_HOOK_STYLES, "curiosity", "interview", "analogy", "history"]);
+  const legacyStyleMap = {
+    curiosity: "insight",
+    interview: "interview_tip",
+    analogy: "insight",
+    history: "insight",
+  };
+  let hookStyle = raw || "insight";
+  if (!allowedStyles.has(hookStyle)) hookStyle = "insight";
+  if (legacyStyleMap[hookStyle]) hookStyle = legacyStyleMap[hookStyle];
+  return hookStyle;
+}
+
+function factsFromRawList(rawFacts, topic) {
+  if (!Array.isArray(rawFacts)) return [];
+
+  return rawFacts
+    .map((item, index) => {
+      const hook = truncateHook(item?.hook || item?.body || item?.text);
+      if (!hook) return null;
+      return {
+        id: generateFactId(topic.id, index),
+        topicId: topic.id,
+        phase: topic.phase,
+        topicName: topic.name,
+        hookStyle: normalizeHookStyle(item?.hookStyle),
+        title: truncateHook(topic.name, 48),
+        body: hook,
+        deepLink: buildTopicDeepLink(topic.id),
+        source: "gemini",
+        active: true,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, FACTS_PER_TOPIC);
+}
+
+function buildSingleTopicPrompt(topic) {
   const track = topicTrackFromId(topic.id);
   const trackLabel = track ? track.toUpperCase() : "General";
 
@@ -66,42 +132,104 @@ Return JSON:
 hookStyle must be one of: insight, mistake, interview_tip`;
 }
 
-function parseGeneratedFacts(payload, topic) {
-  const raw = payload?.facts || payload;
-  if (!Array.isArray(raw)) {
-    throw new TeachApiError("Gemini returned invalid facts JSON.", { status: 502, code: "INVALID_AI_RESPONSE" });
+function buildMultiTopicPrompt(topics) {
+  const lines = topics.map((topic, i) => {
+    const track = topicTrackFromId(topic.id);
+    const trackLabel = track ? track.toUpperCase() : "General";
+    return `${i + 1}. topicId: "${topic.id}" | name: "${topic.name}" | Phase ${topic.phase} | ${topic.difficulty} | ${trackLabel}`;
+  }).join("\n");
+
+  return `Generate Daily Wisdom hooks for ALL ${topics.length} topics below in ONE JSON response.
+
+Topics:
+${lines}
+
+For EACH topic write exactly ${FACTS_PER_TOPIC} hooks.
+Rules per hook:
+- No person names (personalized later).
+- Max ${HOOK_MAX_LEN} characters.
+- Concrete, topic-specific value (insight, mistake, or interview tip).
+- Punchy Zomato/Swiggy style; 0-1 emoji ok.
+
+Return JSON exactly:
+{
+  "topics": [
+    {
+      "topicId": "<id from list>",
+      "facts": [
+        { "hookStyle": "insight", "hook": "..." },
+        { "hookStyle": "mistake", "hook": "..." },
+        { "hookStyle": "interview_tip", "hook": "..." }
+      ]
+    }
+  ]
+}
+
+Include every topicId from the list. hookStyle: insight | mistake | interview_tip`;
+}
+
+function parseMultiTopicFacts(payload, topics) {
+  const topicMap = new Map(topics.map((t) => [normalizeTopicKey(t.id), t]));
+  const rawTopics = payload?.topics || payload?.topicFacts || payload?.results;
+
+  if (!Array.isArray(rawTopics)) {
+    throw new TeachApiError("Gemini batch JSON missing topics array.", { status: 502, code: "INVALID_AI_RESPONSE" });
   }
 
-  const allowedStyles = new Set([...VALUE_HOOK_STYLES, "curiosity", "interview", "analogy", "history"]);
-  const legacyStyleMap = {
-    curiosity: "insight",
-    interview: "interview_tip",
-    analogy: "insight",
-    history: "insight",
-  };
+  const parsed = new Map();
 
-  return raw
-    .map((item, index) => {
-      const hook = truncateHook(item?.hook || item?.body || item?.text);
-      if (!hook) return null;
-      let hookStyle = item?.hookStyle || "insight";
-      if (!allowedStyles.has(hookStyle)) hookStyle = "insight";
-      if (legacyStyleMap[hookStyle]) hookStyle = legacyStyleMap[hookStyle];
-      return {
-        id: generateFactId(topic.id, index),
-        topicId: topic.id,
-        phase: topic.phase,
-        topicName: topic.name,
-        hookStyle,
-        title: truncateHook(topic.name, 48),
-        body: hook,
-        deepLink: buildTopicDeepLink(topic.id),
-        source: "gemini",
-        active: true,
-      };
-    })
-    .filter(Boolean)
-    .slice(0, FACTS_PER_TOPIC);
+  for (const entry of rawTopics) {
+    const key = normalizeTopicKey(entry?.topicId || entry?.id || entry?.topic_id);
+    const topic = topicMap.get(key);
+    if (!topic) continue;
+
+    const facts = factsFromRawList(entry?.facts || entry?.hooks, topic);
+    if (facts.length) parsed.set(topic.id, facts);
+  }
+
+  return parsed;
+}
+
+async function saveFactsForTopic(topicId, facts, { replaceExisting = false } = {}) {
+  if (replaceExisting) {
+    await deactivateFactsForTopic(topicId);
+  }
+
+  const saved = [];
+  for (const fact of facts) {
+    const doc = await upsertTopicLearningFact(fact);
+    if (doc) saved.push(doc);
+  }
+
+  return saved;
+}
+
+async function callGeminiForFacts({
+  userPrompt,
+  maxTokens,
+  timeoutMs,
+  validateResponse,
+}) {
+  const apiKey = resolveApiKey();
+  if (!apiKey) {
+    throw new TeachApiError("Gemini API key is not configured.", { status: 503, code: "API_KEY_MISSING" });
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await generateWithModelFallback({
+      apiKey,
+      systemPrompt: FACT_SYSTEM_PROMPT,
+      userPrompt,
+      options: { json: true, temperature: 0.85, maxTokens },
+      signal: controller.signal,
+      validateResponse,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
@@ -109,61 +237,131 @@ function parseGeneratedFacts(payload, topic) {
  * @param {{ replaceExisting?: boolean }} options
  */
 export async function generateFactsForTopic(topicId, { replaceExisting = true } = {}) {
-  const apiKey = resolveApiKey();
-  if (!apiKey) {
-    throw new TeachApiError("Gemini API key is not configured.", { status: 503, code: "API_KEY_MISSING" });
-  }
-
   const topic = getTopicById(topicId);
   if (!topic) {
     throw new TeachApiError("Unknown topic id.", { status: 404, code: "NOT_FOUND" });
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90_000);
+  const result = await callGeminiForFacts({
+    userPrompt: buildSingleTopicPrompt(topic),
+    maxTokens: 1024,
+    timeoutMs: SINGLE_TOPIC_TIMEOUT_MS,
+    validateResponse: (content) => {
+      const payload = extractJsonPayload(content);
+      const facts = factsFromRawList(payload?.facts || payload, topic);
+      if (!facts.length) {
+        throw new TeachApiError("No facts generated.", { status: 502, code: "INVALID_AI_RESPONSE" });
+      }
+      return facts;
+    },
+  });
 
+  const saved = await saveFactsForTopic(topicId, result.parsed, { replaceExisting });
+
+  return {
+    topicId,
+    topicName: topic.name,
+    generated: saved.length,
+    model: result.model,
+    mode: "single",
+    facts: saved,
+  };
+}
+
+/**
+ * One Gemini call for multiple topics; per-topic fallback on partial failure.
+ */
+async function generateFactsMultiTopicCall(topics, { replaceExisting = false } = {}) {
+  if (!topics.length) return { results: [], errors: [], mode: "multi", model: null };
+
+  const result = await callGeminiForFacts({
+    userPrompt: buildMultiTopicPrompt(topics),
+    maxTokens: 8192,
+    timeoutMs: MULTI_BATCH_TIMEOUT_MS,
+    validateResponse: (content) => {
+      const payload = extractJsonPayload(content);
+      return parseMultiTopicFacts(payload, topics);
+    },
+  });
+
+  const parsedMap = result.parsed;
+  const results = [];
+  const errors = [];
+
+  for (const topic of topics) {
+    const facts = parsedMap.get(topic.id);
+
+    if (facts?.length) {
+      try {
+        const saved = await saveFactsForTopic(topic.id, facts, { replaceExisting });
+        results.push({
+          topicId: topic.id,
+          topicName: topic.name,
+          generated: saved.length,
+          model: result.model,
+          mode: "multi",
+          facts: saved,
+        });
+      } catch (err) {
+        errors.push({
+          topicId: topic.id,
+          topicName: topic.name,
+          message: err?.message || String(err),
+          mode: "multi_save",
+        });
+      }
+      continue;
+    }
+
+    try {
+      const single = await generateFactsForTopic(topic.id, { replaceExisting });
+      single.mode = "single_fallback";
+      results.push(single);
+    } catch (err) {
+      errors.push({
+        topicId: topic.id,
+        topicName: topic.name,
+        message: err?.message || String(err),
+        mode: "single_fallback",
+      });
+    }
+  }
+
+  return { results, errors, mode: "multi", model: result.model };
+}
+
+/**
+ * Try multi-topic batch; on total failure retry each topic individually.
+ */
+async function generateFactsWithBatchFallback(topics, { replaceExisting = false } = {}) {
   try {
-    const result = await generateWithModelFallback({
-      apiKey,
-      systemPrompt: FACT_SYSTEM_PROMPT,
-      userPrompt: buildFactPrompt(topic),
-      options: { json: true, temperature: 0.85, maxTokens: 1024 },
-      signal: controller.signal,
-      validateResponse: (content) => {
-        try {
-          const parsed = JSON.parse(content);
-          return parseGeneratedFacts(parsed, topic);
-        } catch (err) {
-          if (err instanceof TeachApiError) throw err;
-          throw new TeachApiError("Could not parse Gemini facts JSON.", { status: 502, code: "PARSE_ERROR" });
-        }
-      },
-    });
+    return await generateFactsMultiTopicCall(topics, { replaceExisting });
+  } catch (batchErr) {
+    const results = [];
+    const errors = [];
 
-    const facts = result.parsed;
-    if (!facts?.length) {
-      throw new TeachApiError("No facts generated.", { status: 502, code: "INVALID_AI_RESPONSE" });
-    }
-
-    if (replaceExisting) {
-      await deactivateFactsForTopic(topicId);
-    }
-
-    const saved = [];
-    for (const fact of facts) {
-      const doc = await upsertTopicLearningFact(fact);
-      if (doc) saved.push(doc);
+    for (const topic of topics) {
+      try {
+        const single = await generateFactsForTopic(topic.id, { replaceExisting });
+        single.mode = "single_fallback";
+        results.push(single);
+      } catch (err) {
+        errors.push({
+          topicId: topic.id,
+          topicName: topic.name,
+          message: err?.message || String(err),
+          mode: "single_fallback",
+        });
+      }
     }
 
     return {
-      topicId,
-      topicName: topic.name,
-      generated: saved.length,
-      model: result.model,
-      facts: saved,
+      results,
+      errors,
+      mode: "single_fallback",
+      model: null,
+      batchError: batchErr?.message || String(batchErr),
     };
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -181,40 +379,115 @@ export async function listTopicsNeedingFacts({ minFacts = MIN_FACTS_PER_TOPIC } 
   return withCounts.filter((t) => t.count < minFacts);
 }
 
-/**
- * Generate facts for the next batch of topics that need them.
- */
-export async function generateFactsBatch({ limit = 6, replaceExisting = true } = {}) {
-  const pending = await listTopicsNeedingFacts();
-  const batch = pending.slice(0, Math.max(1, limit));
+async function resolveTopicsQueue({ replaceExisting = false } = {}) {
+  if (replaceExisting) {
+    const ordered = getOrderedRoadmapTopics();
+    return Promise.all(
+      ordered.map(async (topic) => ({
+        topicId: topic.id,
+        topicName: topic.name,
+        phase: topic.phase,
+        count: await countFactsForTopic(topic.id),
+      })),
+    );
+  }
+  return listTopicsNeedingFacts();
+}
 
-  const results = [];
-  const errors = [];
+function buildBatchActivity({ results, errors, mode, batchError }) {
+  const lines = [];
 
-  for (const item of batch) {
-    try {
-      const result = await generateFactsForTopic(item.topicId, { replaceExisting });
-      results.push(result);
-    } catch (err) {
-      errors.push({
-        topicId: item.topicId,
-        topicName: item.topicName,
-        message: err?.message || String(err),
-      });
-    }
+  if (mode === "single_fallback" && batchError) {
+    lines.push({ status: "warning", message: `Batch call failed — retried topics individually: ${batchError}` });
+  } else if (mode === "multi") {
+    lines.push({ status: "success", message: `Multi-topic Gemini batch (${results.length} saved)` });
   }
 
-  const remaining = Math.max(0, pending.length - batch.length);
+  for (const r of results) {
+    const tag = r.mode === "single_fallback" ? " (fallback)" : "";
+    lines.push({
+      status: "success",
+      message: `${r.topicName}: ${r.generated} hooks${tag}`,
+      topicId: r.topicId,
+    });
+  }
+
+  for (const e of errors) {
+    lines.push({
+      status: "failed",
+      message: `${e.topicName}: ${e.message}`,
+      topicId: e.topicId,
+    });
+  }
+
+  return lines;
+}
+
+/**
+ * Process next chunk of topics in one Gemini call (up to topicsPerCall).
+ */
+export async function generateFactsBatch({
+  topicsPerCall = TOPICS_PER_GEMINI_CALL,
+  replaceExisting = false,
+} = {}) {
+  const perCall = Math.min(Math.max(Number.parseInt(topicsPerCall, 10) || TOPICS_PER_GEMINI_CALL, 1), 20);
+  const pending = await resolveTopicsQueue({ replaceExisting });
+  const queueTotal = pending.length;
+  const batchItems = pending.slice(0, perCall);
+  const topics = batchItems
+    .map((item) => getTopicById(item.topicId))
+    .filter(Boolean);
+
+  if (!topics.length) {
+    return {
+      topicsPerCall: perCall,
+      mode: "idle",
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      remaining: 0,
+      queueTotal: 0,
+      totalBatches: 0,
+      batchIndex: 0,
+      totalTopics: getOrderedRoadmapTopics().length,
+      coveredTopics: (await listTopicIdsWithFacts()).length,
+      results: [],
+      errors: [],
+      activity: [],
+    };
+  }
+
+  const { results, errors, mode, model, batchError } = await generateFactsWithBatchFallback(topics, {
+    replaceExisting,
+  });
+
+  const remaining = Math.max(0, queueTotal - batchItems.length);
+  const totalBatches = Math.ceil(queueTotal / perCall) || 1;
+  const batchIndex = totalBatches - Math.ceil(remaining / perCall);
+
+  const fallbackCount = results.filter((r) => r.mode === "single_fallback").length;
 
   return {
-    processed: batch.length,
+    topicsPerCall: perCall,
+    mode,
+    model: model || null,
+    batchError: batchError || null,
+    processed: batchItems.length,
     succeeded: results.length,
     failed: errors.length,
+    skipped: Math.max(0, batchItems.length - results.length - errors.length),
+    fallbackCount,
     remaining,
+    queueTotal,
+    totalBatches,
+    batchIndex,
+    completedTopics: queueTotal - remaining,
     totalTopics: getOrderedRoadmapTopics().length,
     coveredTopics: (await listTopicIdsWithFacts()).length,
     results,
     errors,
+    activity: buildBatchActivity({ results, errors, mode, batchError }),
   };
 }
 
@@ -234,5 +507,6 @@ export async function getLearningFactsPoolStats() {
     topicsMissingFacts: ordered.length - coveredSet.size,
     totalActiveFacts: totalFacts,
     factsPerTopicTarget: FACTS_PER_TOPIC,
+    topicsPerGeminiCall: TOPICS_PER_GEMINI_CALL,
   };
 }

@@ -8,6 +8,8 @@ import {
   renderMetrics,
   renderConsoleStatus,
   renderPreviewText,
+  renderGenProgress,
+  appendGenLogEntry,
 } from "../components/daily-wisdom-admin-panel.js";
 import {
   getPushDeliveryLogs,
@@ -253,8 +255,16 @@ export default {
     const studentIdInput = container.querySelector("#dw-student-id");
     const seedPilotBtn = container.querySelector("#dw-seed-pilot");
     const regenerateAllBtn = container.querySelector("#dw-regenerate-all");
+    const genProgressEl = container.querySelector("#dw-gen-progress");
+    const genStatusEl = container.querySelector("#dw-gen-status");
+    const genBarEl = container.querySelector("#dw-gen-bar");
+    const genEtaEl = container.querySelector("#dw-gen-eta");
+    const genCountsEl = container.querySelector("#dw-gen-counts");
+    const genLogEl = container.querySelector("#dw-gen-log");
+    const genStopBtn = container.querySelector("#dw-gen-stop");
 
     let search = "";
+    let generationAbort = false;
     let status = "all";
     let source = "all";
     let searchTimer = null;
@@ -336,43 +346,125 @@ export default {
       }
     }
 
+    function setGenerationUiActive(active) {
+      generateMissingBtn.disabled = active;
+      if (regenerateAllBtn) regenerateAllBtn.disabled = active;
+      genProgressEl?.classList.toggle("hidden", !active);
+    }
+
+    function updateGenProgressUI(state) {
+      const view = renderGenProgress(state);
+      if (genStatusEl) genStatusEl.textContent = view.status;
+      if (genBarEl) genBarEl.style.width = view.barWidth;
+      if (genEtaEl) genEtaEl.textContent = view.eta;
+      if (genCountsEl) genCountsEl.textContent = view.counts;
+    }
+
+    genStopBtn?.addEventListener("click", () => {
+      generationAbort = true;
+      appendGenLogEntry(genLogEl, { status: "warning", message: "Stop requested — finishing current batch…" });
+      if (genStopBtn) genStopBtn.disabled = true;
+    });
+
     async function runGenerateBatch(btn, { replaceExisting = false } = {}) {
       if (!btn) return;
-      btn.disabled = true;
-      const labelEl = btn.querySelector("span");
-      const originalLabel = labelEl?.textContent;
+
+      generationAbort = false;
+      setGenerationUiActive(true);
+      if (genLogEl) genLogEl.innerHTML = "";
+      if (genStopBtn) genStopBtn.disabled = false;
+
+      appendGenLogEntry(genLogEl, {
+        status: "info",
+        message: replaceExisting
+          ? "Regenerating all topics (18 per Gemini call)…"
+          : "Generating missing hooks (18 topics per Gemini call)…",
+      });
+
+      let remaining = 1;
+      let queueTotal = 0;
+      let totalBatches = 0;
+      let cumulativeSuccess = 0;
+      let cumulativeFailed = 0;
+      let cumulativeSkipped = 0;
+      const batchDurations = [];
+      let stopped = false;
 
       try {
-        let remaining = 1;
-        let totalProcessed = 0;
+        while (remaining > 0 && !generationAbort) {
+          const batchStart = Date.now();
 
-        while (remaining > 0) {
-          if (labelEl) labelEl.textContent = `Generating… (${totalProcessed} topics)`;
-
-          const data = await generateLearningFactsBatch({ limit: 6, replaceExisting });
+          const data = await generateLearningFactsBatch({ topicsPerCall: 18, replaceExisting });
           const batch = data.result;
-          totalProcessed += batch.succeeded || 0;
-          remaining = batch.remaining ?? 0;
 
-          if (batch.failed > 0 && batch.succeeded === 0) {
+          if (batch.mode === "idle" || batch.queueTotal === 0) {
+            appendGenLogEntry(genLogEl, { status: "success", message: "Nothing to generate — all topics covered." });
+            break;
+          }
+
+          if (!queueTotal) {
+            queueTotal = batch.queueTotal;
+            totalBatches = batch.totalBatches || Math.ceil(queueTotal / 18);
+          }
+
+          remaining = batch.remaining ?? 0;
+          cumulativeSuccess += batch.succeeded || 0;
+          cumulativeFailed += batch.failed || 0;
+          cumulativeSkipped += batch.skipped || 0;
+
+          batchDurations.push(Date.now() - batchStart);
+          const avgBatchMs = batchDurations.reduce((a, b) => a + b, 0) / batchDurations.length;
+          const batchesLeft = Math.ceil(remaining / 18);
+          const etaSeconds = (avgBatchMs / 1000) * batchesLeft;
+
+          updateGenProgressUI({
+            batchIndex: batch.batchIndex || Math.ceil((queueTotal - remaining) / 18),
+            totalBatches,
+            completedTopics: queueTotal - remaining,
+            queueTotal,
+            succeeded: cumulativeSuccess,
+            failed: cumulativeFailed,
+            skipped: cumulativeSkipped,
+            etaSeconds,
+          });
+
+          for (const line of batch.activity || []) {
+            appendGenLogEntry(genLogEl, line);
+          }
+
+          if (batch.failed > 0 && batch.succeeded === 0 && batch.mode !== "idle") {
             throw new AuthApiError(batch.errors?.[0]?.message || "AI generation failed.", {
               status: 502,
               details: batch,
             });
           }
 
-          if (remaining > 0) {
-            await new Promise((r) => { setTimeout(r, 800); });
+          if (remaining > 0 && !generationAbort) {
+            await new Promise((r) => { setTimeout(r, 400); });
           }
         }
 
+        if (generationAbort && remaining > 0) {
+          stopped = true;
+          appendGenLogEntry(genLogEl, {
+            status: "warning",
+            message: `Stopped early — ${queueTotal - remaining}/${queueTotal} topics processed.`,
+          });
+        }
+
         showToast(Toast({
-          title: replaceExisting ? "All hooks regenerated" : "Missing hooks generated",
-          text: "Mantra Feed is up to date for all roadmap topics.",
-          variant: "success",
+          title: stopped ? "Generation stopped" : (replaceExisting ? "Regeneration complete" : "Missing hooks generated"),
+          text: stopped
+            ? `${cumulativeSuccess} topics saved before stop.`
+            : "Mantra Feed is up to date.",
+          variant: stopped ? "warning" : "success",
         }));
         void loadDashboard();
       } catch (err) {
+        appendGenLogEntry(genLogEl, {
+          status: "failed",
+          message: err instanceof AuthApiError ? err.message : "Generation failed.",
+        });
         showToast(Toast({
           title: "Generation stopped",
           text: err instanceof AuthApiError ? err.message : "Could not finish generating hooks.",
@@ -380,8 +472,7 @@ export default {
         }));
         void loadDashboard();
       } finally {
-        if (labelEl && originalLabel) labelEl.textContent = originalLabel;
-        btn.disabled = false;
+        setGenerationUiActive(false);
       }
     }
 

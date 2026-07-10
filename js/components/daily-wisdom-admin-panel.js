@@ -96,6 +96,27 @@ export function renderDailyWisdomPanelShell() {
         </button>
       </div>
 
+      <div class="dw-gen-progress hidden" id="dw-gen-progress" aria-live="polite">
+        <div class="dw-gen-progress__head">
+          <div>
+            <p class="dw-gen-progress__label">Mantra Feed generation</p>
+            <p class="dw-gen-progress__status" id="dw-gen-status">Starting…</p>
+          </div>
+          <button type="button" class="btn btn--danger btn--sm" id="dw-gen-stop">
+            ${icon("close")}
+            <span>Stop</span>
+          </button>
+        </div>
+        <div class="dw-gen-progress__bar-track" aria-hidden="true">
+          <div class="dw-gen-progress__bar-fill" id="dw-gen-bar" style="width: 0%"></div>
+        </div>
+        <div class="dw-gen-progress__meta">
+          <span id="dw-gen-eta" class="dw-gen-progress__eta text-tertiary">Estimating…</span>
+          <span id="dw-gen-counts" class="dw-gen-progress__counts text-secondary"></span>
+        </div>
+        <ul class="dw-gen-log" id="dw-gen-log"></ul>
+      </div>
+
       <div class="dw-console__activity">
         <div class="dw-console__activity-head">
           <h3 class="dw-console__activity-title">Recent activity</h3>
@@ -234,6 +255,45 @@ export function renderConsoleStatus(dashboard) {
     return `<span class="dw-console__live-dot dw-console__live-dot--warn" aria-hidden="true"></span><span>Low delivery rate</span>`;
   }
   return `<span class="dw-console__live-dot dw-console__live-dot--ok" aria-hidden="true"></span><span>Operational</span>`;
+}
+
+export function formatEta(seconds) {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return "Almost done…";
+  if (seconds < 60) return `~${Math.ceil(seconds)}s remaining`;
+  const mins = Math.ceil(seconds / 60);
+  return `~${mins} min remaining`;
+}
+
+export function renderGenProgress({
+  batchIndex,
+  totalBatches,
+  completedTopics,
+  queueTotal,
+  succeeded,
+  failed,
+  skipped,
+  etaSeconds,
+}) {
+  const pct = queueTotal > 0 ? Math.min(100, Math.round((completedTopics / queueTotal) * 100)) : 0;
+
+  return {
+    status: `Batch ${batchIndex} of ${totalBatches} · ${completedTopics}/${queueTotal} topics`,
+    barWidth: `${pct}%`,
+    eta: formatEta(etaSeconds),
+    counts: `Success ${succeeded} · Failed ${failed} · Skipped ${skipped}`,
+  };
+}
+
+export function appendGenLogEntry(logEl, { status, message }) {
+  if (!logEl) return;
+  const li = document.createElement("li");
+  li.className = `dw-gen-log__item dw-gen-log__item--${status || "info"}`;
+  const time = new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  li.innerHTML = `<span class="dw-gen-log__time">${time}</span><span class="dw-gen-log__msg">${escapeHtml(message)}</span>`;
+  logEl.prepend(li);
+  while (logEl.children.length > 12) {
+    logEl.removeChild(logEl.lastChild);
+  }
 }
 
 export function renderPreviewText(preview) {

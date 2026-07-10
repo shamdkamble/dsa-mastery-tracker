@@ -588,10 +588,11 @@ app.get("/api/auth/admin/learning-facts/dashboard", requireAdmin, async (req, re
 
 app.post("/api/auth/admin/learning-facts/generate-batch", requireAdmin, async (req, res) => {
   try {
-    const { limit = 6, replaceExisting = true } = req.body ?? {};
+    const { topicsPerCall, limit, replaceExisting = false } = req.body ?? {};
+    const perCall = Number.parseInt(topicsPerCall ?? limit, 10) || 18;
     const result = await generateFactsBatch({
-      limit: Number.parseInt(limit, 10) || 6,
-      replaceExisting: replaceExisting !== false,
+      topicsPerCall: Math.min(Math.max(perCall, 1), 20),
+      replaceExisting: replaceExisting === true,
     });
     res.json({ ok: true, result });
   } catch (err) {

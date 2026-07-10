@@ -392,6 +392,101 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* ── Generation progress ── */
+
+.dw-gen-progress {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface));
+}
+
+.dw-gen-progress__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.dw-gen-progress__label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: var(--font-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-tertiary);
+}
+
+.dw-gen-progress__status {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.dw-gen-progress__bar-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-elevated);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.dw-gen-progress__bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--color-accent), color-mix(in srgb, #7c3aed 80%, var(--color-accent)));
+  transition: width 0.35s ease;
+}
+
+.dw-gen-progress__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.dw-gen-log {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.dw-gen-log__item {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+
+.dw-gen-log__item:last-child {
+  border-bottom: none;
+}
+
+.dw-gen-log__time {
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.dw-gen-log__msg {
+  color: var(--color-text-secondary);
+  min-width: 0;
+  word-break: break-word;
+}
+
+.dw-gen-log__item--success .dw-gen-log__msg { color: var(--color-success); }
+.dw-gen-log__item--failed .dw-gen-log__msg { color: var(--color-danger); }
+.dw-gen-log__item--warning .dw-gen-log__msg { color: var(--color-warning); }
+
 .dw-console__actions .btn--primary {
   flex: 1 1 auto;
   min-width: min(100%, 200px);
