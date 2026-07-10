@@ -238,71 +238,351 @@
   height: 18px;
 }
 
-/* ── Daily Wisdom panel ── */
+/* ── Daily Wisdom admin console ── */
 
-.admin-wisdom-panel {
-  position: relative;
+.dw-console {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, #a855f7 30%, var(--color-border));
-  background:
-    linear-gradient(145deg,
-      color-mix(in srgb, #7c3aed 10%, var(--color-surface)),
-      color-mix(in srgb, var(--color-accent) 6%, var(--color-surface)));
-  box-shadow: 0 20px 50px -24px color-mix(in srgb, #7c3aed 35%, transparent);
 }
 
-.admin-wisdom-panel::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 200px;
-  height: 200px;
-  background: radial-gradient(circle, color-mix(in srgb, #a855f7 20%, transparent), transparent 70%);
-  pointer-events: none;
+.dw-console__header {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-secondary) 40%, var(--color-surface));
 }
 
-.admin-wisdom-panel__badge {
+.dw-console__title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.dw-console__brand {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.dw-console__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.dw-console__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.dw-console__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.dw-console__subtitle {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.dw-console__live {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: 2px var(--space-2);
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.dw-console__live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.dw-console__live-dot--ok {
+  background: var(--color-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 25%, transparent);
+}
+
+.dw-console__live-dot--warn {
+  background: var(--color-warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warning) 25%, transparent);
+}
+
+.dw-console__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dw-metric {
+  padding: var(--space-4);
+  background: var(--color-surface);
+  min-width: 0;
+}
+
+.dw-metric__label {
   font-size: 10px;
-  font-weight: var(--font-bold);
+  font-weight: var(--font-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #c4b5fd;
-  background: color-mix(in srgb, #7c3aed 25%, transparent);
-  margin-bottom: var(--space-2);
+  letter-spacing: 0.06em;
+  color: var(--color-text-tertiary);
 }
 
-.admin-wisdom-panel__badge svg {
-  width: 12px;
-  height: 12px;
-}
-
-.admin-wisdom-panel__title {
-  margin: 0 0 var(--space-3);
-  font-size: var(--text-xl);
+.dw-metric__value {
+  margin-top: var(--space-1);
+  font-size: var(--text-2xl);
   font-weight: var(--font-bold);
+  line-height: 1.1;
   letter-spacing: -0.02em;
 }
 
-.admin-wisdom-panel__cron {
+.dw-metric__dim {
+  font-size: var(--text-lg);
+  font-weight: var(--font-medium);
+  color: var(--color-text-tertiary);
+}
+
+.dw-metric__sub {
+  margin-top: var(--space-1);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  line-height: 1.35;
+}
+
+.dw-metric--accent .dw-metric__value {
+  color: var(--color-accent);
+}
+
+.dw-metric--success .dw-metric__value {
+  color: var(--color-success);
+}
+
+.dw-metric--warning .dw-metric__value {
+  color: var(--color-warning);
+}
+
+.dw-console__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dw-console__actions .btn--primary {
+  flex: 1 1 auto;
+  min-width: min(100%, 200px);
+}
+
+.dw-console__activity {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dw-console__activity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.dw-console__activity-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.dw-console__activity-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  padding: var(--space-4) 0;
+  text-align: center;
+}
+
+.dw-activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.dw-activity__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-elevated);
+  font-size: var(--text-sm);
+}
+
+.dw-activity__item:nth-child(even) {
+  background: var(--color-surface);
+}
+
+.dw-activity__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+
+.dw-activity__time {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 4.5rem;
+}
+
+.dw-activity__user {
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dw-activity__title {
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.dw-activity__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.dw-activity__topic {
+  font-size: var(--text-xs);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dw-console__advanced {
+  border-top: 1px solid var(--color-border);
+}
+
+.dw-console__advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.dw-console__advanced-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.dw-console__advanced-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dw-console__advanced[open] .dw-console__advanced-toggle {
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-secondary) 35%, transparent);
+}
+
+.dw-console__advanced-body {
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dw-console__preview {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+}
+
+.dw-console__preview-label {
+  display: block;
+  font-size: 10px;
+  font-weight: var(--font-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-1);
+}
+
+.dw-console__preview-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.dw-console__advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4);
+}
+
+.dw-console__field-label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.dw-console__field-row {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
-  border-top: 1px solid color-mix(in srgb, #a855f7 20%, var(--color-border));
 }
 
-.admin-wisdom-panel__cron-hint {
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-  flex: 1 1 200px;
+.dw-console__field-row .input {
+  flex: 1 1 160px;
+  min-width: 0;
 }
 
 /* ── Notification architecture page ── */
@@ -625,31 +905,32 @@
   max-width: 100%;
 }
 
-.admin-page--modern .learning-facts-guide__body {
+.admin-page--modern .dw-console__metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-page--modern .dw-console__actions {
   flex-direction: column;
 }
 
-.admin-page--modern .learning-facts-guide__actions {
-  width: 100%;
-  min-width: 0;
-}
-
-.admin-page--modern .learning-facts-guide__user-send {
-  width: 100%;
-}
-
-.admin-page--modern .learning-facts-guide__user-send .input {
-  flex: 1 1 100%;
-}
-
-.admin-page--modern .admin-wisdom-panel__cron {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.admin-page--modern .admin-wisdom-panel__cron .btn {
+.admin-page--modern .dw-console__actions .btn {
   width: 100%;
   justify-content: center;
+}
+
+.admin-page--modern .dw-activity__item {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.admin-page--modern .dw-activity__main {
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.admin-page--modern .dw-activity__title {
+  white-space: normal;
+  flex: 1 1 100%;
 }
 
 @media (max-width: 900px) {
@@ -670,9 +951,31 @@
   }
 }
 
+@media (max-width: 900px) {
+  .dw-console__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
   .admin-page--modern {
     gap: var(--space-3);
+  }
+
+  .dw-console__metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dw-metric__value {
+    font-size: var(--text-xl);
+  }
+
+  .dw-console__header,
+  .dw-console__actions,
+  .dw-console__activity,
+  .dw-console__advanced-body {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
   }
 
   .admin-hero__desc {

@@ -83,6 +83,7 @@ import {
   deliverLearningFactToUser,
   previewLearningFactForUser,
 } from "./learning-fact-delivery.js";
+import { getDailyWisdomAdminDashboard } from "./daily-wisdom-admin-stats.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -572,6 +573,16 @@ app.get("/api/auth/admin/learning-facts/stats", requireAdmin, async (_req, res) 
   } catch (err) {
     console.error("[/api/auth/admin/learning-facts/stats]", err);
     res.status(500).json({ error: { message: "Failed to load Mantra Feed stats.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/auth/admin/learning-facts/dashboard", requireAdmin, async (req, res) => {
+  try {
+    const dashboard = await getDailyWisdomAdminDashboard(req.auth.sub);
+    res.json({ dashboard });
+  } catch (err) {
+    console.error("[/api/auth/admin/learning-facts/dashboard]", err);
+    res.status(500).json({ error: { message: "Failed to load Daily Wisdom dashboard.", code: "SERVER_ERROR" } });
   }
 });
 

@@ -3,13 +3,19 @@ import { icon } from "../components/icons.js";
 import { Badge, EmptyState, SkeletonTable } from "../components/ui/index.js";
 import { adminSubnav, adminHero, adminStatCard } from "../components/admin-shell.js";
 import {
+  renderDailyWisdomPanelShell,
+  renderActivityList,
+  renderMetrics,
+  renderConsoleStatus,
+  renderPreviewText,
+} from "../components/daily-wisdom-admin-panel.js";
+import {
   getPushDeliveryLogs,
   seedLearningFacts,
-  getLearningFactsPoolStats,
+  getDailyWisdomDashboard,
   generateLearningFactsBatch,
   deliverLearningFactToMe,
   deliverLearningFactToUser,
-  previewLearningFactAnchor,
   runDailyWisdomCronNow,
   AuthApiError,
 } from "../services/auth.js";
@@ -176,53 +182,7 @@ export default {
           })}
           ${adminSubnav("push-logs")}
 
-          <section class="card admin-wisdom-panel learning-facts-guide">
-            <div class="card__body learning-facts-guide__body">
-              <div>
-                <span class="admin-wisdom-panel__badge">${icon("zap")}<span>Daily Wisdom</span></span>
-                <h2 class="admin-wisdom-panel__title">Mantra Feed</h2>
-                <ol class="learning-facts-guide__steps">
-                  <li><strong>Generate Mantra Feed (AI)</strong> — builds 5 value-first hooks per topic (insight, common mistake, interview tip).</li>
-                  <li><strong>Send Daily Wisdom</strong> — picks the student's next topic and personalizes with progress: streak, last completed topic, tone.</li>
-                  <li><strong>Student taps</strong> — opens that topic's lesson on the roadmap.</li>
-                </ol>
-                <p class="learning-facts-guide__pool text-secondary" id="learning-facts-pool-stats">Mantra Feed: loading…</p>
-                <p class="learning-facts-guide__anchor text-tertiary" id="learning-facts-anchor-preview">Preview: loading…</p>
-              </div>
-              <div class="learning-facts-guide__actions">
-                <button type="button" class="btn btn--primary btn--sm" id="learning-facts-generate-all">
-                  ${icon("zap")}
-                  <span>Generate Mantra Feed (AI)</span>
-                </button>
-                <button type="button" class="btn btn--ghost btn--sm" id="learning-facts-send-me">
-                  ${icon("bell")}
-                  <span>Send Daily Wisdom to me</span>
-                </button>
-                <div class="learning-facts-guide__user-send">
-                  <input
-                    type="text"
-                    class="input input--sm"
-                    id="learning-facts-user-id"
-                    placeholder="Student userId (e.g. user_173…)"
-                    autocomplete="off"
-                  />
-                  <button type="button" class="btn btn--ghost btn--sm" id="learning-facts-send-user">
-                    ${icon("user")}
-                    <span>Send to student</span>
-                  </button>
-                </div>
-                <div class="admin-wisdom-panel__cron">
-                  <button type="button" class="btn btn--secondary btn--sm" id="daily-wisdom-cron-run">
-                    ${icon("repeat")}
-                    <span>Run Daily Wisdom cron now</span>
-                  </button>
-                  <span class="admin-wisdom-panel__cron-hint" id="daily-wisdom-cron-result">
-                    Simulates the daily job for all subscribed students (bypasses timezone &amp; daily dedup).
-                  </span>
-                </div>
-              </div>
-            </div>
-          </section>
+          ${renderDailyWisdomPanelShell()}
 
           <div class="admin-stats push-logs__stats" id="push-logs-stats">
             ${adminStatCard({ iconName: "bell", value: "—", label: "Total attempts" })}
@@ -260,10 +220,6 @@ export default {
                   ${icon("repeat")}
                   <span>Refresh</span>
                 </button>
-                <button class="btn btn--ghost btn--sm" type="button" id="push-logs-seed-facts" title="Seed pilot Daily Wisdom hooks into MongoDB">
-                  ${icon("database")}
-                  <span>Seed pilot</span>
-                </button>
                 <span class="push-logs__updated text-tertiary" id="push-logs-updated" aria-live="polite"></span>
               </div>
             </div>
@@ -283,16 +239,20 @@ export default {
     const statusFilter = container.querySelector("#push-logs-status");
     const sourceFilter = container.querySelector("#push-logs-source");
     const refreshBtn = container.querySelector("#push-logs-refresh");
-    const seedFactsBtn = container.querySelector("#push-logs-seed-facts");
-    const generateAllBtn = container.querySelector("#learning-facts-generate-all");
-    const poolStatsEl = container.querySelector("#learning-facts-pool-stats");
-    const sendMeBtn = container.querySelector("#learning-facts-send-me");
-    const sendUserBtn = container.querySelector("#learning-facts-send-user");
-    const userIdInput = container.querySelector("#learning-facts-user-id");
-    const anchorPreview = container.querySelector("#learning-facts-anchor-preview");
-    const cronRunBtn = container.querySelector("#daily-wisdom-cron-run");
-    const cronResultEl = container.querySelector("#daily-wisdom-cron-result");
     const updatedEl = container.querySelector("#push-logs-updated");
+
+    const dwMetrics = container.querySelector("#dw-console-metrics");
+    const dwStatus = container.querySelector("#dw-console-status");
+    const dwActivity = container.querySelector("#dw-activity-list");
+    const dwPreview = container.querySelector("#dw-preview .dw-console__preview-text");
+    const generateMissingBtn = container.querySelector("#dw-generate-missing");
+    const sendTestBtn = container.querySelector("#dw-send-test");
+    const cronRunBtn = container.querySelector("#dw-run-cron");
+    const refreshActivityBtn = container.querySelector("#dw-refresh-activity");
+    const sendStudentBtn = container.querySelector("#dw-send-student");
+    const studentIdInput = container.querySelector("#dw-student-id");
+    const seedPilotBtn = container.querySelector("#dw-seed-pilot");
+    const regenerateAllBtn = container.querySelector("#dw-regenerate-all");
 
     let search = "";
     let status = "all";
@@ -355,56 +315,41 @@ export default {
 
     refreshBtn?.addEventListener("click", () => { void loadLogs(); });
 
-    async function loadPoolStats() {
-      if (!poolStatsEl) return;
+    function applyDashboard(dashboard) {
+      if (dwMetrics) dwMetrics.innerHTML = renderMetrics(dashboard);
+      if (dwStatus) dwStatus.innerHTML = renderConsoleStatus(dashboard);
+      if (dwActivity) dwActivity.innerHTML = renderActivityList(dashboard?.recentActivity);
+      if (dwPreview) dwPreview.innerHTML = renderPreviewText(dashboard?.preview);
+    }
+
+    async function loadDashboard() {
       try {
-        const stats = await getLearningFactsPoolStats();
-        poolStatsEl.textContent = `Mantra Feed: ${stats.topicsWithFacts}/${stats.totalTopics} topics · ${stats.totalActiveFacts} hooks (${stats.factsPerTopicTarget}/topic target) · ${stats.topicsMissingFacts} topics need generation`;
+        const dashboard = await getDailyWisdomDashboard();
+        applyDashboard(dashboard);
+        return dashboard;
       } catch {
-        poolStatsEl.textContent = "Mantra Feed: could not load stats";
+        if (dwStatus) dwStatus.innerHTML = `<span class="dw-console__live-dot dw-console__live-dot--warn"></span><span>Stats unavailable</span>`;
+        if (dwActivity) {
+          dwActivity.innerHTML = `<p class="dw-console__activity-empty text-tertiary">Could not load activity.</p>`;
+        }
+        return null;
       }
     }
 
-    async function loadAnchorPreview() {
-      if (!anchorPreview) return;
-      try {
-        const data = await previewLearningFactAnchor();
-        if (!data.anchor) {
-          anchorPreview.textContent = "Preview: no next topic (all complete or locked)";
-          return;
-        }
-        const ctx = data.context;
-        const ctxBits = [];
-        if (ctx?.lastCompleted?.topicName) ctxBits.push(`after ${ctx.lastCompleted.topicName}`);
-        if (ctx?.streak >= 2) ctxBits.push(`${ctx.streak}-day streak`);
-        if (ctx?.tone) ctxBits.push(`${ctx.tone} tone`);
-        const ctxLabel = ctxBits.length ? ` (${ctxBits.join(" · ")})` : "";
-
-        if (data.previewMessage) {
-          anchorPreview.textContent = `Preview for ${data.anchor.topicName}${ctxLabel}: "${data.previewMessage.title} — ${data.previewMessage.body}"`;
-          return;
-        }
-        anchorPreview.textContent = `Next topic: ${data.anchor.topicName}${ctxLabel} — no unused hooks yet (generate Mantra Feed)`;
-      } catch {
-        anchorPreview.textContent = "Preview: could not load";
-      }
-    }
-
-    async function runGenerateAllFacts() {
-      if (!generateAllBtn) return;
-      generateAllBtn.disabled = true;
-      const originalLabel = generateAllBtn.querySelector("span")?.textContent;
+    async function runGenerateBatch(btn, { replaceExisting = false } = {}) {
+      if (!btn) return;
+      btn.disabled = true;
+      const labelEl = btn.querySelector("span");
+      const originalLabel = labelEl?.textContent;
 
       try {
         let remaining = 1;
         let totalProcessed = 0;
 
         while (remaining > 0) {
-          if (generateAllBtn.querySelector("span")) {
-            generateAllBtn.querySelector("span").textContent = `Generating… (${totalProcessed} done)`;
-          }
+          if (labelEl) labelEl.textContent = `Generating… (${totalProcessed} topics)`;
 
-          const data = await generateLearningFactsBatch({ limit: 6, replaceExisting: true });
+          const data = await generateLearningFactsBatch({ limit: 6, replaceExisting });
           const batch = data.result;
           totalProcessed += batch.succeeded || 0;
           remaining = batch.remaining ?? 0;
@@ -422,51 +367,53 @@ export default {
         }
 
         showToast(Toast({
-          title: "Mantra Feed complete",
-          text: "Daily Wisdom hooks are ready for every roadmap topic.",
+          title: replaceExisting ? "All hooks regenerated" : "Missing hooks generated",
+          text: "Mantra Feed is up to date for all roadmap topics.",
           variant: "success",
         }));
-        void loadPoolStats();
-        void loadAnchorPreview();
+        void loadDashboard();
       } catch (err) {
         showToast(Toast({
           title: "Generation stopped",
-          text: err instanceof AuthApiError ? err.message : "Could not finish generating all facts.",
+          text: err instanceof AuthApiError ? err.message : "Could not finish generating hooks.",
           variant: "danger",
         }));
-        void loadPoolStats();
+        void loadDashboard();
       } finally {
-        if (generateAllBtn.querySelector("span") && originalLabel) {
-          generateAllBtn.querySelector("span").textContent = originalLabel;
-        }
-        generateAllBtn.disabled = false;
+        if (labelEl && originalLabel) labelEl.textContent = originalLabel;
+        btn.disabled = false;
       }
     }
 
-    generateAllBtn?.addEventListener("click", () => { void runGenerateAllFacts(); });
+    generateMissingBtn?.addEventListener("click", () => {
+      void runGenerateBatch(generateMissingBtn, { replaceExisting: false });
+    });
+
+    regenerateAllBtn?.addEventListener("click", () => {
+      if (!confirm("Regenerate hooks for ALL topics? This replaces existing Mantra Feed content.")) return;
+      void runGenerateBatch(regenerateAllBtn, { replaceExisting: true });
+    });
+
+    refreshActivityBtn?.addEventListener("click", () => { void loadDashboard(); });
 
     cronRunBtn?.addEventListener("click", async () => {
       cronRunBtn.disabled = true;
-      if (cronResultEl) cronResultEl.textContent = "Running cron for all eligible students…";
-
       try {
         const data = await runDailyWisdomCronNow({ force: true, skipTimezone: true });
         const r = data.result || {};
-        const summary = `Done — sent: ${r.sent ?? 0}, checked: ${r.checked ?? 0}, skipped: ${r.skipped ?? 0}, failed: ${r.failed ?? 0}`;
-        if (cronResultEl) cronResultEl.textContent = summary;
+        const summary = `Sent ${r.sent ?? 0} · checked ${r.checked ?? 0} · skipped ${r.skipped ?? 0}`;
 
         showToast(Toast({
-          title: "Daily Wisdom cron finished",
+          title: "Daily cron finished",
           text: summary,
           variant: (r.sent ?? 0) > 0 ? "success" : "warning",
         }));
         void loadLogs();
+        void loadDashboard();
       } catch (err) {
-        const message = err instanceof AuthApiError ? err.message : "Cron run failed.";
-        if (cronResultEl) cronResultEl.textContent = message;
         showToast(Toast({
           title: "Cron failed",
-          text: message,
+          text: err instanceof AuthApiError ? err.message : "Cron run failed.",
           variant: "danger",
         }));
       } finally {
@@ -495,83 +442,84 @@ export default {
       return err instanceof AuthApiError ? err.message : "Delivery failed.";
     }
 
-    sendMeBtn?.addEventListener("click", async () => {
-      sendMeBtn.disabled = true;
+    sendTestBtn?.addEventListener("click", async () => {
+      sendTestBtn.disabled = true;
       try {
         const data = await deliverLearningFactToMe({ sendPush: true });
         showToast(Toast({
-          title: "Daily Wisdom sent",
-          text: `${data.message?.title || data.fact?.title || "Wisdom"} — ${formatDeliverResult(data)}`,
+          title: "Test sent",
+          text: `${data.message?.title || "Daily Wisdom"} — ${formatDeliverResult(data)}`,
           variant: "success",
         }));
         void loadLogs();
-        void loadAnchorPreview();
+        void loadDashboard();
       } catch (err) {
         const details = err instanceof AuthApiError ? err.details : null;
         showToast(Toast({
-          title: "Could not send Daily Wisdom",
+          title: "Test failed",
           text: formatDeliverError(err, details),
           variant: "danger",
         }));
       } finally {
-        sendMeBtn.disabled = false;
+        sendTestBtn.disabled = false;
       }
     });
 
-    sendUserBtn?.addEventListener("click", async () => {
-      const userId = userIdInput?.value?.trim();
+    sendStudentBtn?.addEventListener("click", async () => {
+      const userId = studentIdInput?.value?.trim();
       if (!userId) {
         showToast(Toast({
           title: "Enter a user ID",
-          text: "Copy a student's userId from User Management (e.g. user_173…).",
+          text: "Copy a student's userId from User Management.",
           variant: "warning",
         }));
         return;
       }
 
-      sendUserBtn.disabled = true;
+      sendStudentBtn.disabled = true;
       try {
         const data = await deliverLearningFactToUser(userId, { sendPush: true });
         showToast(Toast({
-          title: "Daily Wisdom sent",
-          text: `${data.message?.title || data.fact?.title || "Wisdom"} — ${formatDeliverResult(data)}`,
+          title: "Sent to student",
+          text: `${data.message?.title || "Daily Wisdom"} — ${formatDeliverResult(data)}`,
           variant: "success",
         }));
         void loadLogs();
+        void loadDashboard();
       } catch (err) {
         const details = err instanceof AuthApiError ? err.details : null;
         showToast(Toast({
-          title: "Could not send to student",
+          title: "Send failed",
           text: formatDeliverError(err, details),
           variant: "danger",
         }));
       } finally {
-        sendUserBtn.disabled = false;
+        sendStudentBtn.disabled = false;
       }
     });
 
-    void loadPoolStats();
-    void loadAnchorPreview();
-
-    seedFactsBtn?.addEventListener("click", async () => {
-      seedFactsBtn.disabled = true;
+    seedPilotBtn?.addEventListener("click", async () => {
+      seedPilotBtn.disabled = true;
       try {
         const data = await seedLearningFacts();
         showToast(Toast({
-          title: "Pilot Mantra Feed seeded",
+          title: "Pilot hooks seeded",
           text: `${data.result?.total ?? 0} hooks across ${data.result?.topicIds?.length ?? 0} topics.`,
           variant: "success",
         }));
+        void loadDashboard();
       } catch (err) {
         showToast(Toast({
           title: "Seed failed",
-          text: err instanceof AuthApiError ? err.message : "Could not seed learning facts.",
+          text: err instanceof AuthApiError ? err.message : "Could not seed pilot hooks.",
           variant: "danger",
         }));
       } finally {
-        seedFactsBtn.disabled = false;
+        seedPilotBtn.disabled = false;
       }
     });
+
+    void loadDashboard();
 
     refreshTimer = window.setInterval(() => { void loadLogs(); }, 30000);
 

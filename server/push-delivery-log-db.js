@@ -171,3 +171,51 @@ export async function getPushDeliveryLogStats() {
 
   return { total, sent, failed, skipped };
 }
+
+/**
+ * Delivery stats for a single push source (e.g. learning-fact).
+ */
+export async function getPushDeliveryStatsForSource(source, { days = 30 } = {}) {
+  if (!source) {
+    return { total: 0, sent: 0, failed: 0, skipped: 0, successRate: null, lastRunAt: null };
+  }
+
+  await connectDB();
+
+  const query = { source };
+  if (days && days > 0) {
+    query.createdAt = { $gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) };
+  }
+
+  const [sent, failed, skipped, lastDoc] = await Promise.all([
+    PushDeliveryLog.countDocuments({ ...query, status: "sent" }),
+    PushDeliveryLog.countDocuments({ ...query, status: "failed" }),
+    PushDeliveryLog.countDocuments({ ...query, status: "skipped" }),
+    PushDeliveryLog.findOne(query).sort({ createdAt: -1 }).lean(),
+  ]);
+
+  const attempts = sent + failed + skipped;
+  const successRate = attempts > 0 ? Math.round((sent / attempts) * 100) : null;
+
+  return {
+    total: attempts,
+    sent,
+    failed,
+    skipped,
+    successRate,
+    lastRunAt: lastDoc?.createdAt ? new Date(lastDoc.createdAt).toISOString() : null,
+  };
+}
+
+export async function listRecentPushLogsBySource(source, { limit = 8 } = {}) {
+  if (!source) return [];
+
+  await connectDB();
+
+  const docs = await PushDeliveryLog.find({ source })
+    .sort({ createdAt: -1 })
+    .limit(Math.min(Math.max(limit, 1), 50))
+    .lean();
+
+  return docs.map(normalize);
+}

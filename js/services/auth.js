@@ -122,6 +122,16 @@ export async function getLearningFactsPoolStats() {
   return data.stats;
 }
 
+export async function getDailyWisdomDashboard() {
+  const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/learning-facts/dashboard`, {
+    headers: authHeaders(),
+  });
+
+  const data = await parseJsonSafe(res);
+  if (!res.ok) throw errorFromResponse(res.status, data);
+  return data.dashboard;
+}
+
 export async function generateLearningFactsBatch({ limit = 6, replaceExisting = true } = {}) {
   const res = await fetch(`${resolveBaseUrl()}/api/auth/admin/learning-facts/generate-batch`, {
     method: "POST",
