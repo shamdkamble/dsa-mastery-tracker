@@ -177,12 +177,12 @@ function getScrollContainer() {
 }
 
 function prepareSidebar(step) {
-  if (!step.expandSidebar) return;
-
   if (window.innerWidth <= 768) {
-    setState({ sidebarOpen: true });
+    setState({ sidebarOpen: Boolean(step.expandSidebar) });
     return;
   }
+
+  if (!step.expandSidebar) return;
 
   if (getState().sidebarCollapsed) {
     setState({ sidebarCollapsed: false });
