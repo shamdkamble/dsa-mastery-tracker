@@ -31,6 +31,22 @@ function hasCodeSignals(text) {
   return CODE_SIGNALS.some((pattern) => pattern.test(text));
 }
 
+/** Reject empty shells like `{}`, `();`, or prose with only punctuation. */
+export function isTrivialFakeCode(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return true;
+
+  const withoutNoise = trimmed.replace(/[\s{}();[\].,]/g, "");
+  if (withoutNoise.length < 6) return true;
+
+  const lines = trimmed.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 1 && !hasCodeSignals(lines[0]) && /[{}();[\]]/.test(lines[0])) {
+    return true;
+  }
+
+  return false;
+}
+
 export function looksLikeSolutionCode(text) {
   const { code } = extractSolutionCodeForAnalysis(text);
   return Boolean(code && code.length >= 8);

@@ -19,7 +19,7 @@ import {
   buildLeetcodeUrl,
   slugToTitle,
 } from "../services/leetcode.js";
-import { detectPattern, analyzeComplexity } from "../api/problemAiApi.js";
+import { detectPattern, analyzeComplexity, validateSolutionCode } from "../api/problemAiApi.js";
 import { canAccessProblemAi } from "../auth/access.js";
 import { getSessionUser } from "../auth/session.js";
 import { debounce } from "../utils.js";
@@ -28,7 +28,7 @@ import { renderLockedAiButton } from "./access-ui.js";
 import { openUpgradeModal } from "./upgrade-modal.js";
 import {
   extractSolutionCodeForAnalysis,
-  looksLikeSolutionCode,
+  isTrivialFakeCode,
   splitLegacySolutionFields,
 } from "../utils/solution-code.js";
 
@@ -194,7 +194,7 @@ function renderSolutionSection(p = {}, { aiLocked = false } = {}) {
                   ${icon("zap")}
                   <span>Analyze Complexity</span>
                 </button>`}
-            <span class="problem-complexity__hint" id="complexity-hint">${aiLocked ? "Upgrade to Premium to unlock AI complexity analysis" : "Paste solution code above — enabled when code is detected"}</span>
+            <span class="problem-complexity__hint" id="complexity-hint">${aiLocked ? "Upgrade to Premium to unlock AI complexity analysis" : "Paste solution code — Groq verifies it before analysis"}</span>
           </div>
           <p class="problem-ai-status" id="complexity-ai-status" aria-live="polite"></p>
           <div id="complexity-result-host">
@@ -594,28 +594,130 @@ function toggleSolutionPanel(host, open) {
   if (label) label.textContent = open ? "Approach & Solution" : "Add Approach & Solution";
 
   if (open) {
-    updateAnalyzeButtonState(host);
+    scheduleSolutionCodeValidation(host);
     host.querySelector("#problem-approach")?.focus();
   }
 }
 
-function updateAnalyzeButtonState(host) {
+const CODE_VALIDATE_DEBOUNCE_MS = 700;
+
+function setAnalyzeComplexityUi(host, { disabled, hint }) {
+  const btn = host.querySelector("#analyze-complexity-btn");
+  const hintEl = host.querySelector("#complexity-hint");
+  if (btn) btn.disabled = disabled;
+  if (hintEl && hint) hintEl.textContent = hint;
+}
+
+function getExtractedSolutionCode(raw) {
+  const extracted = extractSolutionCodeForAnalysis(raw);
+  return {
+    extracted,
+    code: extracted.code?.trim() || "",
+  };
+}
+
+function scheduleSolutionCodeValidation(host) {
+  if (host._aiLocked) return;
+
+  clearTimeout(host._codeValidateTimer);
+  host._codeValidateTimer = setTimeout(() => {
+    void runSolutionCodeValidation(host);
+  }, CODE_VALIDATE_DEBOUNCE_MS);
+}
+
+async function runSolutionCodeValidation(host) {
   if (host._aiLocked) return;
 
   const raw = host.querySelector("#problem-solution")?.value?.trim() || "";
   const btn = host.querySelector("#analyze-complexity-btn");
-  const hint = host.querySelector("#complexity-hint");
-  const ready = looksLikeSolutionCode(raw);
 
-  if (btn) btn.disabled = !ready;
+  host._codeValidateAbort?.abort();
+  host._codeValidateAbort = new AbortController();
+  const requestId = ++host._codeValidateSeq;
 
-  if (hint) {
-    if (!raw) {
-      hint.textContent = "Paste solution code above — approach notes stay separate";
-    } else if (!ready) {
-      hint.textContent = "Add recognizable code (functions, loops, braces) to enable analysis";
-    } else {
-      hint.textContent = "AI will analyze solution code only";
+  if (!raw) {
+    host._codeValid = false;
+    host._lastValidatedCode = "";
+    setAnalyzeComplexityUi(host, {
+      disabled: true,
+      hint: "Paste solution code above — approach notes stay separate",
+    });
+    return;
+  }
+
+  const { extracted, code } = getExtractedSolutionCode(raw);
+
+  if (!code) {
+    host._codeValid = false;
+    host._lastValidatedCode = "";
+    setAnalyzeComplexityUi(host, {
+      disabled: true,
+      hint: extracted.reason === "prose"
+        ? "Approach-style text belongs in My approach — paste code here"
+        : "Paste your accepted solution code first",
+    });
+    return;
+  }
+
+  if (isTrivialFakeCode(code)) {
+    host._codeValid = false;
+    host._lastValidatedCode = code;
+    setAnalyzeComplexityUi(host, {
+      disabled: true,
+      hint: "Add real solution code — braces or punctuation alone are not valid",
+    });
+    return;
+  }
+
+  if (host._lastValidatedCode === code && host._codeValid === true) {
+    setAnalyzeComplexityUi(host, {
+      disabled: false,
+      hint: host._codeValidHint || "Valid solution code — ready to analyze",
+    });
+    return;
+  }
+
+  if (host._lastValidatedCode === code && host._codeValid === false) {
+    setAnalyzeComplexityUi(host, {
+      disabled: true,
+      hint: host._codeInvalidHint || "This doesn't look like real solution code",
+    });
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  setAnalyzeComplexityUi(host, { disabled: true, hint: "Checking code with AI…" });
+
+  try {
+    const result = await validateSolutionCode(
+      { code },
+      { signal: host._codeValidateAbort.signal, timeoutMs: 25_000 },
+    );
+
+    if (requestId !== host._codeValidateSeq) return;
+
+    host._lastValidatedCode = code;
+    host._codeValid = Boolean(result.isValidCode);
+
+    if (result.isValidCode) {
+      const lang = result.language ? `${result.language} ` : "";
+      host._codeValidHint = `Valid ${lang}code — ready to analyze`;
+      setAnalyzeComplexityUi(host, { disabled: false, hint: host._codeValidHint });
+      return;
+    }
+
+    host._codeInvalidHint = result.reason || "This doesn't look like real solution code";
+    setAnalyzeComplexityUi(host, { disabled: true, hint: host._codeInvalidHint });
+  } catch (err) {
+    if (host._codeValidateAbort?.signal.aborted || requestId !== host._codeValidateSeq) return;
+
+    host._codeValid = false;
+    host._lastValidatedCode = code;
+    host._codeInvalidHint = err?.message || "Could not verify code — try again";
+    setAnalyzeComplexityUi(host, { disabled: true, hint: host._codeInvalidHint });
+  } finally {
+    if (requestId === host._codeValidateSeq && btn?.classList.contains("is-loading")) {
+      btn.disabled = !host._codeValid;
     }
   }
 }
@@ -733,18 +835,32 @@ async function handleAnalyzeComplexity(host) {
   const btn = host.querySelector("#analyze-complexity-btn");
   const raw = host.querySelector("#problem-solution")?.value?.trim() || "";
   const title = host.querySelector("#problem-title")?.value?.trim();
-  const extracted = extractSolutionCodeForAnalysis(raw);
+  const { extracted, code } = getExtractedSolutionCode(raw);
 
-  if (!extracted.code || !looksLikeSolutionCode(extracted.code)) {
+  if (!code || isTrivialFakeCode(code)) {
     setAiStatus(
       host,
       "#complexity-ai-status",
       extracted.reason === "prose"
         ? "Approach-style text belongs in My approach — paste solution code here for analysis."
-        : "Paste your accepted solution code first.",
+        : "Paste valid solution code first.",
       "error",
     );
     return;
+  }
+
+  if (!host._codeValid || host._lastValidatedCode !== code) {
+    setAiStatus(host, "#complexity-ai-status", "Waiting for code validation…", "loading");
+    await runSolutionCodeValidation(host);
+    if (!host._codeValid || host._lastValidatedCode !== code) {
+      setAiStatus(
+        host,
+        "#complexity-ai-status",
+        host._codeInvalidHint || "Paste valid solution code before analyzing complexity.",
+        "error",
+      );
+      return;
+    }
   }
 
   btn?.classList.add("is-loading");
@@ -752,7 +868,7 @@ async function handleAnalyzeComplexity(host) {
   setAiStatus(host, "#complexity-ai-status", "Analyzing complexity with AI…", "loading");
 
   try {
-    const result = await analyzeComplexity({ code: extracted.code, title });
+    const result = await analyzeComplexity({ code, title });
     applyComplexityResult(host, result);
     setAiStatus(
       host,
@@ -768,7 +884,7 @@ async function handleAnalyzeComplexity(host) {
     focusManualComplexity(host);
   } finally {
     btn?.classList.remove("is-loading");
-    updateAnalyzeButtonState(host);
+    scheduleSolutionCodeValidation(host);
   }
 }
 
@@ -822,7 +938,7 @@ function bindAiHandlers(host) {
   });
 
   const solutionInput = host.querySelector("#problem-solution");
-  solutionInput?.addEventListener("input", debounce(() => updateAnalyzeButtonState(host), 200));
+  solutionInput?.addEventListener("input", () => scheduleSolutionCodeValidation(host));
 
   host.querySelector("#time-complexity")?.addEventListener("input", debounce(() => syncComplexityPreview(host), 200));
   host.querySelector("#space-complexity")?.addEventListener("input", debounce(() => syncComplexityPreview(host), 200));
@@ -892,8 +1008,12 @@ export function openProblemModal(problemId = null) {
     showDetectPatternBtn(host, true);
   }
 
-  if (problem?.approach?.trim() || problem?.solution?.trim()) {
-    updateAnalyzeButtonState(host);
+  host._codeValidateSeq = 0;
+  host._codeValid = false;
+  host._lastValidatedCode = "";
+
+  if (problem?.solution?.trim()) {
+    scheduleSolutionCodeValidation(host);
   }
 
   const form = host.querySelector("#problem-form");

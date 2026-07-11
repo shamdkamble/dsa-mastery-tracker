@@ -38,6 +38,9 @@ function errorFromResponse(status, data) {
     PARSE_ERROR: " Fill in the fields manually.",
     INVALID_PATTERN: " Select a pattern from the dropdown.",
     INVALID_COMPLEXITY: " Enter time and space complexity manually.",
+    INVALID_CODE: " Paste valid solution code first.",
+    GROQ_NOT_CONFIGURED: " Code validation is unavailable — contact support.",
+    GROQ_RATE_LIMITED: " Wait a moment and try again.",
     MODEL_NOT_FOUND: " All models are busy — try again later or fill in manually.",
     NETWORK_ERROR: " Run the server with npm start.",
   };
@@ -98,4 +101,15 @@ export function detectPattern(input) {
  */
 export function analyzeComplexity(input) {
   return postProblemAi("/api/problem/analyze-complexity", input);
+}
+
+/**
+ * @param {{ code: string }} input
+ * @param {{ signal?: AbortSignal, timeoutMs?: number }} [options]
+ */
+export function validateSolutionCode(input, options = {}) {
+  return postProblemAi("/api/problem/validate-solution-code", input, {
+    timeoutMs: options.timeoutMs ?? 25_000,
+    signal: options.signal,
+  });
 }

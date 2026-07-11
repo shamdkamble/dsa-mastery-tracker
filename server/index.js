@@ -11,7 +11,11 @@ import { fileURLToPath } from "url";
 import { TeachApiError, resolveApiKey, resolveModel } from "./gemini.js";
 import { isGroqConfigured, resolveGroqModel } from "./groq.js";
 import { getSystemArchitectureLiveSnapshot } from "./system-architecture-live.js";
-import { detectProblemPattern, analyzeSolutionComplexity } from "./problem-ai.js";
+import {
+  detectProblemPattern,
+  analyzeSolutionComplexity,
+  validateSolutionCode,
+} from "./problem-ai.js";
 import { fetchLeetcodeProblem, LeetcodeApiError, parseLeetcodeSlug } from "./leetcode.js";
 import {
   AuthError,
@@ -959,6 +963,34 @@ app.post("/api/problem/detect-pattern", requireAuth, async (req, res) => {
     }
     console.error("[/api/problem/detect-pattern]", err);
     res.status(500).json({ error: { message: "Pattern detection failed.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/problem/validate-solution-code", requireAuth, async (req, res) => {
+  try {
+    const token = extractBearer(req);
+    const user = await getCurrentUser(token);
+
+    if (!canAccessProblemAi(user)) {
+      res.status(403).json({
+        error: {
+          message: "Upgrade to Premium to unlock AI complexity analysis.",
+          code: "AI_LOCKED",
+        },
+      });
+      return;
+    }
+
+    const { code } = req.body ?? {};
+    const result = await validateSolutionCode({ code });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof TeachApiError) {
+      res.status(err.status).json({ error: { message: err.message, code: err.code } });
+      return;
+    }
+    console.error("[/api/problem/validate-solution-code]", err);
+    res.status(500).json({ error: { message: "Code validation failed.", code: "SERVER_ERROR" } });
   }
 });
 

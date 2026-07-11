@@ -6,6 +6,7 @@ import { TeachApiError } from "./gemini.js";
 import { PATTERN_CATALOG } from "../js/storage/patterns-catalog.js";
 import {
   extractSolutionCodeForAnalysis,
+  isTrivialFakeCode,
   looksLikeSolutionCode,
 } from "./solution-code.js";
 
@@ -23,6 +24,27 @@ IMPORTANT: Reply with a single raw JSON object only. No markdown, no code fences
   "confidence": "high",
   "reasoning": "One concise sentence"
 }`;
+
+const VALIDATE_CODE_SYSTEM = `You judge whether pasted text is real source code in any programming language (Python, JavaScript, TypeScript, Java, C++, C, Go, Rust, Kotlin, Swift, etc.).
+
+Reject if the text is:
+- Plain English, pseudocode, or approach notes
+- Random words with stray braces/punctuation (e.g. "hello {}")
+- Only punctuation or empty structure like "{}" or "();"
+- Incomplete fragments that are not plausible syntax in any language
+- Comments-only with no executable logic
+
+Accept only if it is plausible source code: a function, class, method, or complete snippet in a recognizable language.
+
+IMPORTANT: Reply with a single raw JSON object only. No markdown, no code fences, no commentary.
+
+{
+  "isValidCode": true,
+  "language": "python",
+  "reason": ""
+}
+
+If invalid, set isValidCode to false and give a short user-facing reason in reason. Leave language null when invalid.`;
 
 const COMPLEXITY_SYSTEM = `You analyze solution code and report time and space complexity in Big-O notation.
 
@@ -110,6 +132,14 @@ function parseJsonContent(text) {
     return complexityFallback;
   }
 
+  const validationFallback = extractJsonFields(cleaned, ["language", "reason"]);
+  if (validationFallback && /"isValidCode"\s*:\s*true/i.test(cleaned)) {
+    return { isValidCode: true, ...validationFallback };
+  }
+  if (validationFallback && /"isValidCode"\s*:\s*false/i.test(cleaned)) {
+    return { isValidCode: false, ...validationFallback };
+  }
+
   throw new TeachApiError(
     "AI returned an unreadable response. You can fill in the fields manually.",
     { status: 502, code: "PARSE_ERROR" },
@@ -132,13 +162,26 @@ function normalizePatternName(name) {
   return partial || null;
 }
 
-async function generateAndParseJson({ systemPrompt, userPrompt, options }) {
+function parseValidationPayload(data) {
+  const isValidCode = data?.isValidCode === true;
+  const language = typeof data?.language === "string" && data.language.trim()
+    ? data.language.trim()
+    : null;
+  const reason = typeof data?.reason === "string" ? data.reason.trim() : "";
+  return { isValidCode, language, reason };
+}
+
+async function generateAndParseJson({ systemPrompt, userPrompt, options, provider = "gemini-primary" }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 45_000);
 
   try {
-    const { generateWithGeminiPrimary } = await import("./ai-provider.js");
-    return await generateWithGeminiPrimary({
+    const aiProvider = await import("./ai-provider.js");
+    const generate = provider === "groq-primary"
+      ? aiProvider.generateWithGroqPrimary
+      : aiProvider.generateWithGeminiPrimary;
+
+    return await generate({
       userPrompt,
       options,
       systemPrompt,
@@ -154,6 +197,67 @@ async function generateAndParseJson({ systemPrompt, userPrompt, options }) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function buildInvalidCodeResult(reason) {
+  return {
+    isValidCode: false,
+    language: null,
+    reason: reason || "This doesn't look like real solution code.",
+  };
+}
+
+export async function validateSolutionCode({ code }) {
+  if (!code?.trim()) {
+    throw new TeachApiError("Solution code is required.", { status: 400, code: "INVALID_INPUT" });
+  }
+
+  const extracted = extractSolutionCodeForAnalysis(code);
+  const candidate = extracted.code?.trim() || "";
+
+  if (!candidate) {
+    return buildInvalidCodeResult(
+      extracted.reason === "prose"
+        ? "Approach-style text belongs in My approach — paste solution code here."
+        : "Paste your accepted solution code first.",
+    );
+  }
+
+  if (candidate.length > 12_000) {
+    throw new TeachApiError("Solution is too long to validate (max 12,000 characters).", {
+      status: 400,
+      code: "INVALID_INPUT",
+    });
+  }
+
+  if (isTrivialFakeCode(candidate)) {
+    return buildInvalidCodeResult("Add real solution code — braces or punctuation alone are not valid.");
+  }
+
+  const userPrompt = [
+    "Is this valid source code in any programming language?",
+    "```",
+    candidate,
+    "```",
+  ].join("\n");
+
+  const { parsed: data, model, usage, provider } = await generateAndParseJson({
+    systemPrompt: VALIDATE_CODE_SYSTEM,
+    userPrompt,
+    provider: "groq-primary",
+    options: { json: true, temperature: 0, maxTokens: 256, timeoutMs: 20_000 },
+  });
+
+  const result = parseValidationPayload(data);
+  return {
+    ...result,
+    reason: result.isValidCode
+      ? ""
+      : (result.reason || "This doesn't look like real solution code in any language."),
+    model,
+    usage,
+    provider,
+  };
 }
 
 export async function detectProblemPattern({ title, difficulty, topic, topicTags = [] }) {
@@ -225,6 +329,14 @@ export async function analyzeSolutionComplexity({ code, title }) {
       status: 400,
       code: "INVALID_INPUT",
     });
+  }
+
+  const validation = await validateSolutionCode({ code: analyzable });
+  if (!validation.isValidCode) {
+    throw new TeachApiError(
+      validation.reason || "Paste valid solution code before analyzing complexity.",
+      { status: 400, code: "INVALID_CODE" },
+    );
   }
 
   const userPrompt = [
