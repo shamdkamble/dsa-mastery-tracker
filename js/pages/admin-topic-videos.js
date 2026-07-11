@@ -59,11 +59,16 @@ function topicRow(topic) {
             ${icon("check")}
             <span>Save</span>
           </button>
-          ${hasVideo ? `
-            <button type="button" class="btn btn--ghost btn--sm" data-action="clear-video" data-topic-id="${escapeHtml(topic.id)}">
-              Clear
-            </button>
-          ` : ""}
+          <button
+            type="button"
+            class="btn btn--danger btn--sm topic-videos__remove${hasVideo ? "" : " is-hidden"}"
+            data-action="clear-video"
+            data-topic-id="${escapeHtml(topic.id)}"
+            title="Remove YouTube video from this topic"
+          >
+            ${icon("close")}
+            <span>Remove</span>
+          </button>
         </div>
       </td>
     </tr>
@@ -223,9 +228,9 @@ export default {
       try {
         await saveAdminTopicVideo(topicId, { youtubeUrl, title });
         showToast(Toast({
-          title: clear ? "Video cleared" : "Video saved",
+          title: clear ? "Video removed" : "Video saved",
           text: clear ? "Learners will see Coming soon for this topic." : "YouTube video is live in the Learn dialog.",
-          variant: "success",
+          variant: clear ? "info" : "success",
         }));
         await loadTopics();
       } catch (err) {
@@ -262,7 +267,7 @@ export default {
       }
 
       if (btn.dataset.action === "clear-video") {
-        if (!confirm("Remove the YouTube video for this topic?")) return;
+        if (!confirm("Remove the YouTube video for this topic? Learners will see Coming soon again.")) return;
         void handleSave(topicId, { clear: true });
       }
     });

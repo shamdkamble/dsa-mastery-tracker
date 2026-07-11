@@ -1172,6 +1172,10 @@
   gap: var(--space-2);
 }
 
+.topic-videos__remove.is-hidden {
+  display: none;
+}
+
 .topic-videos__count {
   margin: var(--space-3) 0 0;
   font-size: var(--text-xs);

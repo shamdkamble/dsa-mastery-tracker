@@ -239,23 +239,23 @@ function renderLearnModeBar() {
     <div class="teach-learn-mode" id="teach-learn-mode" role="tablist" aria-label="Learning format">
       <button
         type="button"
-        class="teach-learn-mode__tab${isAi ? " is-active" : ""}"
+        class="teach-learn-mode__tab teach-learn-mode__tab--ai${isAi ? " is-active" : ""}"
         data-learn-mode="ai"
         role="tab"
         aria-selected="${isAi}"
       >
-        ${icon("zap")}
-        <span>AI Lesson</span>
+        <span class="teach-learn-mode__icon" aria-hidden="true">${icon("zap")}</span>
+        <span class="teach-learn-mode__label">AI Lesson</span>
       </button>
       <button
         type="button"
-        class="teach-learn-mode__tab${isYoutube ? " is-active" : ""}"
+        class="teach-learn-mode__tab teach-learn-mode__tab--youtube${isYoutube ? " is-active" : ""}"
         data-learn-mode="youtube"
         role="tab"
         aria-selected="${isYoutube}"
       >
-        ${icon("video")}
-        <span>YouTube Video</span>
+        <span class="teach-learn-mode__icon" aria-hidden="true">${icon("video")}</span>
+        <span class="teach-learn-mode__label">YouTube</span>
       </button>
     </div>
   `;
