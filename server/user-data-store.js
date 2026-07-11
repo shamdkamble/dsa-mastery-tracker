@@ -92,6 +92,20 @@ export async function createProblem(userId, data) {
     throw new UserDataError("Problem already exists.", { status: 409, code: "DUPLICATE" });
   }
 
+  const slug = String(data.leetcodeSlug || "").trim().toLowerCase();
+  if (slug) {
+    const slugDup = await Problem.findOne({
+      userId,
+      leetcodeSlug: { $regex: new RegExp(`^${slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+    }).lean();
+    if (slugDup) {
+      throw new UserDataError(
+        `"${slugDup.title}" is already in your problem list.`,
+        { status: 409, code: "DUPLICATE_SLUG" },
+      );
+    }
+  }
+
   const now = new Date().toISOString();
   const doc = await Problem.create({
     userId,

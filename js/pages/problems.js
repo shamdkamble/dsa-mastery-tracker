@@ -1,7 +1,12 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
 import { DifficultyBadge, EmptyState, Badge } from "../components/ui/index.js";
-import { getProblems, getProblemsInProgress } from "../storage/db.js";
+import {
+  getProblems,
+  getProblemsInProgress,
+  sortProblemsForDisplay,
+  isProblemOnTodaysMission,
+} from "../storage/db.js";
 import { formatRelativeTime, formatElapsedSince } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 import { openProblemModal } from "../components/problem-modal.js";
@@ -17,6 +22,20 @@ const STATUS_MAP = {
 function statusPill(status) {
   const s = STATUS_MAP[status] || STATUS_MAP.todo;
   return `<span class="status-pill status-pill--${s.class}">${s.label}</span>`;
+}
+
+function formatSolveTime(p) {
+  if (p.actualSolveMinutes) return `${p.actualSolveMinutes}m`;
+  if (p.startedAt && p.status !== "mastered") return formatElapsedSince(p.startedAt);
+  if (p.missionDone && isProblemOnTodaysMission(p)) {
+    return p.estimatedMinutes ? `~${p.estimatedMinutes}m` : "Done";
+  }
+  if (p.status === "mastered" && p.estimatedMinutes) return `~${p.estimatedMinutes}m`;
+  return "—";
+}
+
+function isMissionItemDone(p) {
+  return Boolean(p.missionDone && isProblemOnTodaysMission(p));
 }
 
 function renderInProgressBanner(inProgress) {
@@ -46,11 +65,11 @@ function problemRow(p, i) {
   const lcUrl = getProblemLeetcodeUrl(p);
   const isRoadmap = p.source === "roadmap";
   const inProgress = Boolean(p.startedAt && p.status !== "mastered");
-  const solveTime = p.actualSolveMinutes
-    ? `${p.actualSolveMinutes}m`
-    : inProgress
-      ? formatElapsedSince(p.startedAt)
-      : "—";
+  const missionDone = isMissionItemDone(p);
+  const solveTime = formatSolveTime(p);
+  const canSolve = lcUrl && !missionDone && !inProgress;
+  const canResume = lcUrl && inProgress && !missionDone;
+  const canAddMission = !isProblemOnTodaysMission(p);
 
   return `
     <tr
@@ -60,9 +79,8 @@ function problemRow(p, i) {
       data-topic="${p.topic?.toLowerCase() || ""}"
       data-status="${p.status}"
       data-source="${p.source || "manual"}"
-      class="cursor-pointer${inProgress ? " is-solving" : ""}"
-      tabindex="0"
-      role="button"
+      class="${missionDone ? "" : "cursor-pointer"}${inProgress ? " is-solving" : ""}${missionDone ? " is-mission-done" : ""}"
+      ${missionDone ? "" : 'tabindex="0" role="button"'}
     >
       <td data-label="Problem">
         <div class="flex items-center gap-2">
@@ -71,6 +89,7 @@ function problemRow(p, i) {
           ${p.leetcodeId ? `<span class="text-xs text-tertiary font-mono">#${p.leetcodeId}</span>` : ""}
           ${isRoadmap ? Badge({ label: "Roadmap", variant: "accent", size: "sm" }) : ""}
           ${inProgress ? Badge({ label: "In progress", variant: "warning", size: "sm" }) : ""}
+          ${missionDone ? Badge({ label: "Mission done", variant: "success", size: "sm" }) : ""}
         </div>
       </td>
       <td data-label="Topic"><span class="table__cell-secondary">${p.topic || "—"}</span></td>
@@ -81,9 +100,13 @@ function problemRow(p, i) {
       <td data-label="Last Review"><span class="text-secondary text-xs">${formatRelativeTime(p.lastReviewAt)}</span></td>
       <td data-label="Actions">
         <div class="flex items-center gap-2">
-          ${lcUrl ? leetcodeLinkButton(lcUrl, { size: "xs", label: inProgress ? "Resume" : "Solve", problemId: p.id }) : ""}
-          ${inProgress ? `<button class="btn btn--xs btn--primary" data-action="mark-solved" data-id="${p.id}" type="button">Solved</button>` : ""}
-          ${!p.inMission ? `<button class="btn btn--xs btn--ghost" data-action="add-to-mission" data-id="${p.id}" type="button" title="Add to mission">+</button>` : ""}
+          ${canResume ? leetcodeLinkButton(lcUrl, { size: "xs", label: "Resume", problemId: p.id }) : ""}
+          ${canSolve ? leetcodeLinkButton(lcUrl, { size: "xs", label: "Solve", problemId: p.id }) : ""}
+          ${inProgress && !missionDone ? `<button class="btn btn--xs btn--primary" data-action="mark-solved" data-id="${p.id}" type="button">Solved</button>` : ""}
+          ${canAddMission ? `<button class="btn btn--xs btn--ghost" data-action="add-to-mission" data-id="${p.id}" type="button" title="Add to mission">+</button>` : ""}
+          ${!missionDone
+            ? `<button class="btn btn--xs btn--ghost" data-action="edit-problem" data-id="${p.id}" type="button" title="Edit">${icon("notes")}</button>`
+            : ""}
         </div>
       </td>
     </tr>
@@ -93,7 +116,7 @@ function problemRow(p, i) {
 export default {
   title: "Problems",
   render() {
-    const problems = getProblems();
+    const problems = sortProblemsForDisplay(getProblems());
     const inProgress = getProblemsInProgress();
     const mastered = problems.filter((p) => p.status === "mastered").length;
     const learning = problems.filter((p) => p.status === "learning" || p.status === "struggling").length;
@@ -170,7 +193,8 @@ export default {
     container.addEventListener("click", (e) => {
       if (e.target.closest("[data-action]")) return;
       const row = e.target.closest("tr[data-problem-row]");
-      if (row) openProblemModal(row.dataset.id);
+      if (!row || row.classList.contains("is-mission-done")) return;
+      openProblemModal(row.dataset.id);
     });
   },
 };

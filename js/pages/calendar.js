@@ -1,14 +1,19 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
-import { Button, Card, StatCard, EmptyState } from "../components/ui/index.js";
-import { getCalendarMonth } from "../storage/db.js";
-import { computeStats, computeCalendarDays, computeUpcomingReviews } from "../storage/computed.js";
-import { monthLabel } from "../storage/helpers.js";
+import { Card, StatCard, EmptyState, DifficultyBadge } from "../components/ui/index.js";
+import { getCalendarMonth, getCalendarSelectedDate } from "../storage/db.js";
+import {
+  computeStats,
+  computeCalendarDays,
+  computeUpcomingReviews,
+  computeProblemsSolvedOnDate,
+} from "../storage/computed.js";
+import { monthLabel, formatDateLabel } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-function renderCalendarDay(d) {
+function renderCalendarDay(d, selectedDate) {
   const dots = [];
   if (d.activity > 0 && !d.isFuture) {
     for (let i = 0; i < d.activity; i++) {
@@ -19,11 +24,54 @@ function renderCalendarDay(d) {
     dots.push('<span class="calendar-day__dot calendar-day__dot--review"></span>');
   }
 
+  const isSelected = d.dateKey === selectedDate;
+
   return `
-    <div class="calendar-day${d.isToday ? " is-today" : ""}${d.isWeekend ? " is-weekend" : ""}${d.isFuture ? " is-future" : ""}">
+    <button
+      type="button"
+      class="calendar-day${d.isToday ? " is-today" : ""}${d.isWeekend ? " is-weekend" : ""}${d.isFuture ? " is-future" : ""}${isSelected ? " is-selected" : ""}"
+      data-cal-day="${d.dateKey}"
+      aria-label="${d.day}${d.solvedCount ? `, ${d.solvedCount} solved` : ""}${isSelected ? ", selected" : ""}"
+      aria-pressed="${isSelected}"
+      ${d.isFuture ? "disabled" : ""}
+    >
       <span>${d.day}</span>
       ${dots.length ? `<div class="calendar-day__dots">${dots.join("")}</div>` : ""}
-    </div>
+    </button>
+  `;
+}
+
+function renderSolvedPanel(dateKey) {
+  const solved = computeProblemsSolvedOnDate(dateKey);
+  const label = formatDateLabel(`${dateKey}T12:00:00.000Z`);
+
+  return `
+    <section class="page-section">
+      <div class="page-section__header">
+        <h2 class="page-section__title">Solved on ${label}</h2>
+        <span class="text-sm text-secondary">${solved.length} problem${solved.length !== 1 ? "s" : ""}</span>
+      </div>
+      ${solved.length ? Card({
+        body: solved.map((p) => `
+          <div class="review-list__item">
+            <div class="review-list__date">${p.minutes ? `${p.minutes}m` : "—"}</div>
+            <div>
+              <div class="text-sm font-medium text-primary mb-1 flex items-center gap-2">
+                <span>${p.title}</span>
+                ${DifficultyBadge(p.difficulty)}
+              </div>
+              <div class="review-list__problems">${p.topic || "Uncategorized"}</div>
+            </div>
+          </div>
+        `).join(""),
+      }) : EmptyState({
+        title: "No problems solved",
+        text: "Mark mission items done or solve problems to see them on this day.",
+        iconName: "problems",
+        compact: true,
+        flat: true,
+      })}
+    </section>
   `;
 }
 
@@ -31,19 +79,21 @@ export default {
   title: "Calendar",
   render() {
     const { year, month } = getCalendarMonth();
+    const selectedDate = getCalendarSelectedDate();
     const { days, firstDow } = computeCalendarDays(year, month);
     const stats = computeStats();
     const reviews = computeUpcomingReviews();
     const activeDays = days.filter((d) => d.activity > 0 && !d.isFuture).length;
+    const monthSolved = days.reduce((sum, d) => sum + (d.solvedCount || 0), 0);
 
     return createPage({
       title: "Calendar",
-      description: "Visualize your study consistency, streaks, and upcoming spaced-repetition reviews.",
+      description: "Visualize your study consistency, streaks, and problems solved each day.",
       children: `
         <div class="dash-stats mb-6" style="grid-template-columns: repeat(3, 1fr)">
           ${StatCard({ label: "Active Days", value: String(activeDays), change: monthLabel(year, month), icon: icon("calendar") })}
           ${StatCard({ label: "Current Streak", value: `${stats.currentStreak}d`, change: `Best: ${stats.longestStreak}d`, changeType: stats.currentStreak > 0 ? "up" : undefined, icon: icon("flame") })}
-          ${StatCard({ label: "Reviews Due", value: String(stats.revisionsDue), change: "upcoming", icon: icon("repeat") })}
+          ${StatCard({ label: "Solved This Month", value: String(monthSolved), change: `${stats.missionDoneToday} today`, changeType: stats.missionDoneToday > 0 ? "up" : undefined, icon: icon("problems") })}
         </div>
 
         <div class="calendar-layout">
@@ -60,7 +110,7 @@ export default {
               <div class="calendar-grid">
                 ${WEEKDAYS.map((d) => `<div class="calendar-grid__head">${d}</div>`).join("")}
                 ${Array(firstDow).fill("<div></div>").join("")}
-                ${days.map(renderCalendarDay).join("")}
+                ${days.map((d) => renderCalendarDay(d, selectedDate)).join("")}
               </div>
               <div class="heatmap-legend">
                 <span>Less</span>
@@ -79,6 +129,8 @@ export default {
           </div>
 
           <div>
+            ${renderSolvedPanel(selectedDate)}
+
             <section class="page-section">
               <div class="page-section__header">
                 <h2 class="page-section__title">Upcoming Reviews</h2>

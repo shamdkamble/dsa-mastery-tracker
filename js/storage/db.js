@@ -4,7 +4,7 @@
  */
 
 import { dispatch } from "../utils.js";
-import { generateId, todayKey } from "./helpers.js";
+import { generateId, todayKey, yesterdayKey } from "./helpers.js";
 import { getToken } from "../auth/session.js";
 import {
   fetchUserData,
@@ -365,6 +365,44 @@ export function getProblems() {
   return [...load().problems];
 }
 
+export function findProblemByLeetcodeSlug(slug, { excludeId = null } = {}) {
+  const normalized = String(slug || "").trim().toLowerCase();
+  if (!normalized) return null;
+  return load().problems.find((p) => {
+    if (excludeId && p.id === excludeId) return false;
+    return String(p.leetcodeSlug || "").trim().toLowerCase() === normalized;
+  }) || null;
+}
+
+export function isProblemOnTodaysMission(problem) {
+  if (!problem?.inMission) return false;
+  const today = todayKey();
+  const yesterday = yesterdayKey();
+  if (problem.missionDate === today) return true;
+  if (problem.missionDate === yesterday && !problem.missionDone) return true;
+  return false;
+}
+
+export function sortProblemsForDisplay(problems) {
+  const today = todayKey();
+  const yesterday = yesterdayKey();
+
+  const priority = (p) => {
+    if (isProblemOnTodaysMission(p) && !p.missionDone && p.missionDate === yesterday) return 0;
+    if (isProblemOnTodaysMission(p) && !p.missionDone && p.missionType === "new" && p.missionDate === today) return 1;
+    if (isProblemOnTodaysMission(p) && !p.missionDone) return 2;
+    return 3;
+  };
+
+  return [...problems].sort((a, b) => {
+    const diff = priority(a) - priority(b);
+    if (diff !== 0) return diff;
+    const tb = new Date(b.createdAt || 0).getTime();
+    const ta = new Date(a.createdAt || 0).getTime();
+    return tb - ta;
+  });
+}
+
 export function getProblem(id) {
   const problem = load().problems.find((p) => p.id === id) || null;
   if (!problem) return null;
@@ -379,6 +417,16 @@ export async function createProblem(data) {
   const db = load();
   const now = new Date().toISOString();
   const today = todayKey();
+  const slug = data.leetcodeSlug?.trim();
+
+  if (slug) {
+    const existing = findProblemByLeetcodeSlug(slug);
+    if (existing) {
+      const err = new Error(`"${existing.title}" is already in your problem list.`);
+      err.code = "DUPLICATE_SLUG";
+      throw err;
+    }
+  }
 
   const problem = {
     id: generateId(),
@@ -501,7 +549,13 @@ export async function deleteProblem(id) {
 
 export function getTodaysMissionProblems() {
   const today = todayKey();
-  return load().problems.filter((p) => p.inMission && p.missionDate === today);
+  const yesterday = yesterdayKey();
+  return load().problems.filter((p) => {
+    if (!p.inMission) return false;
+    if (p.missionDate === today) return true;
+    if (p.missionDate === yesterday && !p.missionDone) return true;
+    return false;
+  });
 }
 
 export async function addToMission(id, missionType = "new") {
@@ -534,6 +588,10 @@ export async function toggleMissionDone(id) {
     updates.lastReviewAt = new Date().toISOString();
     updates.attempts = (problem.attempts || 0) + 1;
     if (problem.status === "todo") updates.status = "learning";
+    if (problem.startedAt) {
+      updates.actualSolveMinutes = computeActualSolveMinutes(problem);
+      updates.startedAt = null;
+    }
     const activity = logActivity({
       action: problem.missionType === "revision" ? "Reviewed" : "Solved",
       problemId: id,
@@ -680,6 +738,16 @@ export function setCalendarMonth(year, month) {
   const db = load();
   db.meta.calendarMonth = { year, month };
   touch();
+}
+
+export function getCalendarSelectedDate() {
+  return load().meta.calendarSelectedDate || todayKey();
+}
+
+export function setCalendarSelectedDate(dateKey) {
+  const db = load();
+  db.meta.calendarSelectedDate = dateKey;
+  touch({ silent: true });
 }
 
 export function updateLongestStreak(streak) {

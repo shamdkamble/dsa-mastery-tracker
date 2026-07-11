@@ -91,13 +91,22 @@ export function bindMissionHandlers(root) {
 
     const startBtn = e.target.closest("[data-action='start-next']");
     if (startBtn) {
-      const next = root.querySelector(".mission-card:not(.is-done) [data-action='toggle-mission']");
-      if (next) {
-        void toggleMissionDone(next.dataset.id)
-          .then(() => refreshPage())
-          .catch((err) => console.error("[mission] start-next failed", err));
-      } else {
+      const nextCard = root.querySelector(".mission-card:not(.is-done)");
+      if (!nextCard) {
         showToast(Toast({ title: "All done!", text: "You've completed today's mission.", variant: "success" }));
+        return;
+      }
+
+      nextCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      const solveLink = nextCard.querySelector("[data-action='start-solve']");
+      if (solveLink) {
+        solveLink.click();
+      } else {
+        showToast(Toast({
+          title: "No LeetCode link",
+          text: "Add a LeetCode URL to this problem before solving.",
+          variant: "warning",
+        }));
       }
       return;
     }
@@ -432,13 +441,23 @@ export function bindCalendarHandlers(root) {
     const next = e.target.closest("[data-cal-next]");
     const todayBtn = e.target.closest("[data-cal-today]");
 
+    const dayBtn = e.target.closest("[data-cal-day]");
+    if (dayBtn?.dataset.calDay) {
+      import("../storage/db.js").then(({ setCalendarSelectedDate }) => {
+        setCalendarSelectedDate(dayBtn.dataset.calDay);
+        refreshPage();
+      });
+      return;
+    }
+
     if (prev || next || todayBtn) {
-      import("../storage/db.js").then(({ getCalendarMonth, setCalendarMonth }) => {
+      import("../storage/db.js").then(({ getCalendarMonth, setCalendarMonth, setCalendarSelectedDate }) => {
         let { year, month } = getCalendarMonth();
         if (todayBtn) {
           const now = new Date();
           year = now.getFullYear();
           month = now.getMonth();
+          setCalendarSelectedDate(now.toISOString().slice(0, 10));
         } else if (prev) {
           month--;
           if (month < 0) { month = 11; year--; }

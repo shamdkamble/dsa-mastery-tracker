@@ -6,6 +6,12 @@ export function todayKey(date = new Date()) {
   return date.toISOString().slice(0, 10);
 }
 
+export function yesterdayKey(date = new Date()) {
+  const d = new Date(date);
+  d.setDate(d.getDate() - 1);
+  return todayKey(d);
+}
+
 export function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }

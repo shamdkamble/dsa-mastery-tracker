@@ -12,6 +12,7 @@ import {
 import { PATTERN_CATALOG } from "./patterns-catalog.js";
 import {
   todayKey,
+  yesterdayKey,
   formatRelativeTime,
   formatMinutes,
   formatDateLabel,
@@ -57,6 +58,7 @@ export function computeStats() {
   const revisionsDue = problems.filter((p) => p.nextReviewAt && p.nextReviewAt.slice(0, 10) <= today);
   const todaysMission = getTodaysMissionProblems();
   const todaysRevisions = todaysMission.filter((p) => p.missionType === "revision").length;
+  const missionDoneToday = todaysMission.filter((p) => p.missionDone).length;
 
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
   const weeklySolved = activities.filter(
@@ -90,6 +92,7 @@ export function computeStats() {
     currentStreak: streak.current,
     longestStreak: streak.longest,
     problemsSolved: mastered.length,
+    missionDoneToday,
     totalProblems: problems.length,
     weeklySolved,
     accuracy,
@@ -98,11 +101,39 @@ export function computeStats() {
   };
 }
 
+function sortMissionProblems(problems) {
+  const today = todayKey();
+  const yesterday = yesterdayKey();
+  const typeOrder = { new: 0, revision: 1, challenge: 2 };
+
+  return [...problems].sort((a, b) => {
+    if (a.missionDone !== b.missionDone) return a.missionDone ? 1 : -1;
+
+    const aCarry = a.missionDate === yesterday && !a.missionDone;
+    const bCarry = b.missionDate === yesterday && !b.missionDone;
+    if (aCarry !== bCarry) return aCarry ? -1 : 1;
+
+    const aNewToday = a.missionType === "new" && a.missionDate === today && !a.missionDone;
+    const bNewToday = b.missionType === "new" && b.missionDate === today && !b.missionDone;
+    if (aNewToday !== bNewToday) return aNewToday ? -1 : 1;
+
+    const ta = typeOrder[a.missionType] ?? 1;
+    const tb = typeOrder[b.missionType] ?? 1;
+    if (ta !== tb) return ta - tb;
+
+    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+  });
+}
+
 export function computeTodaysMission() {
-  return getTodaysMissionProblems().map((p) => {
-    const today = todayKey();
+  const today = todayKey();
+  const yesterday = yesterdayKey();
+
+  return sortMissionProblems(getTodaysMissionProblems()).map((p) => {
     let due = "Scheduled";
-    if (p.nextReviewAt) {
+    if (p.missionDate === yesterday && !p.missionDone) {
+      due = "From yesterday";
+    } else if (p.nextReviewAt) {
       const reviewDay = p.nextReviewAt.slice(0, 10);
       if (reviewDay < today) due = "Overdue";
       else if (reviewDay === today) due = "Today";
@@ -117,11 +148,45 @@ export function computeTodaysMission() {
       type: p.missionType || "new",
       due,
       done: p.missionDone,
+      carriedOver: p.missionDate === yesterday && !p.missionDone,
       time: p.actualSolveMinutes ? `${p.actualSolveMinutes}m` : `${p.estimatedMinutes || 30}m`,
       leetcodeUrl: p.leetcodeUrl || null,
       leetcodeSlug: p.leetcodeSlug || null,
     };
   });
+}
+
+export function computeProblemsSolvedOnDate(dateKey) {
+  if (!dateKey) return [];
+
+  const problems = getProblems();
+  const solvedIds = new Set();
+
+  problems.forEach((p) => {
+    if (p.solvedAt?.slice(0, 10) === dateKey) {
+      solvedIds.add(p.id);
+      return;
+    }
+    if (p.missionDone && p.lastReviewAt?.slice(0, 10) === dateKey) {
+      solvedIds.add(p.id);
+    }
+  });
+
+  getActivities()
+    .filter((a) => a.action === "Solved" && a.timestamp.slice(0, 10) === dateKey)
+    .forEach((a) => {
+      if (a.problemId) solvedIds.add(a.problemId);
+    });
+
+  return problems
+    .filter((p) => solvedIds.has(p.id))
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      topic: p.topic,
+      difficulty: p.difficulty,
+      minutes: p.actualSolveMinutes || p.estimatedMinutes || null,
+    }));
 }
 
 export function computeRecentActivity(limit = 5) {
@@ -214,19 +279,23 @@ export function computeCalendarDays(year, month) {
   const today = todayKey();
   const firstDow = new Date(year, month, 1).getDay();
   const activities = getActivities();
-  const problems = getProblems();
 
   const days = [];
   for (let i = 1; i <= total; i++) {
     const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
+    const solved = computeProblemsSolvedOnDate(key);
     const dayActs = activities.filter((a) => a.timestamp.slice(0, 10) === key);
-    const activity = dayActs.length > 0 ? Math.min(dayActs.length, 3) : 0;
-    const hasReview = problems.some((p) => p.nextReviewAt?.slice(0, 10) === key);
+    const activity = solved.length
+      ? Math.min(solved.length, 3)
+      : (dayActs.length > 0 ? Math.min(dayActs.length, 3) : 0);
+    const hasReview = getProblems().some((p) => p.nextReviewAt?.slice(0, 10) === key);
     const d = new Date(year, month, i);
 
     days.push({
       day: i,
+      dateKey: key,
       activity,
+      solvedCount: solved.length,
       isToday: key === today,
       hasReview,
       isWeekend: d.getDay() === 0 || d.getDay() === 6,
