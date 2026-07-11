@@ -207,7 +207,10 @@
 }
 
 .mentor-chat__composer {
-  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -334,11 +337,6 @@
 }
 
 .mentor-chat__emoji-picker {
-  position: absolute;
-  right: calc(42px + var(--space-3));
-  bottom: calc(100% + var(--space-2));
-  left: var(--space-3);
-  z-index: 5;
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 4px;
@@ -346,7 +344,11 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   background: var(--color-bg-elevated);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.mentor-chat__emoji-picker[hidden] {
+  display: none !important;
 }
 
 .mentor-chat__emoji-item {

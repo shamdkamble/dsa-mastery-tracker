@@ -110,9 +110,15 @@ function insertAtCursor(textarea, text) {
   textarea.focus();
 }
 
+function setPickerOpen(picker, open) {
+  if (!picker) return;
+  if (open) picker.removeAttribute("hidden");
+  else picker.setAttribute("hidden", "");
+}
+
 function closeEmojiPickers(container, except) {
   container.querySelectorAll("[data-emoji-picker]").forEach((picker) => {
-    if (picker !== except) picker.hidden = true;
+    if (picker !== except) setPickerOpen(picker, false);
   });
 }
 
@@ -124,26 +130,29 @@ export function bindChatComposer(container) {
     const toggle = e.target.closest("[data-emoji-toggle]");
     if (toggle) {
       e.preventDefault();
+      e.stopPropagation();
       const form = toggle.closest("[data-mentor-chat-form]");
       const picker = form?.querySelector("[data-emoji-picker]");
       if (!picker) return;
-      const willOpen = picker.hidden;
+      const willOpen = picker.hasAttribute("hidden");
       closeEmojiPickers(container);
-      picker.hidden = !willOpen;
+      setPickerOpen(picker, willOpen);
       return;
     }
 
     const emojiBtn = e.target.closest("[data-emoji]");
     if (emojiBtn) {
       e.preventDefault();
+      e.stopPropagation();
       const form = emojiBtn.closest("[data-mentor-chat-form]");
       const textarea = form?.querySelector("textarea");
       insertAtCursor(textarea, emojiBtn.dataset.emoji || "");
-      form?.querySelector("[data-emoji-picker]")?.setAttribute("hidden", "");
+      setPickerOpen(form?.querySelector("[data-emoji-picker]"), false);
     }
   });
 
   document.addEventListener("click", (e) => {
+    if (!container.contains(e.target)) return;
     if (e.target.closest("[data-emoji-toggle], [data-emoji-picker]")) return;
     closeEmojiPickers(container);
   });
