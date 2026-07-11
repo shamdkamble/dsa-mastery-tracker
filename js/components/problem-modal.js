@@ -29,10 +29,18 @@ import { openUpgradeModal } from "./upgrade-modal.js";
 
 const MODAL_ID = "problem-modal";
 
+function formatSelectLabel(value) {
+  const str = String(value || "");
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 function selectOptions(items, selected) {
   return items.map((item) => {
-    const val = typeof item === "string" ? item : item.name;
-    const label = typeof item === "string" ? item : item.name;
+    const val = typeof item === "string" ? item : (item.value ?? item.name);
+    const label = typeof item === "string"
+      ? formatSelectLabel(item)
+      : (item.label ?? formatSelectLabel(item.name ?? val));
     return `<option value="${val}"${val === selected ? " selected" : ""}>${label}</option>`;
   }).join("");
 }
@@ -153,7 +161,7 @@ function renderSolutionSection(p = {}, { aiLocked = false } = {}) {
       <div class="problem-optional-section__panel" id="solution-panel" ${isOpen ? "" : "hidden"}>
         ${Field({
           label: "",
-          hint: "Optional — paste your accepted solution (any language)",
+          hint: "Optional — paste your final accepted code here (any language). Use Notes for approach write-ups; Analyze Complexity expects code only.",
           children: `<textarea
             class="textarea problem-code-input"
             name="solution"
@@ -170,7 +178,7 @@ function renderSolutionSection(p = {}, { aiLocked = false } = {}) {
                   ${icon("zap")}
                   <span>Analyze Complexity</span>
                 </button>`}
-            <span class="problem-complexity__hint" id="complexity-hint">${aiLocked ? "Upgrade to Premium to unlock AI complexity analysis" : "Paste code above, then analyze with AI"}</span>
+            <span class="problem-complexity__hint" id="complexity-hint">${aiLocked ? "Upgrade to Premium to unlock AI complexity analysis" : "Works best with solution code only — notes or prose may skew results"}</span>
           </div>
           <p class="problem-ai-status" id="complexity-ai-status" aria-live="polite"></p>
           <div id="complexity-result-host">
