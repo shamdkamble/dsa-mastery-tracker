@@ -530,3 +530,10 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* iOS Safari zooms focused inputs under 16px — chat field uses a custom class */
+@media (max-width: 768px) {
+  .mentor-chat__input {
+    font-size: 16px;
+  }
+}
