@@ -8,6 +8,7 @@ import {
   escapeHtml,
   formatChatTime,
   bindChatComposer,
+  unbindChatComposer,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
 
@@ -16,6 +17,7 @@ const POLL_MS = 5000;
 let pollTimer = null;
 let activeThreadId = null;
 let activeStudentId = null;
+let inboxContainer = null;
 
 function stopPolling() {
   if (pollTimer) {
@@ -188,31 +190,20 @@ function bindInbox(container, state) {
     });
   }
 
-  bindChatComposer(container);
-
-  const form = root.querySelector("[data-mentor-chat-form]");
-  if (form && !form.dataset.bound) {
-    form.dataset.bound = "true";
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      if (!state.activeThread?.id) return;
-
-      const textarea = form.querySelector("textarea");
-      const body = textarea?.value?.trim();
-      if (!body) return;
-
-      const submitBtn = form.querySelector(".mentor-chat__send");
-      submitBtn?.setAttribute("disabled", "true");
-      textarea.disabled = true;
-
+  bindChatComposer(container, {
+    onSubmit: async (body) => {
       try {
+        if (!state.activeThread) {
+          throw new Error("Select a student first.");
+        }
+
         const api = await import("../api/mentorChatApi.js");
         if (state.activeThread.id) {
           await api.sendAdminChatMessage(state.activeThread.id, body);
         } else {
           await api.sendAdminChatMessageToStudent(state.activeThread.studentId, body);
         }
-        textarea.value = "";
+
         const data = state.activeThread.id
           ? await loadThread(state.activeThread.id)
           : await api.fetchAdminStudentThread(state.activeThread.studentId);
@@ -226,13 +217,10 @@ function bindInbox(container, state) {
         refreshUI(container, state);
       } catch (err) {
         showToast(Toast({ title: "Send failed", text: err?.message, variant: "danger" }));
-      } finally {
-        submitBtn?.removeAttribute("disabled");
-        textarea.disabled = false;
-        textarea.focus();
+        throw err;
       }
-    });
-  }
+    },
+  });
 }
 
 async function selectThread(container, state, threadId) {
@@ -331,6 +319,7 @@ export default {
     });
   },
   onMount(container) {
+    inboxContainer = container;
     const state = {
       threads: [],
       stats: {},
@@ -349,6 +338,8 @@ export default {
   },
   onUnmount() {
     stopPolling();
+    unbindChatComposer(inboxContainer);
+    inboxContainer = null;
     activeThreadId = null;
     activeStudentId = null;
   },

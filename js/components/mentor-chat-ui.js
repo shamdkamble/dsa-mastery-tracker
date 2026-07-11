@@ -76,6 +76,9 @@ export function renderChatComposer({ placeholder = "Type a message", disabled = 
             rows="1"
             placeholder="${escapeHtml(placeholder)}"
             maxlength="4000"
+            inputmode="text"
+            autocomplete="off"
+            autocorrect="on"
             ${disabled ? "disabled" : ""}
             aria-label="Message"
           ></textarea>
@@ -122,8 +125,10 @@ function closeEmojiPickers(container, except) {
   });
 }
 
-export function bindChatComposer(container) {
-  if (!container || container.dataset.chatComposerBound) return;
+export function bindChatComposer(container, { onSubmit } = {}) {
+  if (!container) return;
+  if (onSubmit) container._mentorChatOnSubmit = onSubmit;
+  if (container.dataset.chatComposerBound) return;
   container.dataset.chatComposerBound = "true";
 
   container.addEventListener("click", (e) => {
@@ -156,6 +161,37 @@ export function bindChatComposer(container) {
     if (e.target.closest("[data-emoji-toggle], [data-emoji-picker]")) return;
     closeEmojiPickers(container);
   });
+
+  container.addEventListener("submit", async (e) => {
+    const form = e.target.closest("[data-mentor-chat-form]");
+    if (!form || !container._mentorChatOnSubmit) return;
+    e.preventDefault();
+    if (form.dataset.sending === "true") return;
+
+    const textarea = form.querySelector("textarea");
+    const body = textarea?.value?.trim();
+    if (!body) return;
+
+    const submitBtn = form.querySelector(".mentor-chat__send");
+    form.dataset.sending = "true";
+    submitBtn?.setAttribute("disabled", "true");
+    textarea.disabled = true;
+
+    try {
+      await container._mentorChatOnSubmit(body, { form, textarea, submitBtn });
+      textarea.value = "";
+    } finally {
+      delete form.dataset.sending;
+      submitBtn?.removeAttribute("disabled");
+      textarea.disabled = false;
+      textarea.focus();
+    }
+  });
+}
+
+export function unbindChatComposer(container) {
+  if (!container) return;
+  delete container._mentorChatOnSubmit;
 }
 
 export function scrollChatToBottom(container) {

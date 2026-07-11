@@ -214,6 +214,7 @@
   padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);
+  touch-action: manipulation;
 }
 
 .mentor-chat__composer-bar {
@@ -256,9 +257,11 @@
   background: transparent;
   color: var(--color-text-primary);
   font-family: inherit;
-  font-size: var(--text-sm);
+  font-size: 16px;
   line-height: 1.35;
   box-shadow: none;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
 }
 
 .mentor-chat__emoji-btn {
@@ -531,9 +534,9 @@
   }
 }
 
-/* iOS Safari zooms focused inputs under 16px — chat field uses a custom class */
-@media (max-width: 768px) {
+/* Mobile browsers auto-zoom inputs under 16px computed size */
+@media (hover: none) and (pointer: coarse) {
   .mentor-chat__input {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 }

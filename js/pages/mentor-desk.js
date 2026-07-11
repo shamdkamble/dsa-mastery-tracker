@@ -6,6 +6,7 @@ import {
   scrollChatToBottom,
   escapeHtml,
   bindChatComposer,
+  unbindChatComposer,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getSessionUser } from "../auth/session.js";
@@ -13,6 +14,7 @@ import { getSessionUser } from "../auth/session.js";
 const POLL_MS = 5000;
 
 let pollTimer = null;
+let deskContainer = null;
 
 function stopPolling() {
   if (pollTimer) {
@@ -72,39 +74,19 @@ async function loadThread() {
 }
 
 function bindDesk(container, state) {
-  const root = container.querySelector("[data-mentor-desk]");
-  if (!root || root.dataset.bound) return;
-  root.dataset.bound = "true";
-
-  bindChatComposer(container);
-
-  container.addEventListener("submit", async (e) => {
-    const form = e.target.closest("[data-mentor-chat-form]");
-    if (!form) return;
-    e.preventDefault();
-
-    const textarea = form.querySelector("textarea");
-    const body = textarea?.value?.trim();
-    if (!body) return;
-
-    const btn = form.querySelector(".mentor-chat__send");
-    btn?.setAttribute("disabled", "true");
-    textarea.disabled = true;
-
-    try {
-      const { sendStudentChatMessage } = await import("../api/mentorChatApi.js");
-      await sendStudentChatMessage(body);
-      textarea.value = "";
-      state.messages = await loadThread();
-      refreshUI(container, state);
-      showToast(Toast({ title: "Message sent", variant: "success" }));
-    } catch (err) {
-      showToast(Toast({ title: "Send failed", text: err?.message, variant: "danger" }));
-    } finally {
-      btn?.removeAttribute("disabled");
-      textarea.disabled = false;
-      textarea.focus();
-    }
+  bindChatComposer(container, {
+    onSubmit: async (body) => {
+      try {
+        const { sendStudentChatMessage } = await import("../api/mentorChatApi.js");
+        await sendStudentChatMessage(body);
+        state.messages = await loadThread();
+        refreshUI(container, state);
+        showToast(Toast({ title: "Message sent", variant: "success" }));
+      } catch (err) {
+        showToast(Toast({ title: "Send failed", text: err?.message, variant: "danger" }));
+        throw err;
+      }
+    },
   });
 }
 
@@ -121,6 +103,7 @@ export default {
     return renderDesk({ messages: [], loading: true, error: null, sending: false });
   },
   onMount(container) {
+    deskContainer = container;
     const state = { messages: [], loading: true, error: null, sending: false };
 
     void loadThread()
@@ -156,5 +139,7 @@ export default {
   },
   onUnmount() {
     stopPolling();
+    unbindChatComposer(deskContainer);
+    deskContainer = null;
   },
 };
