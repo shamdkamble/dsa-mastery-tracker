@@ -89,6 +89,7 @@ export async function updateUser(id, patch) {
     updates.expiresAt = patch.expiresAt ? new Date(patch.expiresAt) : null;
   }
   if (patch.name !== undefined) updates.name = patch.name.trim();
+  if (patch.role !== undefined) updates.role = patch.role;
 
   const user = await User.findOneAndUpdate(
     { id },

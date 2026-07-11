@@ -193,3 +193,42 @@ export async function notifyAccessPatch(before, after, patch) {
 
   return { record: null, push: null };
 }
+
+/**
+ * @param {object} before - user before patch
+ * @param {object} after - user after patch
+ * @param {{ role?: string }} patch
+ */
+export async function notifyRolePatch(before, after, patch) {
+  const userId = after?.id;
+  if (!userId || patch.role === undefined) return { record: null, push: null };
+
+  const prevRole = before?.role || "user";
+  const nextRole = after?.role || "user";
+  if (prevRole === nextRole) return { record: null, push: null };
+
+  if (nextRole === "tester") {
+    return notifyUser(userId, {
+      title: "QA Tester access granted",
+      text: "Congratulations! You have been given access to test DSAMantra. Open the Testing Panel to report issues and verify fixes.",
+      variant: "accent",
+      href: "#/testing-dashboard",
+    }, { tag: "tester-role-granted" });
+  }
+
+  if (prevRole === "tester" && nextRole === "user") {
+    return notifyUser(userId, {
+      title: "QA Tester access removed",
+      text: "Your tester role has been changed back to a standard user account.",
+      variant: "info",
+      href: "#/dashboard",
+    }, { tag: "tester-role-revoked" });
+  }
+
+  return notifyUser(userId, {
+    title: "Account role updated",
+    text: `Your account role is now ${nextRole.charAt(0).toUpperCase() + nextRole.slice(1)}.`,
+    variant: "info",
+    href: "#/settings",
+  }, { tag: "role-updated" });
+}

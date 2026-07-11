@@ -183,6 +183,7 @@ function renderNavbar(state) {
   const subBadge = renderSubscriptionBadge();
   const tier = user.subscriptionTier || getSubscriptionTier(getSessionUser());
   const isPremium = tier === "premium";
+  const isTester = tier === "tester";
 
   return `
     <div class="navbar__left">
@@ -292,7 +293,7 @@ function renderNavbar(state) {
       <div class="navbar__profile-wrap">
         ${subBadge ? `<div class="navbar__profile-badge" data-subscription-badge>${subBadge}</div>` : ""}
         <button
-          class="navbar__profile${isPremium ? " navbar__profile--premium" : ""}"
+          class="navbar__profile${isPremium ? " navbar__profile--premium" : ""}${isTester ? " navbar__profile--tester" : ""}"
           type="button"
           id="navbar-profile-btn"
           aria-label="User profile menu"

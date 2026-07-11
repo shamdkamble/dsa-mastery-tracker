@@ -572,6 +572,15 @@ export default {
           expiresAt: expiresAtRaw || null,
         });
         notify("success", "Saved", `User settings updated.${pushDeliveryHint(result.pushDelivery)}`);
+        const saveBtn = row?.querySelector('[data-action="save"]');
+        if (saveBtn) {
+          saveBtn.dataset.access = accessLevel;
+          saveBtn.dataset.role = role || saveBtn.dataset.role;
+          saveBtn.dataset.expires = expiresAtRaw || "";
+          saveBtn.disabled = true;
+          saveBtn.classList.remove("user-mgmt__save--dirty");
+          row?.classList.remove("user-mgmt__row--dirty");
+        }
         await refreshUsers();
       } catch (err) {
         const message = err instanceof AuthApiError ? err.message : "Save failed.";

@@ -389,3 +389,137 @@
 [data-subscription="trial"] .btn--primary:hover:not(:disabled) {
   box-shadow: 0 0 20px rgba(14, 165, 233, 0.38);
 }
+
+/* ═══════════════════════════════════════════
+   QA Tester — aurora violet / fuchsia / cyan
+   Distinct from trial (sky), premium (gold), standard (indigo)
+   ═══════════════════════════════════════════ */
+
+[data-subscription="tester"] {
+  --color-accent: #c026d3;
+  --color-accent-hover: #a21caf;
+  --color-accent-active: #86198f;
+  --color-accent-muted: rgba(192, 38, 211, 0.2);
+  --color-accent-subtle: rgba(192, 38, 211, 0.09);
+  --color-text-link: #a21caf;
+  --shadow-glow: 0 0 28px rgba(192, 38, 211, 0.38), 0 0 48px rgba(34, 211, 238, 0.12);
+  --subscription-ring: rgba(192, 38, 211, 0.55);
+}
+
+[data-theme="dark"][data-subscription="tester"] {
+  --color-accent: #e879f9;
+  --color-accent-hover: #d946ef;
+  --color-accent-active: #c026d3;
+  --color-accent-muted: rgba(232, 121, 249, 0.2);
+  --color-accent-subtle: rgba(232, 121, 249, 0.1);
+  --color-text-link: #f0abfc;
+  --shadow-glow: 0 0 32px rgba(232, 121, 249, 0.35), 0 0 56px rgba(34, 211, 238, 0.15);
+}
+
+[data-subscription="tester"] .app {
+  background:
+    radial-gradient(ellipse 90% 55% at 0% -10%, rgba(192, 38, 211, 0.09), transparent 52%),
+    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(34, 211, 238, 0.07), transparent 48%),
+    var(--color-bg-primary);
+}
+
+[data-subscription="tester"] .btn--primary {
+  color: #fff;
+  font-weight: var(--font-semibold);
+  background: linear-gradient(135deg, #c026d3 0%, #7c3aed 48%, #0891b2 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 22px rgba(192, 38, 211, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+[data-subscription="tester"] .btn--primary:hover:not(:disabled) {
+  box-shadow: 0 0 32px rgba(192, 38, 211, 0.48), 0 0 20px rgba(34, 211, 238, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  filter: brightness(1.05);
+}
+
+[data-subscription="tester"] .sidebar__link.is-active {
+  background: linear-gradient(90deg, rgba(192, 38, 211, 0.16), rgba(34, 211, 238, 0.06));
+  border-color: rgba(192, 38, 211, 0.28);
+}
+
+[data-subscription="tester"] .sidebar__logo-icon {
+  box-shadow: var(--shadow-glow);
+}
+
+[data-subscription="tester"] .navbar {
+  border-bottom-color: color-mix(in srgb, #c026d3 18%, var(--color-border));
+  background: color-mix(in srgb, var(--color-bg-elevated) 92%, rgba(192, 38, 211, 0.04));
+}
+
+.navbar__profile--tester .navbar__profile-avatar {
+  box-shadow:
+    0 0 0 2px var(--color-bg-primary),
+    0 0 0 3px rgba(192, 38, 211, 0.55),
+    0 0 16px rgba(34, 211, 238, 0.25);
+}
+
+.subscription-badge--tester {
+  position: relative;
+  color: #86198f;
+  background: linear-gradient(135deg, rgba(192, 38, 211, 0.28), rgba(34, 211, 238, 0.12));
+  border: 1px solid rgba(192, 38, 211, 0.45);
+  box-shadow: 0 0 18px rgba(192, 38, 211, 0.28);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .subscription-badge--tester {
+  color: #f5d0fe;
+  border-color: rgba(232, 121, 249, 0.45);
+  box-shadow: 0 0 20px rgba(232, 121, 249, 0.22);
+}
+
+.subscription-badge--tester .subscription-badge__glow {
+  position: absolute;
+  inset: -40%;
+  background: conic-gradient(from 120deg, rgba(192, 38, 211, 0.35), rgba(34, 211, 238, 0.2), rgba(192, 38, 211, 0.35));
+  animation: tester-badge-spin 6s linear infinite;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.subscription-badge--tester .subscription-badge__shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.35) 50%, transparent 65%);
+  animation: tester-badge-shine 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes tester-badge-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes tester-badge-shine {
+  0%, 100% { transform: translateX(-120%); opacity: 0; }
+  45%, 55% { transform: translateX(120%); opacity: 1; }
+}
+
+.subscription-status--tester {
+  border-color: rgba(192, 38, 211, 0.38);
+  background: linear-gradient(155deg, rgba(192, 38, 211, 0.12), rgba(34, 211, 238, 0.06), var(--color-bg-secondary));
+  box-shadow: var(--shadow-glow);
+}
+
+.subscription-status__glow--tester {
+  position: absolute;
+  top: -50%;
+  right: -25%;
+  width: 70%;
+  height: 140%;
+  background: radial-gradient(ellipse, rgba(192, 38, 211, 0.28), rgba(34, 211, 238, 0.08), transparent 72%);
+  pointer-events: none;
+  animation: subscription-glow-pulse 4s ease-in-out infinite;
+}
+
+[data-subscription="tester"] .dash-continue--hero .dash-continue__glow {
+  background: radial-gradient(ellipse at 25% 15%, rgba(192, 38, 211, 0.24), rgba(34, 211, 238, 0.08), transparent 58%);
+}
+
+.roadmap-tier-banner--tester {
+  border-color: rgba(192, 38, 211, 0.35);
+  background: linear-gradient(135deg, rgba(192, 38, 211, 0.1), rgba(34, 211, 238, 0.05));
+}

@@ -7,10 +7,11 @@ import { getRoadmapAccessHint, getTrialDaysRemaining, hasTrialAccess } from "./a
 
 /**
  * @param {Object | null | undefined} [user]
- * @returns {"standard" | "trial" | "premium"}
+ * @returns {"standard" | "trial" | "premium" | "tester"}
  */
 export function getSubscriptionTier(user = getSessionUser()) {
   if (!user) return "standard";
+  if (user.role === "tester") return "tester";
   if (user.role === "admin" || user.accessLevel === "premium") return "premium";
   if (user.accessLevel === "trial") return "trial";
   return "standard";
@@ -36,6 +37,15 @@ export function applySubscriptionTheme(user = getSessionUser()) {
  */
 export function renderSubscriptionBadge(user = getSessionUser()) {
   const tier = getSubscriptionTier(user);
+  if (tier === "tester") {
+    return `
+      <span class="subscription-badge subscription-badge--tester">
+        <span class="subscription-badge__glow" aria-hidden="true"></span>
+        <span class="subscription-badge__shine" aria-hidden="true"></span>
+        QA Tester
+      </span>
+    `;
+  }
   if (tier === "trial") {
     return `<span class="subscription-badge subscription-badge--trial">Trial Active</span>`;
   }
@@ -72,6 +82,25 @@ export function renderSubscriptionStatusCard(user = getSessionUser()) {
 
   const tier = getSubscriptionTier(user);
   const hint = getRoadmapAccessHint(user);
+
+  if (tier === "tester") {
+    return `
+      <div class="subscription-status subscription-status--tester">
+        <div class="subscription-status__glow subscription-status__glow--tester" aria-hidden="true"></div>
+        <div class="subscription-status__head">
+          ${renderSubscriptionBadge(user)}
+          <span class="subscription-status__label">Quality assurance access</span>
+        </div>
+        <p class="subscription-status__text">You have exclusive access to the Testing Panel. Report issues, track fixes, and help shape DSAMantra before every release.</p>
+        <ul class="subscription-status__perks">
+          <li>QA Dashboard &amp; Issue Tracker</li>
+          <li>Verify fixes &amp; confirm resolutions</li>
+          <li>Priority in-app &amp; push notifications</li>
+        </ul>
+        <a href="#/testing-dashboard" class="btn btn--primary btn--sm subscription-status__cta">Open Testing Panel</a>
+      </div>
+    `;
+  }
 
   if (tier === "premium") {
     return `
@@ -127,6 +156,7 @@ export function renderSubscriptionStatusCard(user = getSessionUser()) {
  */
 export function getTierBannerClass(user = getSessionUser()) {
   const tier = getSubscriptionTier(user);
+  if (tier === "tester") return "roadmap-tier-banner--tester";
   if (tier === "trial") return "roadmap-tier-banner--trial";
   if (tier === "premium") return "roadmap-tier-banner--premium";
   return "roadmap-tier-banner--standard";

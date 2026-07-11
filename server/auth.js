@@ -26,6 +26,7 @@ import {
   notifyAccountRejected,
   notifyAccountSuspended,
   notifyAccessPatch,
+  notifyRolePatch,
 } from "./access-notifications.js";
 
 const scrypt = promisify(crypto.scrypt);
@@ -382,7 +383,11 @@ export async function patchUserAdmin(userId, { accessLevel, expiresAt, role }) {
   }
 
   const user = await updateUser(userId, patch);
-  const notification = await notifyAccessPatch(existing, user, patch);
+  const roleNotification = await notifyRolePatch(existing, user, patch);
+  const accessNotification = roleNotification?.record
+    ? { record: null, push: null }
+    : await notifyAccessPatch(existing, user, patch);
+  const notification = roleNotification?.record ? roleNotification : accessNotification;
   return withPushDelivery(user, notification);
 }
 
