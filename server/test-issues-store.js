@@ -50,6 +50,12 @@ export async function listTestIssues() {
   return sortIssues(docs.map(toTestIssueDto));
 }
 
+export async function clearAllTestIssues() {
+  await connectDB();
+  const result = await TestIssue.deleteMany({});
+  return { deletedCount: result.deletedCount || 0 };
+}
+
 export async function getTestIssueStats() {
   const issues = await listTestIssues();
   const counts = {

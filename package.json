@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js",
-    "generate-vapid-keys": "node scripts/generate-vapid-keys.js"
+    "generate-vapid-keys": "node scripts/generate-vapid-keys.js",
+    "clear-test-issues": "node --env-file=.env scripts/clear-test-issues.js"
   },
   "dependencies": {
     "express": "^4.21.2",
