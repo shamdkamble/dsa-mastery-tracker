@@ -148,6 +148,11 @@
   scroll-behavior: smooth;
 }
 
+.mentor-chat__feed.is-gesture-active {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .mentor-chat__loading,
 .mentor-chat__empty {
   margin: auto;
@@ -165,6 +170,7 @@
 }
 
 .mentor-chat__message {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -174,6 +180,43 @@
 .mentor-chat__message--mine {
   align-self: flex-end;
   align-items: flex-end;
+}
+
+.mentor-chat__message--is-reply {
+  padding-left: var(--space-3);
+}
+
+.mentor-chat__message--mine.mentor-chat__message--is-reply {
+  padding-left: 0;
+  padding-right: var(--space-3);
+}
+
+.mentor-chat__thread-connector {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 12px;
+  width: 2px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+}
+
+.mentor-chat__message--mine .mentor-chat__thread-connector {
+  left: auto;
+  right: 0;
+}
+
+.mentor-chat__message.is-reply-highlight .mentor-chat__bubble {
+  animation: mentor-chat-highlight 1.4s ease;
+}
+
+.mentor-chat__message.is-reply-source .mentor-chat__bubble {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+
+@keyframes mentor-chat-highlight {
+  0%, 100% { box-shadow: none; }
+  20%, 60% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 50%, transparent); }
 }
 
 .mentor-chat__meta {
@@ -193,6 +236,11 @@
   font-size: var(--text-sm);
   line-height: 1.45;
   word-break: break-word;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  touch-action: pan-y;
 }
 
 .mentor-chat__bubble--theirs {
@@ -222,6 +270,11 @@
   width: 100%;
   max-width: 100%;
   touch-action: pan-y;
+  cursor: grab;
+}
+
+.mentor-chat__feed.is-gesture-active .mentor-chat__swipe-row {
+  cursor: grabbing;
 }
 
 .mentor-chat__message--mine .mentor-chat__swipe-row {
@@ -278,9 +331,32 @@
 .mentor-chat__quote {
   display: flex;
   gap: var(--space-2);
-  margin-bottom: var(--space-2);
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  width: 100%;
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-md);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--color-bg-primary) 65%, transparent);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.mentor-chat__quote:hover {
+  background: color-mix(in srgb, var(--color-bg-primary) 85%, transparent);
+}
+
+.mentor-chat__quote:active {
+  transform: scale(0.99);
+}
+
+.mentor-chat__quote--mentor {
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-primary));
+}
+
+.mentor-chat__quote--student {
+  background: color-mix(in srgb, var(--color-success) 10%, var(--color-bg-primary));
 }
 
 .mentor-chat__quote-accent {
@@ -305,16 +381,22 @@
   min-width: 0;
 }
 
-.mentor-chat__quote-name {
+.mentor-chat__quote-label {
   font-size: 10px;
-  font-weight: var(--font-semibold);
-  color: var(--color-text-secondary);
+  font-weight: var(--font-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
+.mentor-chat__quote--student .mentor-chat__quote-label {
+  color: var(--color-success);
 }
 
 .mentor-chat__quote-text {
   font-size: 11px;
   line-height: 1.35;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -329,6 +411,27 @@
   border-radius: var(--radius-md);
   background: var(--color-bg-hover);
   border: 1px solid var(--color-border);
+  animation: mentor-chat-reply-bar-in 0.2s ease;
+}
+
+@keyframes mentor-chat-reply-bar-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mentor-chat__reply-bar-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-accent);
+}
+
+.mentor-chat__reply-bar-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .mentor-chat__reply-bar-accent {

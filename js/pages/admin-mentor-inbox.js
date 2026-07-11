@@ -235,6 +235,7 @@ function patchMessages(container, state) {
   const feed = container.querySelector("[data-mentor-chat-feed]");
   if (!feed) return;
   feed.innerHTML = renderChatMessages(state.messages, { viewerRole: "admin" });
+  updateReplyBar(container);
   scrollChatToBottom(container);
 }
 

@@ -163,6 +163,7 @@ export default {
                 const feed = container.querySelector("[data-mentor-chat-feed]");
                 if (feed) {
                   feed.innerHTML = renderChatMessages(msgs, { viewerRole: getSessionUser()?.role || "user" });
+                  updateReplyBar(container);
                   scrollChatToBottom(container);
                 }
               }

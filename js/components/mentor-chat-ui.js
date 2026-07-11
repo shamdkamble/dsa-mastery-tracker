@@ -10,8 +10,9 @@ const CHAT_EMOJIS = [
   "🙌", "✨", "📚", "💯", "⚡", "🙂", "😢", "😮", "🤝", "☕",
 ];
 
-const SWIPE_REPLY_THRESHOLD = 56;
-const SWIPE_MAX = 72;
+const SWIPE_REPLY_THRESHOLD = 52;
+const SWIPE_MAX = 76;
+const LONG_PRESS_MS = 480;
 
 export function escapeHtml(str) {
   return String(str ?? "")
@@ -50,13 +51,18 @@ export function renderReplyQuote(replyTo, { viewerRole = "user" } = {}) {
     : "mentor-chat__quote-accent--student";
 
   return `
-    <div class="mentor-chat__quote ${roleClass}">
+    <button
+      type="button"
+      class="mentor-chat__quote ${roleClass}"
+      data-jump-to-message="${escapeHtml(replyTo.id)}"
+      aria-label="Jump to message from ${replySenderLabel(replyTo)}"
+    >
       <span class="mentor-chat__quote-accent ${accentClass}" aria-hidden="true"></span>
       <div class="mentor-chat__quote-body">
-        <span class="mentor-chat__quote-name">${replySenderLabel(replyTo)}</span>
+        <span class="mentor-chat__quote-label">Replying to ${replySenderLabel(replyTo)}</span>
         <span class="mentor-chat__quote-text">${escapeHtml(truncateReplyText(replyTo.body))}</span>
       </div>
-    </div>
+    </button>
   `;
 }
 
@@ -68,6 +74,7 @@ function renderReplyBarContent(replyTarget) {
 
   return `
     <div class="mentor-chat__reply-bar ${roleClass}" data-reply-bar>
+      <span class="mentor-chat__reply-bar-icon" aria-hidden="true">${icon("reply")}</span>
       <span class="mentor-chat__reply-bar-accent" aria-hidden="true"></span>
       <div class="mentor-chat__reply-bar-content">
         <span class="mentor-chat__reply-bar-label">Replying to ${replySenderLabel(replyTarget)}</span>
@@ -84,22 +91,67 @@ export function getReplyTarget(container) {
   return container?._mentorChatReplyTarget || null;
 }
 
+export function scrollToChatMessage(container, messageId, { highlight = true } = {}) {
+  const feed = container?.querySelector("[data-mentor-chat-feed]");
+  const el = feed?.querySelector(`[data-message-id="${messageId}"]`);
+  if (!el) return false;
+
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (highlight) {
+    el.classList.add("is-reply-highlight");
+    window.setTimeout(() => el.classList.remove("is-reply-highlight"), 1400);
+  }
+  return true;
+}
+
+function highlightReplySource(container, messageId) {
+  const feed = container?.querySelector("[data-mentor-chat-feed]");
+  feed?.querySelectorAll(".is-reply-source").forEach((el) => el.classList.remove("is-reply-source"));
+  const el = feed?.querySelector(`[data-message-id="${messageId}"]`);
+  el?.classList.add("is-reply-source");
+}
+
+function resetComposerPlaceholder(container) {
+  const textarea = container?.querySelector("[data-mentor-chat-form] textarea");
+  if (!textarea) return;
+  const defaultPlaceholder = textarea.dataset.defaultPlaceholder || textarea.getAttribute("placeholder") || "Type a message";
+  textarea.dataset.defaultPlaceholder = defaultPlaceholder;
+  textarea.placeholder = defaultPlaceholder;
+}
+
 export function setReplyTarget(container, message) {
   if (!container || !message?.id || message.pending) return;
+
   container._mentorChatReplyTarget = {
     id: message.id,
     body: message.body,
     senderName: message.senderName,
     senderRole: message.senderRole,
   };
+
+  highlightReplySource(container, message.id);
+  scrollToChatMessage(container, message.id, { highlight: true });
   updateReplyBar(container);
-  container.querySelector("[data-mentor-chat-form] textarea")?.focus();
+
+  const textarea = container.querySelector("[data-mentor-chat-form] textarea");
+  if (textarea) {
+    const label = message.senderRole === "admin" ? "Mentor" : (message.senderName || "Student");
+    textarea.dataset.defaultPlaceholder = textarea.dataset.defaultPlaceholder
+      || textarea.getAttribute("placeholder")
+      || "Type a message";
+    textarea.placeholder = `Reply to ${label}…`;
+    textarea.focus();
+  }
 }
 
 export function clearReplyTarget(container) {
   if (!container) return;
   delete container._mentorChatReplyTarget;
+  container.querySelector("[data-mentor-chat-feed]")
+    ?.querySelectorAll(".is-reply-source")
+    .forEach((el) => el.classList.remove("is-reply-source"));
   updateReplyBar(container);
+  resetComposerPlaceholder(container);
 }
 
 export function updateReplyBar(container) {
@@ -115,6 +167,7 @@ export function updateReplyBar(container) {
 
   const replyTarget = getReplyTarget(container);
   slot.innerHTML = replyTarget ? renderReplyBarContent(replyTarget) : "";
+  if (replyTarget) highlightReplySource(container, replyTarget.id);
 }
 
 export function renderChatEmptyState() {
@@ -130,13 +183,19 @@ export function renderChatMessage(msg, { viewerRole = "user" } = {}) {
   const isMine = msg.senderRole === "admin"
     ? viewerRole === "admin"
     : viewerRole !== "admin";
+  const isReply = Boolean(msg.replyToId || msg.replyTo);
   const bubbleClass = isMine ? "mentor-chat__bubble--mine" : "mentor-chat__bubble--theirs";
   const roleLabel = msg.senderRole === "admin" ? "Mentor" : escapeHtml(msg.senderName || "Student");
   const pendingClass = msg.pending ? " mentor-chat__bubble--pending" : "";
   const replyQuote = msg.replyTo ? renderReplyQuote(msg.replyTo, { viewerRole }) : "";
 
   return `
-    <div class="mentor-chat__message${isMine ? " mentor-chat__message--mine" : ""}" data-message-id="${escapeHtml(msg.id)}">
+    <div
+      class="mentor-chat__message${isMine ? " mentor-chat__message--mine" : ""}${isReply ? " mentor-chat__message--is-reply" : ""}"
+      data-message-id="${escapeHtml(msg.id)}"
+      ${msg.replyToId ? `data-reply-to="${escapeHtml(msg.replyToId)}"` : ""}
+    >
+      ${isReply ? `<div class="mentor-chat__thread-connector" aria-hidden="true"></div>` : ""}
       <div class="mentor-chat__meta">
         <span class="mentor-chat__sender">${roleLabel}</span>
         <time class="mentor-chat__time" datetime="${msg.createdAt}">${formatChatTime(msg.createdAt)}</time>
@@ -146,7 +205,7 @@ export function renderChatMessage(msg, { viewerRole = "user" } = {}) {
           ${icon("reply")}
         </button>
         <div class="mentor-chat__swipe-track" data-chat-swipe-track>
-          <div class="mentor-chat__bubble ${bubbleClass}${pendingClass}">
+          <div class="mentor-chat__bubble ${bubbleClass}${pendingClass}" draggable="false">
             ${replyQuote}
             <div class="mentor-chat__bubble-text">${escapeHtml(msg.body).replace(/\n/g, "<br>")}</div>
           </div>
@@ -204,8 +263,34 @@ function resetSwipeTrack(track) {
 function triggerReply(container, messageId, getMessages) {
   const messages = getMessages?.() || [];
   const message = messages.find((msg) => msg.id === messageId);
-  if (!message || message.pending) return;
+  if (!message || message.pending) return false;
   setReplyTarget(container, message);
+  return true;
+}
+
+function getSwipeMessageEl(target) {
+  return target?.closest("[data-message-id]");
+}
+
+function isChatGestureTarget(target) {
+  return Boolean(target?.closest("[data-mentor-chat-feed] [data-chat-swipe-row], [data-mentor-chat-feed] .mentor-chat__quote"));
+}
+
+function bindFeedGestureGuards(container) {
+  if (!container || container.dataset.gestureGuardsBound) return;
+  container.dataset.gestureGuardsBound = "true";
+
+  container.addEventListener("selectstart", (e) => {
+    if (isChatGestureTarget(e.target)) e.preventDefault();
+  });
+
+  container.addEventListener("dragstart", (e) => {
+    if (isChatGestureTarget(e.target)) e.preventDefault();
+  });
+
+  container.addEventListener("contextmenu", (e) => {
+    if (e.target.closest("[data-mentor-chat-feed] [data-chat-swipe-row]")) e.preventDefault();
+  });
 }
 
 export function bindChatSwipeReply(container, { getMessages } = {}) {
@@ -214,36 +299,68 @@ export function bindChatSwipeReply(container, { getMessages } = {}) {
   if (container.dataset.chatSwipeBound) return;
   container.dataset.chatSwipeBound = "true";
 
+  bindFeedGestureGuards(container);
+  const feed = container.querySelector("[data-mentor-chat-feed]");
+
   let activeDrag = null;
+  let longPressTimer = null;
+  let suppressClickUntil = 0;
+
+  const clearLongPress = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  };
 
   const finishDrag = (triggerReplyOnRelease = true) => {
     if (!activeDrag) return;
-    const { track, offsetX, messageId } = activeDrag;
-    if (triggerReplyOnRelease && offsetX >= SWIPE_REPLY_THRESHOLD) {
-      triggerReply(container, messageId, container._mentorChatGetMessages);
+    const { track, offsetX, messageId, didTrigger } = activeDrag;
+
+    if (!didTrigger && triggerReplyOnRelease && offsetX >= SWIPE_REPLY_THRESHOLD) {
+      if (triggerReply(container, messageId, container._mentorChatGetMessages)) {
+        suppressClickUntil = Date.now() + 350;
+        if (navigator.vibrate) navigator.vibrate(12);
+      }
     }
+
     resetSwipeTrack(track);
+    feed?.classList.remove("is-gesture-active");
     activeDrag = null;
   };
 
   container.addEventListener("pointerdown", (e) => {
-    const track = e.target.closest("[data-chat-swipe-track]");
+    const messageEl = getSwipeMessageEl(e.target);
+    const track = messageEl?.querySelector("[data-chat-swipe-track]");
     if (!track || !container.contains(track) || e.button !== 0) return;
+    if (e.target.closest("[data-jump-to-message], [data-chat-reply-btn]")) return;
 
-    const messageEl = track.closest("[data-message-id]");
-    if (!messageEl) return;
+    clearLongPress();
+    const messageId = messageEl.dataset.messageId;
 
     activeDrag = {
       track,
-      messageId: messageEl.dataset.messageId,
+      messageId,
       startX: e.clientX,
       startY: e.clientY,
       offsetX: 0,
       axis: null,
       pointerId: e.pointerId,
+      didTrigger: false,
     };
+
+    longPressTimer = window.setTimeout(() => {
+      if (!activeDrag || activeDrag.pointerId !== e.pointerId) return;
+      if (triggerReply(container, messageId, container._mentorChatGetMessages)) {
+        activeDrag.didTrigger = true;
+        suppressClickUntil = Date.now() + 400;
+        if (navigator.vibrate) navigator.vibrate(18);
+        finishDrag(false);
+      }
+    }, LONG_PRESS_MS);
+
     track.setPointerCapture(e.pointerId);
-  });
+  }, true);
 
   container.addEventListener("pointermove", (e) => {
     if (!activeDrag || activeDrag.pointerId !== e.pointerId) return;
@@ -252,13 +369,16 @@ export function bindChatSwipeReply(container, { getMessages } = {}) {
     const dy = e.clientY - activeDrag.startY;
 
     if (!activeDrag.axis) {
-      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       activeDrag.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
       if (activeDrag.axis === "y") {
-        activeDrag.track.releasePointerCapture(e.pointerId);
+        clearLongPress();
+        try { activeDrag.track.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
         activeDrag = null;
         return;
       }
+      clearLongPress();
+      feed?.classList.add("is-gesture-active");
     }
 
     if (activeDrag.axis !== "x") return;
@@ -270,32 +390,48 @@ export function bindChatSwipeReply(container, { getMessages } = {}) {
     const row = activeDrag.track.closest("[data-chat-swipe-row]");
     row?.classList.toggle("is-swiping", offset > 0);
     row?.classList.toggle("is-reply-ready", offset >= SWIPE_REPLY_THRESHOLD);
-  });
+  }, { passive: false });
 
   container.addEventListener("pointerup", (e) => {
+    clearLongPress();
     if (!activeDrag || activeDrag.pointerId !== e.pointerId) return;
-    activeDrag.track.releasePointerCapture(e.pointerId);
+    try { activeDrag.track.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     finishDrag(true);
   });
 
   container.addEventListener("pointercancel", (e) => {
+    clearLongPress();
     if (!activeDrag || activeDrag.pointerId !== e.pointerId) return;
     finishDrag(false);
   });
 
   container.addEventListener("click", (e) => {
-    const replyBtn = e.target.closest("[data-chat-reply-btn]");
-    if (!replyBtn || !container.contains(replyBtn)) return;
-    e.preventDefault();
-    const messageId = replyBtn.closest("[data-message-id]")?.dataset.messageId;
-    if (messageId) triggerReply(container, messageId, container._mentorChatGetMessages);
-  });
+    if (Date.now() < suppressClickUntil) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
 
-  container.addEventListener("click", (e) => {
-    if (!e.target.closest("[data-reply-cancel]")) return;
-    e.preventDefault();
-    clearReplyTarget(container);
-  });
+    const jumpBtn = e.target.closest("[data-jump-to-message]");
+    if (jumpBtn && container.contains(jumpBtn)) {
+      e.preventDefault();
+      scrollToChatMessage(container, jumpBtn.dataset.jumpToMessage, { highlight: true });
+      return;
+    }
+
+    const replyBtn = e.target.closest("[data-chat-reply-btn]");
+    if (replyBtn && container.contains(replyBtn)) {
+      e.preventDefault();
+      const messageId = replyBtn.closest("[data-message-id]")?.dataset.messageId;
+      if (messageId) triggerReply(container, messageId, container._mentorChatGetMessages);
+      return;
+    }
+
+    if (e.target.closest("[data-reply-cancel]")) {
+      e.preventDefault();
+      clearReplyTarget(container);
+    }
+  }, true);
 }
 
 export function unbindChatSwipeReply(container) {
@@ -322,6 +458,7 @@ export function renderChatComposer({ placeholder = "Type a message", disabled = 
             name="body"
             rows="1"
             placeholder="${escapeHtml(placeholder)}"
+            data-default-placeholder="${escapeHtml(placeholder)}"
             maxlength="4000"
             inputmode="text"
             autocomplete="off"
