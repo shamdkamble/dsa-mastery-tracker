@@ -3,14 +3,19 @@ import { icon } from "../components/icons.js";
 import { DifficultyBadge, EmptyState, Badge } from "../components/ui/index.js";
 import {
   getProblems,
-  getProblemsInProgress,
   sortProblemsForDisplay,
   isProblemOnTodaysMission,
 } from "../storage/db.js";
-import { formatRelativeTime, formatElapsedSince } from "../storage/helpers.js";
+import { formatRelativeTime } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 import { openProblemModal } from "../components/problem-modal.js";
 import { getProblemLeetcodeUrl, leetcodeLinkButton } from "../components/leetcode-actions.js";
+import {
+  renderSolveTimeCell,
+  isSolveTimerActive,
+  initSolveTimerTicker,
+  stopSolveTimerTicker,
+} from "../components/solve-timer.js";
 
 const STATUS_MAP = {
   mastered: { label: "Mastered", class: "mastered" },
@@ -24,52 +29,18 @@ function statusPill(status) {
   return `<span class="status-pill status-pill--${s.class}">${s.label}</span>`;
 }
 
-function formatSolveTime(p) {
-  if (p.actualSolveMinutes) return `${p.actualSolveMinutes}m`;
-  if (p.startedAt && p.status !== "mastered") return formatElapsedSince(p.startedAt);
-  if (p.missionDone && isProblemOnTodaysMission(p)) {
-    return p.estimatedMinutes ? `~${p.estimatedMinutes}m` : "Done";
-  }
-  if (p.status === "mastered" && p.estimatedMinutes) return `~${p.estimatedMinutes}m`;
-  return "—";
-}
-
 function isMissionItemDone(p) {
   return Boolean(p.missionDone && isProblemOnTodaysMission(p));
-}
-
-function renderInProgressBanner(inProgress) {
-  if (!inProgress.length) return "";
-
-  return `
-    <div class="solve-timer-banner">
-      ${inProgress.map((p) => `
-        <div class="solve-timer-banner__item" data-problem-id="${p.id}">
-          <div class="solve-timer-banner__info">
-            <span class="solve-timer-banner__label">Solving</span>
-            <strong class="solve-timer-banner__title">${p.title}</strong>
-            <span class="solve-timer-banner__elapsed">${formatElapsedSince(p.startedAt)} elapsed</span>
-          </div>
-          <div class="solve-timer-banner__actions">
-            ${leetcodeLinkButton(getProblemLeetcodeUrl(p), { size: "xs", label: "Resume", problemId: p.id })}
-            <button class="btn btn--xs btn--primary" type="button" data-action="mark-solved" data-id="${p.id}">Mark Solved</button>
-            <button class="btn btn--xs btn--ghost" type="button" data-action="cancel-solve" data-id="${p.id}" title="Cancel timer">×</button>
-          </div>
-        </div>
-      `).join("")}
-    </div>
-  `;
 }
 
 function problemRow(p, i) {
   const lcUrl = getProblemLeetcodeUrl(p);
   const isRoadmap = p.source === "roadmap";
-  const inProgress = Boolean(p.startedAt && p.status !== "mastered");
+  const inProgress = isSolveTimerActive(p);
   const missionDone = isMissionItemDone(p);
-  const solveTime = formatSolveTime(p);
-  const canSolve = lcUrl && !missionDone && !inProgress;
-  const canResume = lcUrl && inProgress && !missionDone;
   const canAddMission = !isProblemOnTodaysMission(p);
+  const showSolve = lcUrl && !missionDone;
+  const showDone = inProgress && !missionDone;
 
   return `
     <tr
@@ -88,7 +59,7 @@ function problemRow(p, i) {
           <span class="table__cell-primary">${p.title}</span>
           ${p.leetcodeId ? `<span class="text-xs text-tertiary font-mono">#${p.leetcodeId}</span>` : ""}
           ${isRoadmap ? Badge({ label: "Roadmap", variant: "accent", size: "sm" }) : ""}
-          ${inProgress ? Badge({ label: "In progress", variant: "warning", size: "sm" }) : ""}
+          ${inProgress ? Badge({ label: "Timer running", variant: "warning", size: "sm" }) : ""}
           ${missionDone ? Badge({ label: "Mission done", variant: "success", size: "sm" }) : ""}
         </div>
       </td>
@@ -96,13 +67,12 @@ function problemRow(p, i) {
       <td data-label="Pattern"><span class="text-tertiary text-xs">${p.pattern || "—"}</span></td>
       <td data-label="Difficulty">${DifficultyBadge(p.difficulty)}</td>
       <td data-label="Status">${statusPill(p.status)}</td>
-      <td data-label="Solve Time"><span class="text-secondary text-xs font-mono">${solveTime}</span></td>
+      <td data-label="Solve Time">${renderSolveTimeCell(p, { locked: missionDone })}</td>
       <td data-label="Last Review"><span class="text-secondary text-xs">${formatRelativeTime(p.lastReviewAt)}</span></td>
       <td data-label="Actions">
         <div class="flex items-center gap-2">
-          ${canResume ? leetcodeLinkButton(lcUrl, { size: "xs", label: "Resume", problemId: p.id }) : ""}
-          ${canSolve ? leetcodeLinkButton(lcUrl, { size: "xs", label: "Solve", problemId: p.id }) : ""}
-          ${inProgress && !missionDone ? `<button class="btn btn--xs btn--primary" data-action="mark-solved" data-id="${p.id}" type="button">Solved</button>` : ""}
+          ${showSolve ? leetcodeLinkButton(lcUrl, { size: "xs", label: "Solve", problemId: p.id }) : ""}
+          ${showDone ? `<button class="btn btn--xs btn--primary" data-action="mark-solved" data-id="${p.id}" type="button">Done</button>` : ""}
           ${canAddMission ? `<button class="btn btn--xs btn--ghost" data-action="add-to-mission" data-id="${p.id}" type="button" title="Add to mission">+</button>` : ""}
           ${!missionDone
             ? `<button class="btn btn--xs btn--ghost" data-action="edit-problem" data-id="${p.id}" type="button" title="Edit">${icon("notes")}</button>`
@@ -117,7 +87,6 @@ export default {
   title: "Problems",
   render() {
     const problems = sortProblemsForDisplay(getProblems());
-    const inProgress = getProblemsInProgress();
     const mastered = problems.filter((p) => p.status === "mastered").length;
     const learning = problems.filter((p) => p.status === "learning" || p.status === "struggling").length;
     const todo = problems.filter((p) => p.status === "todo").length;
@@ -140,8 +109,6 @@ export default {
       title: "Problems",
       description: "Track every problem in your DSA journey — filter, sort, and monitor mastery.",
       children: `
-        ${renderInProgressBanner(inProgress)}
-
         <div class="problems-toolbar">
           <div class="problems-filters">
             <button class="chip is-selected" data-filter="all" type="button">All</button>
@@ -186,6 +153,7 @@ export default {
   },
   onMount(container) {
     bindPageHandlers(container);
+    initSolveTimerTicker(container);
 
     if (container.dataset.problemsRowBound) return;
     container.dataset.problemsRowBound = "true";
@@ -196,5 +164,8 @@ export default {
       if (!row || row.classList.contains("is-mission-done")) return;
       openProblemModal(row.dataset.id);
     });
+  },
+  onUnmount() {
+    stopSolveTimerTicker();
   },
 };

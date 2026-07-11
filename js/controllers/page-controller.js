@@ -7,6 +7,7 @@ import {
   toggleMissionDone,
   addToMission,
   markProblemSolved,
+  startProblemSolve,
   clearProblemSolveTimer,
   updateUser,
   updateSettings,
@@ -54,7 +55,17 @@ export function bindMissionHandlers(root) {
     const doneBtn = e.target.closest("[data-action='toggle-mission']");
     if (doneBtn) {
       void toggleMissionDone(doneBtn.dataset.id)
-        .then(() => refreshPage())
+        .then((problem) => {
+          if (problem?.missionDone) {
+            const mins = problem.actualSolveMinutes;
+            showToast(Toast({
+              title: "Marked done",
+              text: mins ? `Recorded ${mins} minute${mins !== 1 ? "s" : ""}.` : undefined,
+              variant: "success",
+            }));
+          }
+          refreshPage();
+        })
         .catch((err) => {
           console.error("[mission] toggle failed", err);
           showToast(Toast({ title: "Update failed", text: err?.message || "Could not update mission.", variant: "danger" }));
@@ -68,7 +79,7 @@ export function bindMissionHandlers(root) {
         .then((problem) => {
           const mins = problem?.actualSolveMinutes;
           showToast(Toast({
-            title: "Marked solved",
+            title: "Marked done",
             text: mins ? `Recorded ${mins} minute${mins !== 1 ? "s" : ""}.` : undefined,
             variant: "success",
           }));
@@ -81,11 +92,32 @@ export function bindMissionHandlers(root) {
       return;
     }
 
-    const cancelSolveBtn = e.target.closest("[data-action='cancel-solve']");
-    if (cancelSolveBtn) {
-      void clearProblemSolveTimer(cancelSolveBtn.dataset.id)
-        .then(() => refreshPage())
-        .catch((err) => console.error("[solve-timer] cancel failed", err));
+    const startTimerBtn = e.target.closest("[data-action='start-timer']");
+    if (startTimerBtn) {
+      void startProblemSolve(startTimerBtn.dataset.id)
+        .then(() => {
+          showToast(Toast({
+            title: "Timer started",
+            text: "Click Solve to open LeetCode, then Done when finished.",
+            variant: "info",
+          }));
+          refreshPage();
+        })
+        .catch((err) => {
+          console.error("[solve-timer] start failed", err);
+          showToast(Toast({ title: "Timer failed", text: err?.message || "Could not start timer.", variant: "danger" }));
+        });
+      return;
+    }
+
+    const resetSolveBtn = e.target.closest("[data-action='reset-solve'], [data-action='cancel-solve']");
+    if (resetSolveBtn) {
+      void clearProblemSolveTimer(resetSolveBtn.dataset.id)
+        .then(() => {
+          showToast(Toast({ title: "Timer reset", variant: "info" }));
+          refreshPage();
+        })
+        .catch((err) => console.error("[solve-timer] reset failed", err));
       return;
     }
 

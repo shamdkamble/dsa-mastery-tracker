@@ -152,6 +152,8 @@ export function computeTodaysMission() {
       time: p.actualSolveMinutes ? `${p.actualSolveMinutes}m` : `${p.estimatedMinutes || 30}m`,
       leetcodeUrl: p.leetcodeUrl || null,
       leetcodeSlug: p.leetcodeSlug || null,
+      startedAt: p.startedAt || null,
+      actualSolveMinutes: p.actualSolveMinutes ?? null,
     };
   });
 }

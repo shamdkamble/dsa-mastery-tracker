@@ -57,6 +57,14 @@ export function formatElapsedSince(iso) {
   return formatMinutes(mins);
 }
 
+export function formatElapsedLive(iso) {
+  if (!iso) return "0:00";
+  const totalSecs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
 export function formatMinutes(total) {
   if (!total) return "0m";
   if (total < 60) return `${total}m`;

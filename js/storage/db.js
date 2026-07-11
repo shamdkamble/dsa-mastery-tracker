@@ -616,6 +616,10 @@ export async function startProblemSolve(id) {
   const problem = getProblem(id);
   if (!problem) return null;
 
+  if (problem.startedAt && problem.status !== "mastered") {
+    return problem;
+  }
+
   return updateProblem(id, {
     startedAt: new Date().toISOString(),
     status: problem.status === "todo" ? "learning" : problem.status,

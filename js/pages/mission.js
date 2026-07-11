@@ -6,6 +6,13 @@ import { formatMinutes } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 import { leetcodeLinkButton } from "../components/leetcode-actions.js";
 import { buildLeetcodeUrl } from "../services/leetcode.js";
+import {
+  renderSolveTimeCell,
+  isSolveTimerActive,
+  initSolveTimerTicker,
+  stopSolveTimerTicker,
+} from "../components/solve-timer.js";
+import { getProblem } from "../storage/db.js";
 
 const TYPE_LABELS = {
   revision: { label: "Spaced Revisions", variant: "warning" },
@@ -14,8 +21,10 @@ const TYPE_LABELS = {
 };
 
 function missionCard(item, index) {
+  const problem = getProblem(item.id) || item;
+
   return `
-    <div class="mission-card${item.done ? " is-done" : ""}" data-problem-id="${item.id}">
+    <div class="mission-card${item.done ? " is-done" : ""}${isSolveTimerActive(problem) ? " is-solving" : ""}" data-problem-id="${item.id}">
       <div class="mission-card__num">${index + 1}</div>
       <div class="mission-card__body">
         <div class="mission-card__title">${item.title}</div>
@@ -24,7 +33,11 @@ function missionCard(item, index) {
       <div class="mission-card__actions">
         ${Badge({ label: item.due, variant: item.due === "Overdue" || item.due === "From yesterday" ? "danger" : "default", size: "sm" })}
         ${DifficultyBadge(item.difficulty)}
-        <span class="text-xs text-tertiary">${item.time}</span>
+        <div class="mission-card__timer">
+          ${item.done
+            ? `<span class="text-xs text-tertiary font-mono">${item.time}</span>`
+            : renderSolveTimeCell(problem)}
+        </div>
         ${!item.done
           ? leetcodeLinkButton(item.leetcodeUrl || buildLeetcodeUrl(item.leetcodeSlug), { label: "Solve", problemId: item.id })
           : ""}
@@ -125,5 +138,9 @@ export default {
   },
   onMount(container) {
     bindPageHandlers(container);
+    initSolveTimerTicker(container);
+  },
+  onUnmount() {
+    stopSolveTimerTicker();
   },
 };

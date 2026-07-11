@@ -79,6 +79,7 @@ export function setAuthGuard(fn) {
 
 let lastRenderedPath = "";
 let lastRenderedHtml = "";
+let lastMountedConfig = null;
 
 function scrollToSettingsSection(sectionId) {
   if (!sectionId || !SETTINGS_SECTION_IDS.has(sectionId)) return;
@@ -116,6 +117,10 @@ async function renderRouteContent(path, container) {
     return config;
   }
 
+  if (lastMountedConfig && lastMountedConfig !== config && typeof lastMountedConfig.onUnmount === "function") {
+    lastMountedConfig.onUnmount();
+  }
+
   lastRenderedPath = path;
   lastRenderedHtml = content;
   container.innerHTML = content;
@@ -124,6 +129,7 @@ async function renderRouteContent(path, container) {
     config.onMount(container);
   }
 
+  lastMountedConfig = config;
   return config;
 }
 

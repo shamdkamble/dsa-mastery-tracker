@@ -121,3 +121,72 @@
 .table tr.is-solving {
   background-color: color-mix(in srgb, var(--color-warning) 6%, transparent);
 }
+
+/* Solve time column controls */
+
+.solve-time-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 7.5rem;
+}
+
+.solve-time-cell--active .solve-time-cell__value {
+  min-width: 3.25rem;
+}
+
+.solve-time-cell__value {
+  font-variant-numeric: tabular-nums;
+}
+
+.solve-time-cell__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.solve-time-cell__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: var(--transition-all);
+}
+
+.solve-time-cell__btn svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.solve-time-cell__btn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.solve-time-cell__btn--play:hover:not(:disabled) {
+  color: var(--color-accent);
+}
+
+.solve-time-cell__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.mission-card.is-solving {
+  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
+}
+
+.mission-card__timer {
+  min-width: 6.5rem;
+}
+
+.mission-card__timer .solve-time-cell {
+  min-width: 0;
+}

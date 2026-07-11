@@ -4,7 +4,7 @@
 
 import { icon } from "./icons.js";
 import { buildLeetcodeUrl, openLeetcode } from "../services/leetcode.js";
-import { startProblemSolve } from "../storage/db.js";
+import { getProblem, startProblemSolve } from "../storage/db.js";
 import { showToast, Toast } from "./ui/index.js";
 import { refreshPage } from "../controllers/page-controller.js";
 
@@ -79,14 +79,18 @@ export function initLeetcodeLinks(root = document) {
     if (link.dataset.action === "start-solve" && link.dataset.problemId) {
       e.preventDefault();
       const { problemId, url } = link.dataset;
+      const existing = getProblem(problemId);
+      const wasRunning = Boolean(existing?.startedAt && existing.status !== "mastered");
       void startProblemSolve(problemId)
         .then(() => {
           openLeetcode(url);
-          showToast(Toast({
-            title: "Timer started",
-            text: "Mark solved when you return to record your time.",
-            variant: "info",
-          }));
+          if (!wasRunning) {
+            showToast(Toast({
+              title: "Timer started",
+              text: "Mark done when you return to record your time.",
+              variant: "info",
+            }));
+          }
           refreshPage();
         })
         .catch((err) => {
