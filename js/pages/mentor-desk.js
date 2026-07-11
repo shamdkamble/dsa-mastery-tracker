@@ -87,7 +87,7 @@ function bindDesk(container, state) {
     const body = textarea?.value?.trim();
     if (!body) return;
 
-    const btn = form.querySelector("button");
+    const btn = form.querySelector(".mentor-chat__send");
     btn?.setAttribute("disabled", "true");
     textarea.disabled = true;
 

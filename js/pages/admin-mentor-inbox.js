@@ -201,7 +201,7 @@ function bindInbox(container, state) {
       const body = textarea?.value?.trim();
       if (!body) return;
 
-      const submitBtn = form.querySelector("button");
+      const submitBtn = form.querySelector(".mentor-chat__send");
       submitBtn?.setAttribute("disabled", "true");
       textarea.disabled = true;
 
