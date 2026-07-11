@@ -19,6 +19,7 @@ const problemSchema = new mongoose.Schema(
     leetcodeSlug: { type: String, default: null },
     leetcodeId: { type: String, default: null },
     topicTags: { type: [String], default: [] },
+    approach: { type: String, default: "" },
     solution: { type: String, default: "" },
     timeComplexity: { type: String, default: "" },
     spaceComplexity: { type: String, default: "" },

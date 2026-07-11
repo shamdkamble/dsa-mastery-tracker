@@ -4,6 +4,10 @@
 
 import { TeachApiError } from "./gemini.js";
 import { PATTERN_CATALOG } from "../js/storage/patterns-catalog.js";
+import {
+  extractSolutionCodeForAnalysis,
+  looksLikeSolutionCode,
+} from "./solution-code.js";
 
 const PATTERN_NAMES = PATTERN_CATALOG.map((p) => p.name);
 
@@ -203,7 +207,20 @@ export async function analyzeSolutionComplexity({ code, title }) {
     throw new TeachApiError("Solution code is required.", { status: 400, code: "INVALID_INPUT" });
   }
 
-  if (code.length > 12_000) {
+  const extracted = extractSolutionCodeForAnalysis(code);
+
+  if (!extracted.code || !looksLikeSolutionCode(extracted.code)) {
+    throw new TeachApiError(
+      extracted.reason === "prose"
+        ? "Paste solution code in the code field — approach notes are analyzed separately and prose skews complexity results."
+        : "Could not find analyzable solution code. Paste your accepted code or wrap it in a markdown code block.",
+      { status: 400, code: "INVALID_INPUT" },
+    );
+  }
+
+  const analyzable = extracted.code.trim();
+
+  if (analyzable.length > 12_000) {
     throw new TeachApiError("Solution is too long to analyze (max 12,000 characters).", {
       status: 400,
       code: "INVALID_INPUT",
@@ -212,12 +229,13 @@ export async function analyzeSolutionComplexity({ code, title }) {
 
   const userPrompt = [
     title && `Problem: ${title.trim()}`,
+    extracted.stripped ? "Note: Non-code notes were stripped — analyze only the solution below." : "",
     "",
     "Analyze this solution:",
     "```",
-    code.trim(),
+    analyzable,
     "```",
-  ].filter((line) => line !== false).join("\n");
+  ].filter((line) => line !== false && line !== "").join("\n");
 
   const { parsed: data, model, usage } = await generateAndParseJson({
     systemPrompt: COMPLEXITY_SYSTEM,

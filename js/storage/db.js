@@ -366,7 +366,13 @@ export function getProblems() {
 }
 
 export function getProblem(id) {
-  return load().problems.find((p) => p.id === id) || null;
+  const problem = load().problems.find((p) => p.id === id) || null;
+  if (!problem) return null;
+  return {
+    ...problem,
+    approach: problem.approach?.trim() || "",
+    solution: problem.solution?.trim() || "",
+  };
 }
 
 export async function createProblem(data) {
@@ -387,6 +393,7 @@ export async function createProblem(data) {
     leetcodeSlug: data.leetcodeSlug?.trim() || null,
     leetcodeId: data.leetcodeId?.trim() || null,
     topicTags: Array.isArray(data.topicTags) ? data.topicTags : [],
+    approach: data.approach?.trim() || "",
     solution: data.solution?.trim() || "",
     timeComplexity: data.timeComplexity?.trim() || "",
     spaceComplexity: data.spaceComplexity?.trim() || "",

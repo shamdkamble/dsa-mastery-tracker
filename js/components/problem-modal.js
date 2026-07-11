@@ -26,6 +26,11 @@ import { debounce } from "../utils.js";
 import { refreshPage } from "../controllers/page-controller.js";
 import { renderLockedAiButton } from "./access-ui.js";
 import { openUpgradeModal } from "./upgrade-modal.js";
+import {
+  extractSolutionCodeForAnalysis,
+  looksLikeSolutionCode,
+  splitLegacySolutionFields,
+} from "../utils/solution-code.js";
 
 const MODAL_ID = "problem-modal";
 
@@ -142,8 +147,8 @@ function renderComplexityResult(time = "", space = "", explanation = "") {
 }
 
 function renderSolutionSection(p = {}, { aiLocked = false } = {}) {
-  const hasSolution = Boolean(p.solution?.trim());
-  const isOpen = hasSolution;
+  const hasContent = Boolean(p.approach?.trim() || p.solution?.trim());
+  const isOpen = hasContent;
 
   return `
     <div class="problem-optional-section${isOpen ? " is-open" : ""}" id="solution-section">
@@ -155,13 +160,24 @@ function renderSolutionSection(p = {}, { aiLocked = false } = {}) {
         aria-controls="solution-panel"
       >
         ${icon(isOpen ? "chevronDown" : "plus")}
-        <span>${isOpen ? "My Solution" : "Add My Solution"}</span>
+        <span>${isOpen ? "Approach & Solution" : "Add Approach & Solution"}</span>
         <span class="problem-optional-section__toggle-chevron" aria-hidden="true">${icon("chevronDown")}</span>
       </button>
       <div class="problem-optional-section__panel" id="solution-panel" ${isOpen ? "" : "hidden"}>
         ${Field({
-          label: "",
-          hint: "Optional — paste your final accepted code here (any language). Use Notes for approach write-ups; Analyze Complexity expects code only.",
+          label: "My approach",
+          hint: "Optional — write your plan, pseudocode, or logic before or while solving. Not used for complexity analysis.",
+          children: `<textarea
+            class="textarea problem-approach-input"
+            name="approach"
+            id="problem-approach"
+            rows="4"
+            placeholder="e.g. Use a hash map to store complements while scanning the array once…"
+          >${escapeHtml(p.approach || "")}</textarea>`,
+        })}
+        ${Field({
+          label: "Solution code",
+          hint: "Optional — paste your final accepted code (any language). Analyze Complexity uses this field only.",
           children: `<textarea
             class="textarea problem-code-input"
             name="solution"
@@ -178,7 +194,7 @@ function renderSolutionSection(p = {}, { aiLocked = false } = {}) {
                   ${icon("zap")}
                   <span>Analyze Complexity</span>
                 </button>`}
-            <span class="problem-complexity__hint" id="complexity-hint">${aiLocked ? "Upgrade to Premium to unlock AI complexity analysis" : "Works best with solution code only — notes or prose may skew results"}</span>
+            <span class="problem-complexity__hint" id="complexity-hint">${aiLocked ? "Upgrade to Premium to unlock AI complexity analysis" : "Paste solution code above — enabled when code is detected"}</span>
           </div>
           <p class="problem-ai-status" id="complexity-ai-status" aria-live="polite"></p>
           <div id="complexity-result-host">
@@ -575,26 +591,32 @@ function toggleSolutionPanel(host, open) {
   panel.hidden = !open;
   btn.setAttribute("aria-expanded", String(open));
 
-  if (label) label.textContent = open ? "My Solution" : "Add My Solution";
+  if (label) label.textContent = open ? "Approach & Solution" : "Add Approach & Solution";
 
   if (open) {
     updateAnalyzeButtonState(host);
-    host.querySelector("#problem-solution")?.focus();
+    host.querySelector("#problem-approach")?.focus();
   }
 }
 
 function updateAnalyzeButtonState(host) {
   if (host._aiLocked) return;
 
-  const code = host.querySelector("#problem-solution")?.value?.trim();
+  const raw = host.querySelector("#problem-solution")?.value?.trim() || "";
   const btn = host.querySelector("#analyze-complexity-btn");
   const hint = host.querySelector("#complexity-hint");
+  const ready = looksLikeSolutionCode(raw);
 
-  if (btn) btn.disabled = !code || code.length < 8;
+  if (btn) btn.disabled = !ready;
+
   if (hint) {
-    hint.textContent = code && code.length >= 8
-      ? "AI will estimate time & space complexity"
-      : "Paste code above, then analyze with AI";
+    if (!raw) {
+      hint.textContent = "Paste solution code above — approach notes stay separate";
+    } else if (!ready) {
+      hint.textContent = "Add recognizable code (functions, loops, braces) to enable analysis";
+    } else {
+      hint.textContent = "AI will analyze solution code only";
+    }
   }
 }
 
@@ -709,11 +731,19 @@ async function handleAnalyzeComplexity(host) {
   }
 
   const btn = host.querySelector("#analyze-complexity-btn");
-  const code = host.querySelector("#problem-solution")?.value?.trim();
+  const raw = host.querySelector("#problem-solution")?.value?.trim() || "";
   const title = host.querySelector("#problem-title")?.value?.trim();
+  const extracted = extractSolutionCodeForAnalysis(raw);
 
-  if (!code || code.length < 8) {
-    setAiStatus(host, "#complexity-ai-status", "Paste your solution code first.", "error");
+  if (!extracted.code || !looksLikeSolutionCode(extracted.code)) {
+    setAiStatus(
+      host,
+      "#complexity-ai-status",
+      extracted.reason === "prose"
+        ? "Approach-style text belongs in My approach — paste solution code here for analysis."
+        : "Paste your accepted solution code first.",
+      "error",
+    );
     return;
   }
 
@@ -722,9 +752,16 @@ async function handleAnalyzeComplexity(host) {
   setAiStatus(host, "#complexity-ai-status", "Analyzing complexity with AI…", "loading");
 
   try {
-    const result = await analyzeComplexity({ code, title });
+    const result = await analyzeComplexity({ code: extracted.code, title });
     applyComplexityResult(host, result);
-    setAiStatus(host, "#complexity-ai-status", "Complexity analyzed — will be saved with this problem.", "success");
+    setAiStatus(
+      host,
+      "#complexity-ai-status",
+      extracted.stripped
+        ? "Complexity analyzed from code only — extra notes were ignored."
+        : "Complexity analyzed — will be saved with this problem.",
+      "success",
+    );
   } catch (err) {
     const hint = " Enter time and space complexity below.";
     setAiStatus(host, "#complexity-ai-status", `${err.message || "Analysis failed."}${hint}`, "error");
@@ -797,6 +834,7 @@ function readForm(form) {
   const fd = new FormData(form);
   const inMission = form.querySelector('[name="inMission"]')?.checked;
   const tagsRaw = fd.get("topicTags") || "";
+  const approach = (fd.get("approach") || "").trim();
   const solution = (fd.get("solution") || "").trim();
 
   return {
@@ -812,9 +850,10 @@ function readForm(form) {
     leetcodeSlug: fd.get("leetcodeSlug") || parseLeetcodeSlug(fd.get("leetcodeUrl")),
     leetcodeId: fd.get("leetcodeId") || null,
     topicTags: tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [],
+    approach,
     solution,
-    timeComplexity: solution ? (fd.get("timeComplexity") || "").trim() : "",
-    spaceComplexity: solution ? (fd.get("spaceComplexity") || "").trim() : "",
+    timeComplexity: (fd.get("timeComplexity") || "").trim(),
+    spaceComplexity: (fd.get("spaceComplexity") || "").trim(),
     inMission,
     missionType: inMission ? (fd.get("missionType") || "new") : null,
   };
@@ -832,7 +871,8 @@ function ensureModalContainer() {
 
 export function openProblemModal(problemId = null) {
   const host = ensureModalContainer();
-  const problem = problemId ? getProblem(problemId) : null;
+  const rawProblem = problemId ? getProblem(problemId) : null;
+  const problem = rawProblem ? { ...rawProblem, ...splitLegacySolutionFields(rawProblem) } : null;
   host._aiLocked = !canAccessProblemAi(getSessionUser());
   host.innerHTML = getModalHTML(problem);
   initModals(host);
@@ -852,7 +892,7 @@ export function openProblemModal(problemId = null) {
     showDetectPatternBtn(host, true);
   }
 
-  if (problem?.solution?.trim()) {
+  if (problem?.approach?.trim() || problem?.solution?.trim()) {
     updateAnalyzeButtonState(host);
   }
 

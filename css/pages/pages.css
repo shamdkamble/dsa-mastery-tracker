@@ -2436,6 +2436,18 @@
   display: none !important;
 }
 
+.problem-approach-input {
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  min-height: 100px;
+  resize: vertical;
+  background-color: var(--color-bg-primary);
+}
+
+.problem-optional-section__panel .field + .field {
+  margin-top: var(--space-3);
+}
+
 .problem-code-input {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
