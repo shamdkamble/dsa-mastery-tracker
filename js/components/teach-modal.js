@@ -26,8 +26,7 @@ import {
   markTopicComplete,
 } from "../storage/roadmap-progress.js";
 import { refreshPage } from "../controllers/page-controller.js";
-import { getPendingRecommendations } from "../services/roadmap-problems.js";
-import { openRecommendProblemsModal } from "./recommend-problems-modal.js";
+import { openTopicRecommendations, getTopicRecommendationSummary } from "../services/topic-recommendations.js";
 
 const MODAL_ID = "teach";
 const SECTION_ICONS = ["clock", "layers", "zap", "database"];
@@ -326,17 +325,33 @@ function updateLearnEyebrow() {
   }
 }
 
+function renderPracticeProblemsButton() {
+  if (!currentTopic?.id || !isTopicCompleted(currentTopic.id)) return "";
+  const { pending } = getTopicRecommendationSummary(currentTopic.id);
+  if (!pending) return "";
+
+  return `
+    <button type="button" class="btn btn--secondary btn--sm" id="teach-practice-btn">
+      ${icon("plus")}
+      <span>Add ${pending} practice problem${pending !== 1 ? "s" : ""}</span>
+    </button>
+  `;
+}
+
 function renderCompleteButtonOnly() {
   const completed = currentTopic?.id && isTopicCompleted(currentTopic.id);
   return `
-    <button
-      type="button"
-      class="btn btn--primary btn--lg teach-complete-btn"
-      id="teach-complete-btn"
-    >
-      ${icon("check")}
-      <span>${completed ? "Continue to Next Topic" : "Mark Complete & Continue"}</span>
-    </button>
+    <div class="teach-modal__footer-actions">
+      ${renderPracticeProblemsButton()}
+      <button
+        type="button"
+        class="btn btn--primary btn--lg teach-complete-btn"
+        id="teach-complete-btn"
+      >
+        ${icon("check")}
+        <span>${completed ? "Continue to Next Topic" : "Mark Complete & Continue"}</span>
+      </button>
+    </div>
   `;
 }
 
@@ -390,14 +405,17 @@ function renderFooter() {
       </div>
       ${simplerControl}
     </div>
-    <button
-      type="button"
-      class="btn btn--primary btn--lg teach-complete-btn"
-      id="teach-complete-btn"
-    >
-      ${icon("check")}
-      <span>${completed ? "Continue to Next Topic" : "Mark Complete & Continue"}</span>
-    </button>
+    <div class="teach-modal__footer-actions">
+      ${renderPracticeProblemsButton()}
+      <button
+        type="button"
+        class="btn btn--primary btn--lg teach-complete-btn"
+        id="teach-complete-btn"
+      >
+        ${icon("check")}
+        <span>${completed ? "Continue to Next Topic" : "Mark Complete & Continue"}</span>
+      </button>
+    </div>
   `;
 }
 
@@ -677,6 +695,27 @@ async function handleSimplerWords() {
   }
 }
 
+async function handleAddPracticeProblems() {
+  if (!currentTopic?.id) return;
+
+  const btn = document.getElementById("teach-practice-btn");
+  btn?.setAttribute("disabled", "true");
+
+  try {
+    await openTopicRecommendations({
+      topicId: currentTopic.id,
+      topicName: currentTopic.name,
+    });
+    refreshPage();
+    const footer = document.getElementById(`${MODAL_ID}-footer`);
+    if (footer) {
+      footer.innerHTML = learnMode === "youtube" ? renderCompleteButtonOnly() : renderFooter();
+    }
+  } finally {
+    btn?.removeAttribute("disabled");
+  }
+}
+
 async function handleMarkComplete() {
   if (!currentTopic?.id) return;
 
@@ -692,15 +731,11 @@ async function handleMarkComplete() {
     refreshPage();
 
     if (wasNewCompletion) {
-      const pending = getPendingRecommendations(currentTopic.id);
-      if (pending.length > 0) {
-        await openRecommendProblemsModal({
-          topicId: currentTopic.id,
-          topicName: currentTopic.name,
-          slugs: pending,
-        });
-        refreshPage();
-      }
+      const result = await openTopicRecommendations({
+        topicId: currentTopic.id,
+        topicName: currentTopic.name,
+      });
+      if (result?.added) refreshPage();
     }
 
     const next = getNextRoadmapTopic(currentTopic.id);
@@ -907,6 +942,10 @@ function ensureTeachModalShell() {
     }
     if (e.target.closest("#teach-simpler-btn")) {
       void handleSimplerWords();
+      return;
+    }
+    if (e.target.closest("#teach-practice-btn")) {
+      void handleAddPracticeProblems();
       return;
     }
     if (e.target.closest("#teach-complete-btn")) {

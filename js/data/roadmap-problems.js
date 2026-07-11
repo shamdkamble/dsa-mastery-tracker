@@ -38,3 +38,31 @@ export function getRecommendedSlugsForTopic(topicId) {
 export function hasRoadmapRecommendations(topicId) {
   return getRecommendedSlugsForTopic(topicId).length > 0;
 }
+
+/** Default DSA pattern per roadmap topic (for mastery tracking). */
+export const ROADMAP_TOPIC_PATTERNS = {
+  "dsa-complexity": "1D DP",
+  "dsa-arrays": "Hash Map",
+  "dsa-array-basics": "Sliding Window",
+  "dsa-two-pointers-intro": "Two Pointers",
+  "dsa-two-pointers-pairs": "Two Pointers",
+  "dsa-strings-basics": "Two Pointers",
+  "dsa-string-patterns": "Two Pointers",
+  "dsa-hashing-intro": "Hash Map",
+  "dsa-hash-problems": "Hash Map",
+  "dsa-sorting-apps": "Two Pointers",
+  "dsa-stack": "Stack",
+  "dsa-sliding-window-fixed": "Sliding Window",
+  "dsa-sliding-window-variable": "Sliding Window",
+  "dsa-prefix-sum": "Hash Map",
+  "dsa-recursion": "1D DP",
+  "dsa-framework": "Hash Map",
+};
+
+/**
+ * @param {string} topicId
+ * @returns {string}
+ */
+export function getDefaultPatternForTopic(topicId) {
+  return ROADMAP_TOPIC_PATTERNS[topicId] || "";
+}

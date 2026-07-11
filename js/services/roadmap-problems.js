@@ -5,6 +5,7 @@
 import { getRecommendedSlugsForTopic } from "../data/roadmap-problems.js";
 import { slugToTitle, fetchLeetcodeProblem, parseLeetcodeUrlOffline } from "./leetcode.js";
 import { getProblems, createProblem } from "../storage/db.js";
+import { inferPatternForTopic } from "../storage/pattern-resolver.js";
 
 /**
  * Slugs from this topic not yet in the user's problem list.
@@ -51,10 +52,15 @@ export async function addRoadmapProblems({ topicId, topicName, slugs }) {
       ? meta.topicTags.map((t) => (typeof t === "string" ? t : t.name)).filter(Boolean)
       : [];
 
+    const pattern = inferPatternForTopic(topicId, {
+      topicTags: tags,
+      topic: topicName || meta.topic || "",
+    });
+
     const problem = await createProblem({
       title: meta.title || slugToTitle(slug),
       topic: topicName || meta.topic || "",
-      pattern: meta.pattern || "",
+      pattern: pattern || meta.pattern || "",
       difficulty: meta.difficulty || "Medium",
       estimatedMinutes: meta.estimatedMinutes || 30,
       leetcodeUrl: meta.leetcodeUrl || meta.link,

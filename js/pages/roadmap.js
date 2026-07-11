@@ -25,6 +25,10 @@ import {
   hasTrialAccess,
 } from "../auth/access.js";
 import { getSessionUser } from "../auth/session.js";
+import {
+  getTopicRecommendationSummary,
+  openTopicRecommendations,
+} from "../services/topic-recommendations.js";
 
 const ROADMAP_META = {
   totalPhases: ROADMAP_PHASES.length,
@@ -193,6 +197,26 @@ function renderTierBanner(user) {
   `;
 }
 
+function practiceProblemsButton(topic) {
+  if (!isTopicCompleted(topic.id)) return "";
+  const { pending } = getTopicRecommendationSummary(topic.id);
+  if (!pending) return "";
+
+  return `
+    <button
+      type="button"
+      class="btn btn--sm btn--outline roadmap-topic__practice"
+      data-action="topic-practice"
+      data-topic-id="${escapeAttr(topic.id)}"
+      data-topic-name="${escapeAttr(topic.name)}"
+      title="Add remaining curated practice problems"
+    >
+      ${icon("plus")}
+      <span>${pending} left</span>
+    </button>
+  `;
+}
+
 function topicCard(topic, { locked = false, aiGenerationLocked = false, step } = {}) {
   const track = topicTrack(topic);
   const trackLabel = track === "cpp" ? "C++" : track === "dsa" ? "DSA" : "Topic";
@@ -213,6 +237,7 @@ function topicCard(topic, { locked = false, aiGenerationLocked = false, step } =
         ${isTopicCompleted(topic.id) ? `<span class="roadmap-topic__done" title="Completed">${icon("check")}</span>` : ""}
       </h4>
       <div class="roadmap-topic__footer">
+        ${practiceProblemsButton(topic)}
         ${learnButton(topic, { locked, aiGenerationLocked, step })}
       </div>
     </div>
@@ -441,6 +466,22 @@ function bindPhaseAccordion(container) {
   });
 }
 
+function bindTopicPracticeHandlers(container) {
+  if (!container || container.dataset.topicPracticeBound) return;
+  container.dataset.topicPracticeBound = "true";
+
+  container.addEventListener("click", (e) => {
+    const btn = e.target.closest('[data-action="topic-practice"]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void openTopicRecommendations({
+      topicId: btn.dataset.topicId,
+      topicName: btn.dataset.topicName,
+    }).then(() => refreshPage());
+  });
+}
+
 function bindLockedContentHandlers(container) {
   if (container.dataset.roadmapLockedBound === "true") return;
   container.dataset.roadmapLockedBound = "true";
@@ -569,6 +610,7 @@ export default {
     bindPhaseAccordion(container);
     bindLockedContentHandlers(container);
     bindTeachTopicHandlers(container);
+    bindTopicPracticeHandlers(container);
     void tryOpenTopicFromHash(container);
 
     if (!container.dataset.roadmapProgressBound) {

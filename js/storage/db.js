@@ -641,14 +641,7 @@ export async function markProblemSolved(id) {
   if (!problem) return null;
 
   const actualSolveMinutes = computeActualSolveMinutes(problem);
-
-  const activity = logActivity({
-    action: "Solved",
-    problemId: id,
-    problemTitle: problem.title,
-    topic: problem.topic,
-  });
-  const result = await updateProblem(id, {
+  const patch = {
     status: "mastered",
     missionDone: true,
     lastReviewAt: new Date().toISOString(),
@@ -656,7 +649,21 @@ export async function markProblemSolved(id) {
     nextReviewAt: new Date(Date.now() + 7 * 86400000).toISOString(),
     startedAt: null,
     actualSolveMinutes,
-  }, { silent: true });
+  };
+
+  if (!problem.pattern?.trim()) {
+    const { resolveProblemPattern } = await import("./pattern-resolver.js");
+    const inferred = resolveProblemPattern(problem);
+    if (inferred) patch.pattern = inferred;
+  }
+
+  const activity = logActivity({
+    action: "Solved",
+    problemId: id,
+    problemTitle: problem.title,
+    topic: problem.topic,
+  });
+  const result = await updateProblem(id, patch, { silent: true });
   if (isRemoteMode()) await syncActivityRemote(activity);
   return result;
 }

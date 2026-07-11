@@ -10,6 +10,7 @@ import {
   updateLongestStreak,
 } from "./db.js";
 import { PATTERN_CATALOG } from "./patterns-catalog.js";
+import { resolveProblemPattern } from "./pattern-resolver.js";
 import {
   todayKey,
   yesterdayKey,
@@ -220,21 +221,27 @@ export function computeTopicProgress() {
 
 export function computePatternStats() {
   const problems = getProblems();
+  const tallies = new Map(
+    PATTERN_CATALOG.map((template) => [template.name, { ...template, problems: 0, solved: 0 }]),
+  );
+
+  for (const problem of problems) {
+    const patternName = resolveProblemPattern(problem);
+    if (!patternName || !tallies.has(patternName)) continue;
+    const entry = tallies.get(patternName);
+    entry.problems += 1;
+    if (problem.status === "mastered") entry.solved += 1;
+  }
 
   return PATTERN_CATALOG.map((template) => {
-    const matched = problems.filter(
-      (p) => p.pattern?.toLowerCase() === template.name.toLowerCase()
-        || p.pattern?.toLowerCase().includes(template.name.toLowerCase().split(" ")[0])
-    );
-    const total = matched.length;
-    const solved = matched.filter((p) => p.status === "mastered").length;
-    const mastery = total ? Math.round((solved / total) * 100) : 0;
-
+    const entry = tallies.get(template.name);
+    const total = entry?.problems || 0;
+    const solved = entry?.solved || 0;
     return {
       ...template,
       problems: total,
       solved,
-      mastery,
+      mastery: total ? Math.round((solved / total) * 100) : 0,
     };
   });
 }

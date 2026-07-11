@@ -3,6 +3,8 @@ import { icon } from "../components/icons.js";
 import { Badge, ProgressBar, Alert } from "../components/ui/index.js";
 import { computePatternStats } from "../storage/computed.js";
 import { getProblems } from "../storage/db.js";
+import { refreshPage } from "../controllers/page-controller.js";
+import { getCurrentPath } from "../router.js";
 
 function patternCard(p) {
   const iconVariant = p.color !== "accent" ? ` pattern-card__icon--${p.color}` : "";
@@ -41,7 +43,7 @@ export default {
 
     return createPage({
       title: "Patterns",
-      description: "Master essential DSA patterns — mastery is computed from your tracked problems.",
+      description: "Master essential DSA patterns — mastery is computed from solved problems matched by pattern, roadmap topic, or LeetCode tags.",
       children: `
         <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
           <div class="cluster">
@@ -69,5 +71,12 @@ export default {
   },
   onMount(container) {
     import("../controllers/page-controller.js").then(({ bindPageHandlers }) => bindPageHandlers(container));
+
+    if (!container.dataset.patternsLiveBound) {
+      container.dataset.patternsLiveBound = "true";
+      document.addEventListener("data:change", () => {
+        if (getCurrentPath() === "patterns") refreshPage();
+      });
+    }
   },
 };

@@ -3147,9 +3147,15 @@
 .roadmap-topic__footer {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin-top: var(--space-4);
   padding-top: var(--space-3);
   border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.roadmap-topic__practice {
+  flex-shrink: 0;
 }
 
 .roadmap-topic__learn {

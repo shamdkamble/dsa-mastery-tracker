@@ -31,11 +31,14 @@ function renderShell() {
   });
 }
 
-function renderBody({ topicName, slugs }) {
+function renderBody({ topicName, slugs, addedCount = 0, totalCount = 0 }) {
+  const intro = addedCount > 0
+    ? `You already added <strong>${addedCount}</strong> of <strong>${totalCount}</strong> practice problems for <strong>${escapeHtml(topicName)}</strong>. Pick any remaining ones — duplicates are skipped automatically.`
+    : `Practice <strong>${escapeHtml(topicName)}</strong> with curated LeetCode problems. Select any to add to your Problems list.`;
+
   return `
     <p class="recommend-problems__intro">
-      Practice <strong>${escapeHtml(topicName)}</strong> with curated LeetCode problems.
-      Select any to add to your Problems list.
+      ${intro}
     </p>
     <ul class="recommend-problems__list">
       ${slugs.map((slug) => `
@@ -51,11 +54,12 @@ function renderBody({ topicName, slugs }) {
   `;
 }
 
-function renderFooter() {
+function renderFooter({ addedCount = 0 } = {}) {
+  const addLabel = addedCount > 0 ? "Add remaining" : "Add selected";
   return `
-    <button class="btn btn--secondary" type="button" data-recommend-action="skip">Skip for now</button>
+    <button class="btn btn--secondary" type="button" data-recommend-action="skip">Not now</button>
     <button class="btn btn--primary" type="button" data-recommend-action="add">
-      ${icon("plus")}<span>Add selected</span>
+      ${icon("plus")}<span>${addLabel}</span>
     </button>
   `;
 }
@@ -125,10 +129,10 @@ async function handleAddSelected(overlay) {
 }
 
 /**
- * @param {{ topicId: string, topicName: string, slugs: string[] }} options
+ * @param {{ topicId: string, topicName: string, slugs: string[], addedCount?: number, totalCount?: number }} options
  * @returns {Promise<{ added: boolean, count: number }>}
  */
-export function openRecommendProblemsModal({ topicId, topicName, slugs }) {
+export function openRecommendProblemsModal({ topicId, topicName, slugs, addedCount = 0, totalCount = 0 }) {
   ensureShell();
 
   return new Promise((resolve) => {
@@ -140,6 +144,8 @@ export function openRecommendProblemsModal({ topicId, topicName, slugs }) {
 
     overlay.dataset.topicId = topicId;
     overlay.dataset.topicName = topicName;
+    overlay.dataset.addedCount = String(addedCount);
+    overlay.dataset.totalCount = String(totalCount);
 
     let wasOpen = false;
     overlay._finish = (result) => {
@@ -156,11 +162,15 @@ export function openRecommendProblemsModal({ topicId, topicName, slugs }) {
 
     const body = document.getElementById("recommend-problems-body");
     const footer = document.getElementById("recommend-problems-footer");
-    if (body) body.innerHTML = renderBody({ topicName, slugs });
-    if (footer) footer.innerHTML = renderFooter();
+    if (body) body.innerHTML = renderBody({ topicName, slugs, addedCount, totalCount });
+    if (footer) footer.innerHTML = renderFooter({ addedCount });
 
     const title = document.getElementById(`${MODAL_ID}-title`);
-    if (title) title.textContent = "Add recommended problems?";
+    if (title) {
+      title.textContent = addedCount > 0
+        ? "Add remaining practice problems"
+        : "Add recommended problems?";
+    }
 
     openModal(MODAL_ID);
   });
