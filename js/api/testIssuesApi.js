@@ -74,5 +74,8 @@ export function apiUpdateTestIssue(id, payload) {
 }
 
 export function apiClearAllTestIssues() {
-  return request("/api/auth/admin/test-issues/clear", { method: "POST" });
+  return request("/api/auth/admin/test-issues/clear", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }

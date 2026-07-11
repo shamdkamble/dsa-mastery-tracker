@@ -234,14 +234,22 @@ function renderPage({ issues, loading, error, filter = "all" }) {
 
 let issuesCache = [];
 let activeFilter = "all";
+let issuesPageAbort = null;
+
+function paintIssuesPage(container, { issues, loading, error, filter = activeFilter }) {
+  container.innerHTML = renderPage({ issues, loading, error, filter });
+}
+
+function unbindIssuesPage() {
+  issuesPageAbort?.abort();
+  issuesPageAbort = null;
+}
 
 async function reloadIssues(container) {
   const { fetchTestIssues } = await import("../api/testIssuesApi.js");
   const { issues } = await fetchTestIssues();
   issuesCache = issues || [];
-  const host = container.querySelector(".content-inner") || container;
-  host.innerHTML = renderPage({ issues: issuesCache, loading: false, error: null, filter: activeFilter });
-  bindIssuesPage(container);
+  paintIssuesPage(container, { issues: issuesCache, loading: false, error: null, filter: activeFilter });
 }
 
 function openModal(mode = "create", issue = null) {
@@ -329,16 +337,15 @@ function findIssue(id) {
 }
 
 function bindIssuesPage(container) {
-  if (container.dataset.testingIssuesBound) return;
-  container.dataset.testingIssuesBound = "true";
+  unbindIssuesPage();
+  issuesPageAbort = new AbortController();
+  const { signal } = issuesPageAbort;
 
   container.addEventListener("click", async (e) => {
     const filterChip = e.target.closest("[data-filter]");
     if (filterChip) {
       activeFilter = filterChip.dataset.filter;
-      const host = container.querySelector(".content-inner") || container;
-      host.innerHTML = renderPage({ issues: issuesCache, loading: false, error: null, filter: activeFilter });
-      bindIssuesPage(container);
+      paintIssuesPage(container, { issues: issuesCache, loading: false, error: null, filter: activeFilter });
       return;
     }
 
@@ -352,8 +359,14 @@ function bindIssuesPage(container) {
       if (!confirmed) return;
 
       clearBtn.disabled = true;
+      const clearLabel = clearBtn.querySelector("span");
+      const prevLabel = clearLabel?.textContent;
+      if (clearLabel) clearLabel.textContent = "Clearing…";
       try {
         const { apiClearAllTestIssues } = await import("../api/testIssuesApi.js");
+        if (typeof apiClearAllTestIssues !== "function") {
+          throw new Error("Clear is not available yet. Hard-refresh the page (Ctrl+Shift+R) and try again.");
+        }
         const { deletedCount } = await apiClearAllTestIssues();
         showToast(Toast({
           title: "QA data cleared",
@@ -362,8 +375,9 @@ function bindIssuesPage(container) {
         }));
         await reloadIssues(container);
       } catch (err) {
-        showToast(Toast({ title: "Clear failed", text: err?.message, variant: "danger" }));
+        showToast(Toast({ title: "Clear failed", text: err?.message || "Could not clear issues.", variant: "danger" }));
         clearBtn.disabled = false;
+        if (clearLabel && prevLabel) clearLabel.textContent = prevLabel;
       }
       return;
     }
@@ -418,7 +432,7 @@ function bindIssuesPage(container) {
     } catch (err) {
       showToast(Toast({ title: "Update failed", text: err?.message, variant: "danger" }));
     }
-  });
+  }, { signal });
 
   container.addEventListener("submit", async (e) => {
     if (e.target.id !== "testing-issue-form") return;
@@ -454,7 +468,7 @@ function bindIssuesPage(container) {
     } catch (err) {
       showToast(Toast({ title: "Save failed", text: err?.message, variant: "danger" }));
     }
-  });
+  }, { signal });
 }
 
 export default {
@@ -464,15 +478,17 @@ export default {
     return renderPage({ issues: [], loading: true, error: null, filter: activeFilter });
   },
   onMount(container) {
+    bindIssuesPage(container);
     void reloadIssues(container).catch((err) => {
-      const host = container.querySelector(".content-inner") || container;
-      host.innerHTML = renderPage({
+      paintIssuesPage(container, {
         issues: [],
         loading: false,
         error: err?.message || "Failed to load issues.",
         filter: activeFilter,
       });
-      bindIssuesPage(container);
     });
+  },
+  onUnmount() {
+    unbindIssuesPage();
   },
 };
