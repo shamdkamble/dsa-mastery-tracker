@@ -38,6 +38,7 @@ import {
   getTestIssueStats,
   createTestIssue,
   updateTestIssue,
+  clearAllTestIssues,
 } from "./test-issues-store.js";
 import {
   MentorChatError,
@@ -1020,6 +1021,18 @@ app.patch("/api/test-issues/:id", requireTesterOrAdmin, async (req, res) => {
     if (handleTestIssueError(res, err)) return;
     console.error("[/api/test-issues/:id]", err);
     res.status(500).json({ error: { message: "Failed to update test issue.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/auth/admin/test-issues/clear", requireAdmin, async (_req, res) => {
+  try {
+    const { deletedCount } = await clearAllTestIssues();
+    res.json({ deletedCount });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleTestIssueError(res, err)) return;
+    console.error("[/api/auth/admin/test-issues/clear]", err);
+    res.status(500).json({ error: { message: "Failed to clear test issues.", code: "SERVER_ERROR" } });
   }
 });
 
