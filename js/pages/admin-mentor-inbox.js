@@ -7,6 +7,7 @@ import {
   scrollChatToBottom,
   escapeHtml,
   formatChatTime,
+  bindChatComposer,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
 
@@ -14,6 +15,7 @@ const POLL_MS = 5000;
 
 let pollTimer = null;
 let activeThreadId = null;
+let activeStudentId = null;
 
 function stopPolling() {
   if (pollTimer) {
@@ -22,20 +24,33 @@ function stopPolling() {
   }
 }
 
-function renderThreadItem(thread, selectedId) {
+function isThreadSelected(thread, activeThread) {
+  if (!activeThread) return false;
+  if (thread.id && activeThread.id) return thread.id === activeThread.id;
+  return thread.studentId === activeThread.studentId;
+}
+
+function renderThreadItem(thread, activeThread) {
   const unread = thread.unreadByAdmin > 0;
+  const hasConversation = Boolean(thread.lastMessageAt);
+  const preview = thread.lastMessagePreview
+    || (hasConversation ? "No messages yet" : "Tap to start a conversation");
+  const attrs = thread.id
+    ? `data-thread-id="${thread.id}"`
+    : `data-student-id="${thread.studentId}"`;
+
   return `
     <button
       type="button"
-      class="mentor-inbox__thread${thread.id === selectedId ? " is-active" : ""}${unread ? " is-unread" : ""}"
-      data-thread-id="${thread.id}"
+      class="mentor-inbox__thread${isThreadSelected(thread, activeThread) ? " is-active" : ""}${unread ? " is-unread" : ""}${!hasConversation ? " is-new" : ""}"
+      ${attrs}
     >
       <div class="mentor-inbox__thread-top">
         <span class="mentor-inbox__thread-name">${escapeHtml(thread.studentName || "Student")}</span>
         ${unread ? `<span class="mentor-inbox__unread">${thread.unreadByAdmin}</span>` : ""}
       </div>
-      <div class="mentor-inbox__thread-preview">${escapeHtml(thread.lastMessagePreview || "No messages yet")}</div>
-      <div class="mentor-inbox__thread-time">${formatChatTime(thread.lastMessageAt || thread.createdAt)}</div>
+      <div class="mentor-inbox__thread-preview">${escapeHtml(preview)}</div>
+      <div class="mentor-inbox__thread-time">${hasConversation ? formatChatTime(thread.lastMessageAt) : escapeHtml(thread.studentEmail || "")}</div>
     </button>
   `;
 }
@@ -49,8 +64,8 @@ function renderInbox({
   error,
 }) {
   const threadList = threads?.length
-    ? threads.map((t) => renderThreadItem(t, activeThread?.id)).join("")
-    : `<div class="mentor-inbox__empty-list">No student conversations yet.</div>`;
+    ? threads.map((t) => renderThreadItem(t, activeThread)).join("")
+    : `<div class="mentor-inbox__empty-list">No students registered yet.</div>`;
 
   const conversation = activeThread
     ? `
@@ -64,13 +79,13 @@ function renderInbox({
       <div class="mentor-chat__feed" data-mentor-chat-feed>
         ${renderChatMessages(messages, { viewerRole: "admin" })}
       </div>
-      ${renderChatComposer({ placeholder: `Reply to ${activeThread.studentName}…` })}
+      ${renderChatComposer({ placeholder: `Message ${activeThread.studentName}…` })}
     `
     : `
       <div class="mentor-inbox__placeholder">
         ${icon("message")}
         <h3>Select a student</h3>
-        <p>Choose a conversation from the list to read and reply individually.</p>
+        <p>Pick any student from the list — you can start a new conversation or continue an existing one.</p>
       </div>
     `;
 
@@ -144,8 +159,8 @@ function patchThreadList(container, state) {
   if (!threadList) return;
 
   threadList.innerHTML = state.threads?.length
-    ? state.threads.map((t) => renderThreadItem(t, state.activeThread?.id)).join("")
-    : `<div class="mentor-inbox__empty-list">No student conversations yet.</div>`;
+    ? state.threads.map((t) => renderThreadItem(t, state.activeThread)).join("")
+    : `<div class="mentor-inbox__empty-list">No students registered yet.</div>`;
 }
 
 function patchMessages(container, state) {
@@ -163,11 +178,17 @@ function bindInbox(container, state) {
   if (threadList && !threadList.dataset.bound) {
     threadList.dataset.bound = "true";
     threadList.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-thread-id]");
+      const btn = e.target.closest("[data-thread-id], [data-student-id]");
       if (!btn) return;
-      void selectThread(container, state, btn.dataset.threadId);
+      if (btn.dataset.threadId) {
+        void selectThread(container, state, btn.dataset.threadId);
+        return;
+      }
+      void selectStudent(container, state, btn.dataset.studentId);
     });
   }
+
+  bindChatComposer(container);
 
   const form = root.querySelector("[data-mentor-chat-form]");
   if (form && !form.dataset.bound) {
@@ -185,12 +206,23 @@ function bindInbox(container, state) {
       textarea.disabled = true;
 
       try {
-        const { sendAdminChatMessage } = await import("../api/mentorChatApi.js");
-        await sendAdminChatMessage(state.activeThread.id, body);
+        const api = await import("../api/mentorChatApi.js");
+        if (state.activeThread.id) {
+          await api.sendAdminChatMessage(state.activeThread.id, body);
+        } else {
+          await api.sendAdminChatMessageToStudent(state.activeThread.studentId, body);
+        }
         textarea.value = "";
-        const data = await loadThread(state.activeThread.id);
+        const data = state.activeThread.id
+          ? await loadThread(state.activeThread.id)
+          : await api.fetchAdminStudentThread(state.activeThread.studentId);
         state.messages = data.messages || [];
         state.activeThread = data.thread;
+        activeThreadId = data.thread?.id || null;
+        activeStudentId = data.thread?.studentId || null;
+        const inbox = await loadInbox();
+        state.threads = inbox.threads || [];
+        state.stats = inbox.stats || {};
         refreshUI(container, state);
       } catch (err) {
         showToast(Toast({ title: "Send failed", text: err?.message, variant: "danger" }));
@@ -205,10 +237,30 @@ function bindInbox(container, state) {
 
 async function selectThread(container, state, threadId) {
   activeThreadId = threadId;
+  activeStudentId = null;
   try {
     const data = await loadThread(threadId);
     state.activeThread = data.thread;
     state.messages = data.messages || [];
+    activeStudentId = data.thread?.studentId || null;
+    const inbox = await loadInbox();
+    state.threads = inbox.threads || [];
+    state.stats = inbox.stats || {};
+    refreshUI(container, state);
+  } catch (err) {
+    showToast(Toast({ title: "Load failed", text: err?.message, variant: "danger" }));
+  }
+}
+
+async function selectStudent(container, state, studentId) {
+  activeThreadId = null;
+  activeStudentId = studentId;
+  try {
+    const { fetchAdminStudentThread } = await import("../api/mentorChatApi.js");
+    const data = await fetchAdminStudentThread(studentId);
+    state.activeThread = data.thread;
+    state.messages = data.messages || [];
+    if (data.thread?.id) activeThreadId = data.thread.id;
     const inbox = await loadInbox();
     state.threads = inbox.threads || [];
     state.stats = inbox.stats || {};
@@ -229,6 +281,13 @@ async function syncInboxData(state) {
     const data = await loadThread(activeThreadId);
     state.activeThread = data.thread;
     state.messages = data.messages || [];
+    activeStudentId = data.thread?.studentId || null;
+  } else if (activeStudentId) {
+    const { fetchAdminStudentThread } = await import("../api/mentorChatApi.js");
+    const data = await fetchAdminStudentThread(activeStudentId);
+    state.activeThread = data.thread;
+    state.messages = data.messages || [];
+    if (data.thread?.id) activeThreadId = data.thread.id;
   }
 }
 
@@ -249,7 +308,8 @@ async function pollInbox(container, state) {
     await syncInboxData(state);
     patchThreadList(container, state);
     patchInboxStats(container, state.stats);
-    if (activeThreadId && (state.messages.length !== prevCount || state.messages.at(-1)?.id !== prevLastId)) {
+    if ((activeThreadId || activeStudentId)
+      && (state.messages.length !== prevCount || state.messages.at(-1)?.id !== prevLastId)) {
       patchMessages(container, state);
     }
   } catch {
@@ -290,5 +350,6 @@ export default {
   onUnmount() {
     stopPolling();
     activeThreadId = null;
+    activeStudentId = null;
   },
 };

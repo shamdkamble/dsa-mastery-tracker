@@ -73,8 +73,19 @@ export function fetchAdminThread(threadId) {
   return request(`/api/auth/admin/mentor-chat/threads/${encodeURIComponent(threadId)}`);
 }
 
+export function fetchAdminStudentThread(studentId) {
+  return request(`/api/auth/admin/mentor-chat/students/${encodeURIComponent(studentId)}`);
+}
+
 export function sendAdminChatMessage(threadId, body) {
   return request(`/api/auth/admin/mentor-chat/threads/${encodeURIComponent(threadId)}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+export function sendAdminChatMessageToStudent(studentId, body) {
+  return request(`/api/auth/admin/mentor-chat/students/${encodeURIComponent(studentId)}/messages`, {
     method: "POST",
     body: JSON.stringify({ body }),
   });

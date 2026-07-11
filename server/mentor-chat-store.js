@@ -43,24 +43,30 @@ async function notifyAdmins(payload, pushTag) {
   ));
 }
 
-export async function getOrCreateStudentThread(student) {
-  if (!student?.id) {
-    throw new MentorChatError("Authentication required.", { status: 401, code: "UNAUTHORIZED" });
-  }
-  if (student.role === "admin") {
-    throw new MentorChatError("Admins use Mentor Inbox.", { status: 403, code: "FORBIDDEN" });
-  }
+function buildStubThread(user) {
+  const now = new Date().toISOString();
+  return {
+    id: null,
+    studentId: user.id,
+    studentName: user.name || "",
+    studentEmail: user.email || "",
+    lastMessageAt: null,
+    lastMessagePreview: "",
+    lastSenderRole: null,
+    unreadByAdmin: 0,
+    unreadByStudent: 0,
+    createdAt: user.createdAt || now,
+    updatedAt: user.createdAt || now,
+  };
+}
 
-  await connectDB();
-  let thread = await MentorThread.findOne({ studentId: student.id }).lean();
-  if (thread) return toMentorThreadDto(thread);
-
+async function createThreadForUser(user) {
   const now = new Date().toISOString();
   const doc = await MentorThread.create({
     id: `mthread_${randomUUID()}`,
-    studentId: student.id,
-    studentName: student.name || "",
-    studentEmail: student.email || "",
+    studentId: user.id,
+    studentName: user.name || "",
+    studentEmail: user.email || "",
     lastMessageAt: null,
     lastMessagePreview: "",
     lastSenderRole: null,
@@ -71,6 +77,37 @@ export async function getOrCreateStudentThread(student) {
   });
 
   return toMentorThreadDto(doc);
+}
+
+export async function getOrCreateStudentThread(student) {
+  if (!student?.id) {
+    throw new MentorChatError("Authentication required.", { status: 401, code: "UNAUTHORIZED" });
+  }
+  if (student.role === "admin") {
+    throw new MentorChatError("Admins use Mentor Inbox.", { status: 403, code: "FORBIDDEN" });
+  }
+
+  await connectDB();
+  const existing = await MentorThread.findOne({ studentId: student.id }).lean();
+  if (existing) return toMentorThreadDto(existing);
+
+  return createThreadForUser(student);
+}
+
+export async function getOrCreateThreadForStudentId(studentId) {
+  await connectDB();
+  const user = await User.findOne({ id: studentId }).lean();
+  if (!user) {
+    throw new MentorChatError("Student not found.", { status: 404, code: "NOT_FOUND" });
+  }
+  if (user.role === "admin") {
+    throw new MentorChatError("Cannot open a mentor thread for admin accounts.", { status: 400, code: "INVALID_INPUT" });
+  }
+
+  const existing = await MentorThread.findOne({ studentId }).lean();
+  if (existing) return toMentorThreadDto(existing);
+
+  return createThreadForUser(user);
 }
 
 async function getThreadMessages(threadId) {
@@ -139,10 +176,71 @@ export async function sendStudentMessage(student, body) {
   return toMentorMessageDto(message);
 }
 
+function sortAdminThreads(threads) {
+  return threads.sort((a, b) => {
+    if (a.lastMessageAt && b.lastMessageAt) {
+      return b.lastMessageAt.localeCompare(a.lastMessageAt);
+    }
+    if (a.lastMessageAt) return -1;
+    if (b.lastMessageAt) return 1;
+    return (a.studentName || "").localeCompare(b.studentName || "", undefined, { sensitivity: "base" });
+  });
+}
+
 export async function listAdminThreads() {
   await connectDB();
-  const docs = await MentorThread.find().sort({ lastMessageAt: -1, updatedAt: -1 }).lean();
-  return docs.map(toMentorThreadDto);
+  const [users, threadDocs] = await Promise.all([
+    User.find({ role: { $ne: "admin" } }).select("id name email role createdAt").lean(),
+    MentorThread.find().lean(),
+  ]);
+
+  const threadByStudent = new Map(threadDocs.map((t) => [t.studentId, t]));
+  const merged = users.map((user) => {
+    const thread = threadByStudent.get(user.id);
+    if (thread) {
+      const dto = toMentorThreadDto(thread);
+      return {
+        ...dto,
+        studentName: user.name || dto.studentName,
+        studentEmail: user.email || dto.studentEmail,
+      };
+    }
+    return buildStubThread(user);
+  });
+
+  return sortAdminThreads(merged);
+}
+
+export async function getAdminStudentThreadView(studentId) {
+  await connectDB();
+  const user = await User.findOne({ id: studentId }).lean();
+  if (!user) {
+    throw new MentorChatError("Student not found.", { status: 404, code: "NOT_FOUND" });
+  }
+  if (user.role === "admin") {
+    throw new MentorChatError("Cannot open a mentor thread for admin accounts.", { status: 400, code: "INVALID_INPUT" });
+  }
+
+  const threadDoc = await MentorThread.findOne({ studentId }).lean();
+  if (!threadDoc) {
+    return { thread: buildStubThread(user), messages: [] };
+  }
+
+  const thread = {
+    ...toMentorThreadDto(threadDoc),
+    studentName: user.name || threadDoc.studentName,
+    studentEmail: user.email || threadDoc.studentEmail,
+  };
+  const messages = await getThreadMessages(thread.id);
+
+  if (thread.unreadByAdmin > 0) {
+    await MentorThread.updateOne({ id: thread.id }, {
+      $set: { unreadByAdmin: 0, updatedAt: new Date().toISOString() },
+    });
+    thread.unreadByAdmin = 0;
+  }
+
+  return { thread, messages };
 }
 
 export async function getAdminThreadView(threadId) {
@@ -163,6 +261,11 @@ export async function getAdminThreadView(threadId) {
   }
 
   return { thread: dto, messages };
+}
+
+export async function sendAdminMessageToStudent(admin, studentId, body) {
+  const thread = await getOrCreateThreadForStudentId(studentId);
+  return sendAdminMessage(admin, thread.id, body);
 }
 
 export async function sendAdminMessage(admin, threadId, body) {
@@ -214,9 +317,13 @@ export async function sendAdminMessage(admin, threadId, body) {
 
 export async function getAdminInboxStats() {
   await connectDB();
-  const threads = await MentorThread.find().lean();
+  const [studentCount, threads] = await Promise.all([
+    User.countDocuments({ role: { $ne: "admin" } }),
+    MentorThread.find().lean(),
+  ]);
+
   return {
-    total: threads.length,
+    total: studentCount,
     unread: threads.filter((t) => (t.unreadByAdmin || 0) > 0).length,
     activeToday: threads.filter((t) => {
       if (!t.lastMessageAt) return false;

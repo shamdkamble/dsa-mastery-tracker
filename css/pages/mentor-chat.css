@@ -208,11 +208,67 @@
 
 .mentor-chat__composer {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3);
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);
+}
+
+.mentor-chat__composer-main {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.mentor-chat__emoji-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.mentor-chat__emoji-btn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
+}
+
+.mentor-chat__emoji-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mentor-chat__emoji-picker {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+}
+
+.mentor-chat__emoji-item {
+  width: 100%;
+  aspect-ratio: 1;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.mentor-chat__emoji-item:hover {
+  background: var(--color-bg-hover);
+  transform: scale(1.08);
 }
 
 .mentor-chat__input {
@@ -299,6 +355,11 @@
 
 .mentor-inbox__thread.is-unread .mentor-inbox__thread-name {
   font-weight: var(--font-bold);
+}
+
+.mentor-inbox__thread.is-new .mentor-inbox__thread-preview {
+  color: var(--color-text-secondary);
+  font-style: italic;
 }
 
 .mentor-inbox__thread-top {

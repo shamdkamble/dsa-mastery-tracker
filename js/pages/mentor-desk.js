@@ -5,6 +5,7 @@ import {
   renderChatComposer,
   scrollChatToBottom,
   escapeHtml,
+  bindChatComposer,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getSessionUser } from "../auth/session.js";
@@ -74,6 +75,8 @@ function bindDesk(container, state) {
   const root = container.querySelector("[data-mentor-desk]");
   if (!root || root.dataset.bound) return;
   root.dataset.bound = "true";
+
+  bindChatComposer(container);
 
   container.addEventListener("submit", async (e) => {
     const form = e.target.closest("[data-mentor-chat-form]");
