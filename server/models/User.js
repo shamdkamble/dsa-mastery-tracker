@@ -3,7 +3,7 @@
  */
 
 import mongoose from "mongoose";
-import { ACCESS_LEVELS, USER_STATUSES } from "../user-constants.js";
+import { ACCESS_LEVELS, USER_ROLES, USER_STATUSES } from "../user-constants.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["user", "admin"],
+      enum: USER_ROLES,
       default: "user",
     },
     status: {

@@ -8,7 +8,7 @@ import { navigate } from "../router.js";
 import { $, $$, on, debounce } from "../utils.js";
 import { getProblems } from "../storage/db.js";
 import { computeTodaysMission } from "../storage/computed.js";
-import { isAdmin } from "../auth/session.js";
+import { isAdmin, isTesterOrAdmin } from "../auth/session.js";
 import { BRAND } from "../constants/branding.js";
 
 function escapeAttr(str) {
@@ -49,6 +49,13 @@ function getNavSections() {
         { path: "settings", label: "Profile & Settings", icon: "user" },
       ],
     },
+    ...(isTesterOrAdmin() ? [{
+      label: "Testing Panel",
+      items: [
+        { path: "testing-dashboard", label: "QA Dashboard", icon: "target" },
+        { path: "testing-issues", label: "Issue Tracker", icon: "alertCircle" },
+      ],
+    }] : []),
     ...(isAdmin() ? [{
       label: "Administration",
       items: [

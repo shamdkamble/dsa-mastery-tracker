@@ -16,6 +16,7 @@ import {
 } from "../api/userDataApi.js";
 
 const ACCESS_LEVELS = ["standard", "premium", "trial"];
+const USER_ROLES = ["user", "tester", "admin"];
 const STATUS_FILTERS = ["all", "pending", "approved", "rejected", "suspended"];
 
 function escapeHtml(str) {
@@ -191,6 +192,13 @@ function userRow(user) {
         </div>
         ${expired ? `<span class="user-mgmt__expired-tag">Expired</span>` : ""}
       </td>
+      <td data-label="Role">
+        <select class="input input--sm user-mgmt__level-select" data-field="role" data-user-id="${user.id}" aria-label="Role for ${escapeHtml(user.name)}"${user.id === "admin" ? " disabled" : ""}>
+          ${USER_ROLES.map((role) => `
+            <option value="${role}"${user.role === role ? " selected" : ""}>${role.charAt(0).toUpperCase() + role.slice(1)}</option>
+          `).join("")}
+        </select>
+      </td>
       <td data-label="Access">
         <select class="input input--sm user-mgmt__level-select" data-field="accessLevel" data-user-id="${user.id}" aria-label="Access level for ${escapeHtml(user.name)}">
           ${ACCESS_LEVELS.map((level) => `
@@ -208,6 +216,7 @@ function userRow(user) {
             data-action="save"
             data-user-id="${user.id}"
             data-access="${user.accessLevel}"
+            data-role="${user.role || "user"}"
             data-expires="${toDateInputValue(user.expiresAt)}"
             title="Save access & expiry"
             disabled
@@ -251,6 +260,7 @@ function renderTable(users, { search, statusFilter }) {
             <th>Status</th>
             <th>Registered</th>
             <th>Expiry</th>
+            <th>Role</th>
             <th>Access</th>
             <th>Actions</th>
           </tr>
@@ -379,10 +389,12 @@ export default {
       if (!row) return;
       const saveBtn = row.querySelector('[data-action="save"]');
       const accessEl = row.querySelector('[data-field="accessLevel"]');
+      const roleEl = row.querySelector('[data-field="role"]');
       const expiryEl = row.querySelector('[data-field="expiresAt"]');
       if (!saveBtn || !accessEl || !expiryEl) return;
 
       const dirty = accessEl.value !== saveBtn.dataset.access
+        || (roleEl && roleEl.value !== saveBtn.dataset.role)
         || expiryEl.value !== saveBtn.dataset.expires;
 
       saveBtn.disabled = !dirty;
@@ -550,14 +562,16 @@ export default {
       row?.classList.add("is-processing");
 
       const accessLevel = row?.querySelector('[data-field="accessLevel"]')?.value;
+      const role = row?.querySelector('[data-field="role"]')?.value;
       const expiresAtRaw = row?.querySelector('[data-field="expiresAt"]')?.value;
 
       try {
         const result = await updateUserAdmin(userId, {
           accessLevel,
+          role,
           expiresAt: expiresAtRaw || null,
         });
-        notify("success", "Saved", `Access level and expiry updated.${pushDeliveryHint(result.pushDelivery)}`);
+        notify("success", "Saved", `User settings updated.${pushDeliveryHint(result.pushDelivery)}`);
         await refreshUsers();
       } catch (err) {
         const message = err instanceof AuthApiError ? err.message : "Save failed.";

@@ -28,9 +28,17 @@ import {
   patchUserAdmin,
   requireAuth,
   requireAdmin,
+  requireTesterOrAdmin,
   extractBearer,
   buildSession,
 } from "./auth.js";
+import {
+  TestIssueError,
+  listTestIssues,
+  getTestIssueStats,
+  createTestIssue,
+  updateTestIssue,
+} from "./test-issues-store.js";
 import { canAccessProblemAi, canAccessTeachTopic, canAccessTeachTopicById } from "./roadmap-access.js";
 import { sendAdminManualNotifications } from "./admin-manual-notifications.js";
 import {
@@ -227,6 +235,14 @@ function handleAuthError(res, err) {
 
 function handleUserDataError(res, err) {
   if (err instanceof UserDataError) {
+    res.status(err.status).json({ error: { message: err.message, code: err.code } });
+    return true;
+  }
+  return false;
+}
+
+function handleTestIssueError(res, err) {
+  if (err instanceof TestIssueError) {
     res.status(err.status).json({ error: { message: err.message, code: err.code } });
     return true;
   }
@@ -799,8 +815,8 @@ app.post("/api/learning-facts/deliver-next", requireAuth, async (req, res) => {
 app.patch("/api/auth/admin/users/:userId", requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
-    const { accessLevel, expiresAt } = req.body ?? {};
-    const result = await patchUserAdmin(userId, { accessLevel, expiresAt });
+    const { accessLevel, expiresAt, role } = req.body ?? {};
+    const result = await patchUserAdmin(userId, { accessLevel, expiresAt, role });
     res.json({
       user: result.user,
       pushDelivery: result.pushDelivery ?? null,
@@ -935,6 +951,56 @@ app.post("/api/activities", requireAuth, async (req, res) => {
     if (handleUserDataError(res, err)) return;
     console.error("[/api/activities]", err);
     res.status(500).json({ error: { message: "Failed to log activity.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/test-issues", requireTesterOrAdmin, async (_req, res) => {
+  try {
+    const issues = await listTestIssues();
+    res.json({ issues });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleTestIssueError(res, err)) return;
+    console.error("[/api/test-issues]", err);
+    res.status(500).json({ error: { message: "Failed to load test issues.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/test-issues/stats", requireTesterOrAdmin, async (_req, res) => {
+  try {
+    const stats = await getTestIssueStats();
+    res.json({ stats });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleTestIssueError(res, err)) return;
+    console.error("[/api/test-issues/stats]", err);
+    res.status(500).json({ error: { message: "Failed to load issue stats.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/test-issues", requireTesterOrAdmin, async (req, res) => {
+  try {
+    const user = await getCurrentUser(extractBearer(req));
+    const issue = await createTestIssue(user, req.body ?? {});
+    res.status(201).json({ issue });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleTestIssueError(res, err)) return;
+    console.error("[/api/test-issues]", err);
+    res.status(500).json({ error: { message: "Failed to create test issue.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.patch("/api/test-issues/:id", requireTesterOrAdmin, async (req, res) => {
+  try {
+    const user = await getCurrentUser(extractBearer(req));
+    const issue = await updateTestIssue(user, req.params.id, req.body ?? {});
+    res.json({ issue });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleTestIssueError(res, err)) return;
+    console.error("[/api/test-issues/:id]", err);
+    res.status(500).json({ error: { message: "Failed to update test issue.", code: "SERVER_ERROR" } });
   }
 });
 

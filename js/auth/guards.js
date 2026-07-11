@@ -3,7 +3,7 @@
  */
 
 import { getCurrentPath, navigate } from "../router.js";
-import { getSessionUser, isAuthenticated, isAdmin } from "./session.js";
+import { getSessionUser, isAuthenticated } from "./session.js";
 import { fetchMe } from "../services/auth.js";
 import { clearSession } from "./session.js";
 import { setState } from "../state.js";
@@ -15,7 +15,16 @@ import { getSubscriptionTier, syncSubscriptionPresentation } from "../subscripti
 
 export const PUBLIC_ROUTES = new Set(["login", "register"]);
 export const ADMIN_ROUTES = new Set(["admin", "admin-topic-videos", "admin-push-logs", "admin-notifications"]);
+export const TESTING_ROUTES = new Set(["testing-dashboard", "testing-issues"]);
 export const PENDING_USER_ROUTES = new Set(["dashboard", "settings"]);
+
+export function isTestingRoute(path) {
+  return TESTING_ROUTES.has(path);
+}
+
+export function canAccessTestingPanel(user) {
+  return user?.role === "tester" || user?.role === "admin";
+}
 
 export function isPendingUser(user) {
   return user?.status === "pending" && user?.role !== "admin";
@@ -46,7 +55,11 @@ export async function syncAuthState(user) {
     user: {
       name: user.name,
       initials: getInitials(user.name),
-      role: user.role === "admin" ? "Administrator" : "DSA Learner",
+      role: user.role === "admin"
+        ? "Administrator"
+        : user.role === "tester"
+          ? "QA Tester"
+          : "DSA Learner",
       authRole: user.role,
       status: user.status,
       accessLevel: user.accessLevel,
@@ -91,7 +104,11 @@ export async function enforceRouteAccess(path = getCurrentPath()) {
     if (isAuthenticated()) {
       const user = getSessionUser() || await resolveAuthSession();
       if (user) {
-        const dest = user.role === "admin" ? "admin" : "dashboard";
+        const dest = user.role === "admin"
+          ? "admin"
+          : user.role === "tester"
+            ? "testing-dashboard"
+            : "dashboard";
         if (path !== dest) navigate(dest);
         setAuthShellMode(dest);
         return path === dest;
@@ -110,6 +127,11 @@ export async function enforceRouteAccess(path = getCurrentPath()) {
   }
 
   if (ADMIN_ROUTES.has(path) && user.role !== "admin") {
+    navigate("dashboard");
+    return false;
+  }
+
+  if (isTestingRoute(path) && !canAccessTestingPanel(user)) {
     navigate("dashboard");
     return false;
   }

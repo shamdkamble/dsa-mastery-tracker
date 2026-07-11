@@ -51,6 +51,8 @@ import admin from "./pages/admin.js";
 import adminPushLogs from "./pages/admin-push-logs.js";
 import adminNotifications from "./pages/admin-notifications.js";
 import adminTopicVideos from "./pages/admin-topic-videos.js";
+import testingDashboard from "./pages/testing-dashboard.js";
+import testingIssues from "./pages/testing-issues.js";
 
 registerRoutes({
   login,
@@ -59,6 +61,8 @@ registerRoutes({
   "admin-topic-videos": adminTopicVideos,
   "admin-push-logs": adminPushLogs,
   "admin-notifications": adminNotifications,
+  "testing-dashboard": testingDashboard,
+  "testing-issues": testingIssues,
   dashboard,
   mission,
   problems,
@@ -77,7 +81,11 @@ function syncUserFromDB() {
       user: {
         name: sessionUser.name,
         initials: getInitials(sessionUser.name),
-        role: sessionUser.role === "admin" ? "Administrator" : "DSA Learner",
+        role: sessionUser.role === "admin"
+          ? "Administrator"
+          : sessionUser.role === "tester"
+            ? "QA Tester"
+            : "DSA Learner",
         authRole: sessionUser.role,
         status: sessionUser.status,
         accessLevel: sessionUser.accessLevel,

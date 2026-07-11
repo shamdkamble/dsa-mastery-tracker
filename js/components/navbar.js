@@ -110,6 +110,8 @@ const ROUTE_TITLES = {
   "admin-topic-videos": "Topic Videos",
   "admin-push-logs": "Push Delivery Log",
   "admin-notifications": "System Architecture",
+  "testing-dashboard": "QA Dashboard",
+  "testing-issues": "Issue Tracker",
 };
 
 function escapeHtml(str) {

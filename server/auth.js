@@ -4,6 +4,7 @@
 
 import crypto from "crypto";
 import { promisify } from "util";
+import { USER_ROLES } from "./user-constants.js";
 import {
   ACCESS_LEVELS,
   USER_STATUSES,
@@ -142,6 +143,16 @@ export function requireAdmin(req, res, next) {
   requireAuth(req, res, () => {
     if (req.auth?.role !== "admin") {
       res.status(403).json({ error: { message: "Admin access required.", code: "FORBIDDEN" } });
+      return;
+    }
+    next();
+  });
+}
+
+export function requireTesterOrAdmin(req, res, next) {
+  requireAuth(req, res, () => {
+    if (!["tester", "admin"].includes(req.auth?.role)) {
+      res.status(403).json({ error: { message: "Testing panel access required.", code: "FORBIDDEN" } });
       return;
     }
     next();
@@ -342,7 +353,7 @@ function parseExpiryDate(value) {
   return date.toISOString();
 }
 
-export async function patchUserAdmin(userId, { accessLevel, expiresAt }) {
+export async function patchUserAdmin(userId, { accessLevel, expiresAt, role }) {
   const existing = await findUserById(userId);
   if (!existing) throw new AuthError("User not found.", { status: 404, code: "NOT_FOUND" });
 
@@ -353,6 +364,13 @@ export async function patchUserAdmin(userId, { accessLevel, expiresAt }) {
       throw new AuthError(`Invalid access level. Use: ${ACCESS_LEVELS.join(", ")}`, { status: 400, code: "INVALID_INPUT" });
     }
     patch.accessLevel = accessLevel;
+  }
+
+  if (role !== undefined) {
+    if (!USER_ROLES.includes(role)) {
+      throw new AuthError(`Invalid role. Use: ${USER_ROLES.join(", ")}`, { status: 400, code: "INVALID_INPUT" });
+    }
+    patch.role = role;
   }
 
   if (expiresAt !== undefined) {

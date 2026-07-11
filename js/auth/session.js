@@ -90,3 +90,12 @@ export function isAuthenticated() {
 export function isAdmin() {
   return getSessionUser()?.role === "admin";
 }
+
+export function isTester() {
+  return getSessionUser()?.role === "tester";
+}
+
+export function isTesterOrAdmin() {
+  const role = getSessionUser()?.role;
+  return role === "tester" || role === "admin";
+}
