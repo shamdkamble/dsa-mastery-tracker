@@ -1,7 +1,6 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
-import { Button, EmptyState, SkeletonTable } from "../components/ui/index.js";
-import { showToast, Toast } from "../components/ui/interactions.js";
+import { Button, EmptyState, SkeletonTable, Toast, showToast } from "../components/ui/index.js";
 import {
   testingSubnav,
   testingHero,
