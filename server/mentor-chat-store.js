@@ -132,12 +132,50 @@ export async function getOrCreateThreadForStudentId(studentId) {
   return createThreadForUser(user);
 }
 
+function toReplySnapshot(doc) {
+  if (!doc) return null;
+  const d = doc.toObject ? doc.toObject() : doc;
+  return {
+    id: d.id,
+    body: d.body,
+    senderName: d.senderName || "",
+    senderRole: d.senderRole,
+  };
+}
+
+async function enrichMessagesWithReplies(messages) {
+  if (!messages?.length) return messages || [];
+  const replyIds = [...new Set(messages.map((m) => m.replyToId).filter(Boolean))];
+  if (!replyIds.length) return messages;
+
+  const parents = await MentorMessage.find({ id: { $in: replyIds } }).lean();
+  const parentMap = new Map(parents.map((p) => [p.id, toReplySnapshot(p)]));
+
+  return messages.map((message) => {
+    if (!message.replyToId) return message;
+    const replyTo = parentMap.get(message.replyToId);
+    return replyTo ? { ...message, replyTo } : message;
+  });
+}
+
+async function resolveReplyToId(threadId, replyToId) {
+  const id = String(replyToId || "").trim();
+  if (!id) return null;
+
+  const parent = await MentorMessage.findOne({ id, threadId }).lean();
+  if (!parent) {
+    throw new MentorChatError("Reply message not found.", { status: 404, code: "NOT_FOUND" });
+  }
+  return id;
+}
+
 async function getThreadMessages(threadId) {
   const docs = await MentorMessage.find({ threadId })
     .sort({ createdAt: 1 })
     .limit(MESSAGE_PAGE_SIZE)
     .lean();
-  return docs.map(toMentorMessageDto);
+  const messages = docs.map(toMentorMessageDto);
+  return enrichMessagesWithReplies(messages);
 }
 
 export async function getStudentThreadView(student) {
@@ -154,7 +192,7 @@ export async function getStudentThreadView(student) {
   return { thread, messages };
 }
 
-export async function sendStudentMessage(student, body) {
+export async function sendStudentMessage(student, body, replyToId) {
   const text = String(body || "").trim();
   if (!text) {
     throw new MentorChatError("Message cannot be empty.", { status: 400, code: "INVALID_INPUT" });
@@ -165,6 +203,7 @@ export async function sendStudentMessage(student, body) {
 
   const thread = await getOrCreateStudentThread(student);
   const now = new Date().toISOString();
+  const validatedReplyId = await resolveReplyToId(thread.id, replyToId);
 
   const message = await MentorMessage.create({
     id: `mmsg_${randomUUID()}`,
@@ -173,6 +212,7 @@ export async function sendStudentMessage(student, body) {
     senderRole: student.role === "tester" ? "tester" : "user",
     senderName: student.name || "Student",
     body: text,
+    ...(validatedReplyId ? { replyToId: validatedReplyId } : {}),
     createdAt: now,
   });
 
@@ -195,7 +235,13 @@ export async function sendStudentMessage(student, body) {
     href: "#/admin-mentor-inbox",
   }, `mentor-chat-${thread.id}-${message.id}`);
 
-  return toMentorMessageDto(message);
+  const dto = toMentorMessageDto(message);
+  if (validatedReplyId) {
+    const parent = await MentorMessage.findOne({ id: validatedReplyId }).lean();
+    const replyTo = toReplySnapshot(parent);
+    if (replyTo) dto.replyTo = replyTo;
+  }
+  return dto;
 }
 
 function sortAdminThreads(threads) {
@@ -285,12 +331,12 @@ export async function getAdminThreadView(threadId) {
   return { thread: dto, messages };
 }
 
-export async function sendAdminMessageToStudent(admin, studentId, body) {
+export async function sendAdminMessageToStudent(admin, studentId, body, replyToId) {
   const thread = await getOrCreateThreadForStudentId(studentId);
-  return sendAdminMessage(admin, thread.id, body);
+  return sendAdminMessage(admin, thread.id, body, replyToId);
 }
 
-export async function sendAdminMessage(admin, threadId, body) {
+export async function sendAdminMessage(admin, threadId, body, replyToId) {
   const text = String(body || "").trim();
   if (!text) {
     throw new MentorChatError("Message cannot be empty.", { status: 400, code: "INVALID_INPUT" });
@@ -306,6 +352,7 @@ export async function sendAdminMessage(admin, threadId, body) {
   }
 
   const now = new Date().toISOString();
+  const validatedReplyId = await resolveReplyToId(threadId, replyToId);
   const message = await MentorMessage.create({
     id: `mmsg_${randomUUID()}`,
     threadId,
@@ -313,6 +360,7 @@ export async function sendAdminMessage(admin, threadId, body) {
     senderRole: "admin",
     senderName: admin.name || "Mentor",
     body: text,
+    ...(validatedReplyId ? { replyToId: validatedReplyId } : {}),
     createdAt: now,
   });
 
@@ -330,7 +378,13 @@ export async function sendAdminMessage(admin, threadId, body) {
     href: "#/mentor-desk",
   }, `mentor-reply-${threadId}-${message.id}`);
 
-  return toMentorMessageDto(message);
+  const dto = toMentorMessageDto(message);
+  if (validatedReplyId) {
+    const parent = await MentorMessage.findOne({ id: validatedReplyId }).lean();
+    const replyTo = toReplySnapshot(parent);
+    if (replyTo) dto.replyTo = replyTo;
+  }
+  return dto;
 }
 
 export async function getAdminInboxStats() {

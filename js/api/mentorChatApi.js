@@ -58,10 +58,13 @@ export function fetchStudentThread() {
   return request("/api/mentor-chat/thread");
 }
 
-export function sendStudentChatMessage(body) {
+export function sendStudentChatMessage(body, replyToId) {
   return request("/api/mentor-chat/messages", {
     method: "POST",
-    body: JSON.stringify({ body }),
+    body: JSON.stringify({
+      body,
+      ...(replyToId ? { replyToId } : {}),
+    }),
   });
 }
 
@@ -77,16 +80,22 @@ export function fetchAdminStudentThread(studentId) {
   return request(`/api/auth/admin/mentor-chat/students/${encodeURIComponent(studentId)}`);
 }
 
-export function sendAdminChatMessage(threadId, body) {
+export function sendAdminChatMessage(threadId, body, replyToId) {
   return request(`/api/auth/admin/mentor-chat/threads/${encodeURIComponent(threadId)}/messages`, {
     method: "POST",
-    body: JSON.stringify({ body }),
+    body: JSON.stringify({
+      body,
+      ...(replyToId ? { replyToId } : {}),
+    }),
   });
 }
 
-export function sendAdminChatMessageToStudent(studentId, body) {
+export function sendAdminChatMessageToStudent(studentId, body, replyToId) {
   return request(`/api/auth/admin/mentor-chat/students/${encodeURIComponent(studentId)}/messages`, {
     method: "POST",
-    body: JSON.stringify({ body }),
+    body: JSON.stringify({
+      body,
+      ...(replyToId ? { replyToId } : {}),
+    }),
   });
 }

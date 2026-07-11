@@ -12,6 +12,7 @@ const mentorMessageSchema = new mongoose.Schema(
     senderRole: { type: String, enum: ["user", "tester", "admin"], required: true },
     senderName: { type: String, default: "" },
     body: { type: String, required: true },
+    replyToId: { type: String, default: null, index: true },
     createdAt: { type: String, required: true, index: true },
   },
   {

@@ -7,9 +7,17 @@ import {
   escapeHtml,
   bindChatComposer,
   unbindChatComposer,
+  appendChatMessage,
+  replaceChatMessage,
+  removeChatMessage,
+  bindChatSwipeReply,
+  unbindChatSwipeReply,
+  clearReplyTarget,
+  updateReplyBar,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getSessionUser } from "../auth/session.js";
+import { fetchStudentThread, sendStudentChatMessage } from "../api/mentorChatApi.js";
 
 const POLL_MS = 5000;
 
@@ -68,21 +76,52 @@ function renderDesk({ messages, loading, error, sending }) {
 }
 
 async function loadThread() {
-  const { fetchStudentThread } = await import("../api/mentorChatApi.js");
   const data = await fetchStudentThread();
   return data.messages || [];
 }
 
+function buildOptimisticMessage(body, { replyToId, replyTarget } = {}) {
+  const user = getSessionUser();
+  return {
+    id: `pending_${Date.now()}`,
+    body,
+    senderRole: user?.role === "tester" ? "tester" : "user",
+    senderName: user?.name || "Student",
+    createdAt: new Date().toISOString(),
+    pending: true,
+    ...(replyToId ? { replyToId } : {}),
+    ...(replyTarget ? {
+      replyTo: {
+        id: replyTarget.id,
+        body: replyTarget.body,
+        senderName: replyTarget.senderName,
+        senderRole: replyTarget.senderRole,
+      },
+    } : {}),
+  };
+}
+
 function bindDesk(container, state) {
+  bindChatSwipeReply(container, {
+    getMessages: () => state.messages,
+  });
+
   bindChatComposer(container, {
-    onSubmit: async (body) => {
+    onSubmit: async (body, { replyToId, replyTarget } = {}) => {
+      const viewerRole = getSessionUser()?.role || "user";
+      const optimistic = buildOptimisticMessage(body, { replyToId, replyTarget });
+      state.messages = [...state.messages, optimistic];
+      appendChatMessage(container, optimistic, { viewerRole });
+
       try {
-        const { sendStudentChatMessage } = await import("../api/mentorChatApi.js");
-        await sendStudentChatMessage(body);
-        state.messages = await loadThread();
-        refreshUI(container, state);
-        showToast(Toast({ title: "Message sent", variant: "success" }));
+        const { message } = await sendStudentChatMessage(body, replyToId);
+        state.messages = state.messages.map((msg) => (
+          msg.id === optimistic.id ? message : msg
+        ));
+        replaceChatMessage(container, optimistic.id, message, { viewerRole });
       } catch (err) {
+        state.messages = state.messages.filter((msg) => msg.id !== optimistic.id);
+        removeChatMessage(container, optimistic.id);
         showToast(Toast({ title: "Send failed", text: err?.message, variant: "danger" }));
         throw err;
       }
@@ -94,6 +133,7 @@ function refreshUI(container, state) {
   const host = container.querySelector(".content-inner") || container;
   host.innerHTML = renderDesk(state);
   bindDesk(container, state);
+  updateReplyBar(container);
   scrollChatToBottom(host);
 }
 
@@ -116,6 +156,7 @@ export default {
         pollTimer = setInterval(() => {
           void loadThread()
             .then((msgs) => {
+              if (state.messages.some((msg) => msg.pending)) return;
               if (msgs.length !== state.messages.length
                 || msgs.at(-1)?.id !== state.messages.at(-1)?.id) {
                 state.messages = msgs;
@@ -140,6 +181,8 @@ export default {
   onUnmount() {
     stopPolling();
     unbindChatComposer(deskContainer);
+    unbindChatSwipeReply(deskContainer);
+    clearReplyTarget(deskContainer);
     deskContainer = null;
   },
 };

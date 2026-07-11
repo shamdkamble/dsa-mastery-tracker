@@ -9,8 +9,23 @@ import {
   formatChatTime,
   bindChatComposer,
   unbindChatComposer,
+  appendChatMessage,
+  replaceChatMessage,
+  removeChatMessage,
+  bindChatSwipeReply,
+  unbindChatSwipeReply,
+  clearReplyTarget,
+  updateReplyBar,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
+import { getSessionUser } from "../auth/session.js";
+import {
+  fetchAdminInbox,
+  fetchAdminThread,
+  fetchAdminStudentThread,
+  sendAdminChatMessage,
+  sendAdminChatMessageToStudent,
+} from "../api/mentorChatApi.js";
 
 const POLL_MS = 5000;
 
@@ -132,19 +147,70 @@ function renderInbox({
 }
 
 async function loadInbox() {
-  const { fetchAdminInbox } = await import("../api/mentorChatApi.js");
   return fetchAdminInbox();
 }
 
 async function loadThread(threadId) {
-  const { fetchAdminThread } = await import("../api/mentorChatApi.js");
   return fetchAdminThread(threadId);
+}
+
+function previewText(body) {
+  const text = String(body || "").trim();
+  return text.length > 120 ? `${text.slice(0, 117)}…` : text;
+}
+
+function buildOptimisticAdminMessage(body, { replyToId, replyTarget } = {}) {
+  const user = getSessionUser();
+  return {
+    id: `pending_${Date.now()}`,
+    body,
+    senderRole: "admin",
+    senderName: user?.name || "Mentor",
+    createdAt: new Date().toISOString(),
+    pending: true,
+    ...(replyToId ? { replyToId } : {}),
+    ...(replyTarget ? {
+      replyTo: {
+        id: replyTarget.id,
+        body: replyTarget.body,
+        senderName: replyTarget.senderName,
+        senderRole: replyTarget.senderRole,
+      },
+    } : {}),
+  };
+}
+
+function bumpActiveThreadPreview(state, message) {
+  if (!state.activeThread) return;
+  state.activeThread = {
+    ...state.activeThread,
+    id: state.activeThread.id || message.threadId,
+    lastMessageAt: message.createdAt,
+    lastMessagePreview: previewText(message.body),
+    lastSenderRole: "admin",
+  };
+  activeThreadId = state.activeThread.id || activeThreadId;
+
+  const idx = state.threads.findIndex((t) => (
+    t.studentId === state.activeThread.studentId
+    || (state.activeThread.id && t.id === state.activeThread.id)
+  ));
+  if (idx >= 0) {
+    state.threads[idx] = {
+      ...state.threads[idx],
+      id: state.activeThread.id || state.threads[idx].id,
+      lastMessageAt: message.createdAt,
+      lastMessagePreview: previewText(message.body),
+      lastSenderRole: "admin",
+    };
+  }
 }
 
 function refreshUI(container, state) {
   const host = container.querySelector(".content-inner") || container;
   host.innerHTML = renderInbox(state);
   bindInbox(container, state);
+  updateReplyBar(container);
   scrollChatToBottom(host);
 }
 
@@ -190,32 +256,35 @@ function bindInbox(container, state) {
     });
   }
 
+  bindChatSwipeReply(container, {
+    getMessages: () => state.messages,
+  });
+
   bindChatComposer(container, {
-    onSubmit: async (body) => {
+    onSubmit: async (body, { replyToId, replyTarget } = {}) => {
+      if (!state.activeThread) {
+        showToast(Toast({ title: "Select a student first.", variant: "warning" }));
+        throw new Error("Select a student first.");
+      }
+
+      const optimistic = buildOptimisticAdminMessage(body, { replyToId, replyTarget });
+      state.messages = [...state.messages, optimistic];
+      appendChatMessage(container, optimistic, { viewerRole: "admin" });
+
       try {
-        if (!state.activeThread) {
-          throw new Error("Select a student first.");
-        }
-
-        const api = await import("../api/mentorChatApi.js");
-        if (state.activeThread.id) {
-          await api.sendAdminChatMessage(state.activeThread.id, body);
-        } else {
-          await api.sendAdminChatMessageToStudent(state.activeThread.studentId, body);
-        }
-
-        const data = state.activeThread.id
-          ? await loadThread(state.activeThread.id)
-          : await api.fetchAdminStudentThread(state.activeThread.studentId);
-        state.messages = data.messages || [];
-        state.activeThread = data.thread;
-        activeThreadId = data.thread?.id || null;
-        activeStudentId = data.thread?.studentId || null;
-        const inbox = await loadInbox();
-        state.threads = inbox.threads || [];
-        state.stats = inbox.stats || {};
-        refreshUI(container, state);
+        const result = state.activeThread.id
+          ? await sendAdminChatMessage(state.activeThread.id, body, replyToId)
+          : await sendAdminChatMessageToStudent(state.activeThread.studentId, body, replyToId);
+        const message = result.message;
+        state.messages = state.messages.map((msg) => (
+          msg.id === optimistic.id ? message : msg
+        ));
+        replaceChatMessage(container, optimistic.id, message, { viewerRole: "admin" });
+        bumpActiveThreadPreview(state, message);
+        patchThreadList(container, state);
       } catch (err) {
+        state.messages = state.messages.filter((msg) => msg.id !== optimistic.id);
+        removeChatMessage(container, optimistic.id);
         showToast(Toast({ title: "Send failed", text: err?.message, variant: "danger" }));
         throw err;
       }
@@ -224,6 +293,7 @@ function bindInbox(container, state) {
 }
 
 async function selectThread(container, state, threadId) {
+  clearReplyTarget(container);
   activeThreadId = threadId;
   activeStudentId = null;
   try {
@@ -241,10 +311,10 @@ async function selectThread(container, state, threadId) {
 }
 
 async function selectStudent(container, state, studentId) {
+  clearReplyTarget(container);
   activeThreadId = null;
   activeStudentId = studentId;
   try {
-    const { fetchAdminStudentThread } = await import("../api/mentorChatApi.js");
     const data = await fetchAdminStudentThread(studentId);
     state.activeThread = data.thread;
     state.messages = data.messages || [];
@@ -258,12 +328,14 @@ async function selectStudent(container, state, studentId) {
   }
 }
 
-async function syncInboxData(state) {
+async function syncInboxData(state, { skipMessages = false } = {}) {
   const inbox = await loadInbox();
   state.threads = inbox.threads || [];
   state.stats = inbox.stats || {};
   state.loading = false;
   state.error = null;
+
+  if (skipMessages) return;
 
   if (activeThreadId) {
     const data = await loadThread(activeThreadId);
@@ -271,7 +343,6 @@ async function syncInboxData(state) {
     state.messages = data.messages || [];
     activeStudentId = data.thread?.studentId || null;
   } else if (activeStudentId) {
-    const { fetchAdminStudentThread } = await import("../api/mentorChatApi.js");
     const data = await fetchAdminStudentThread(activeStudentId);
     state.activeThread = data.thread;
     state.messages = data.messages || [];
@@ -291,12 +362,14 @@ async function refreshInbox(container, state) {
 
 async function pollInbox(container, state) {
   try {
+    const hasPending = state.messages.some((msg) => msg.pending);
     const prevCount = state.messages.length;
     const prevLastId = state.messages.at(-1)?.id;
-    await syncInboxData(state);
+    await syncInboxData(state, { skipMessages: hasPending });
     patchThreadList(container, state);
     patchInboxStats(container, state.stats);
-    if ((activeThreadId || activeStudentId)
+    if (!state.messages.some((msg) => msg.pending)
+      && (activeThreadId || activeStudentId)
       && (state.messages.length !== prevCount || state.messages.at(-1)?.id !== prevLastId)) {
       patchMessages(container, state);
     }
@@ -339,6 +412,8 @@ export default {
   onUnmount() {
     stopPolling();
     unbindChatComposer(inboxContainer);
+    unbindChatSwipeReply(inboxContainer);
+    clearReplyTarget(inboxContainer);
     inboxContainer = null;
     activeThreadId = null;
     activeStudentId = null;

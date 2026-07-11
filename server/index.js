@@ -1039,7 +1039,7 @@ app.get("/api/mentor-chat/thread", requireAuth, async (req, res) => {
 app.post("/api/mentor-chat/messages", requireAuth, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
-    const message = await sendStudentMessage(user, req.body?.body);
+    const message = await sendStudentMessage(user, req.body?.body, req.body?.replyToId);
     res.status(201).json({ message });
   } catch (err) {
     if (handleAuthError(res, err)) return;
@@ -1091,7 +1091,7 @@ app.get("/api/auth/admin/mentor-chat/students/:studentId", requireAdmin, async (
 app.post("/api/auth/admin/mentor-chat/students/:studentId/messages", requireAdmin, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
-    const message = await sendAdminMessageToStudent(user, req.params.studentId, req.body?.body);
+    const message = await sendAdminMessageToStudent(user, req.params.studentId, req.body?.body, req.body?.replyToId);
     res.status(201).json({ message });
   } catch (err) {
     if (handleAuthError(res, err)) return;
@@ -1104,7 +1104,7 @@ app.post("/api/auth/admin/mentor-chat/students/:studentId/messages", requireAdmi
 app.post("/api/auth/admin/mentor-chat/threads/:threadId/messages", requireAdmin, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
-    const message = await sendAdminMessage(user, req.params.threadId, req.body?.body);
+    const message = await sendAdminMessage(user, req.params.threadId, req.body?.body, req.body?.replyToId);
     res.status(201).json({ message });
   } catch (err) {
     if (handleAuthError(res, err)) return;
