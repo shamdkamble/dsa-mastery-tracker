@@ -173,7 +173,11 @@ export async function sendStudentMessage(student, body) {
     href: "#/admin-mentor-inbox",
   }, `mentor-chat-${thread.id}-${message.id}`);
 
-  return toMentorMessageDto(message);
+  const updated = await MentorThread.findOne({ id: thread.id }).lean();
+  return {
+    message: toMentorMessageDto(message),
+    thread: toMentorThreadDto(updated),
+  };
 }
 
 function sortAdminThreads(threads) {
@@ -312,7 +316,10 @@ export async function sendAdminMessage(admin, threadId, body) {
     console.warn("[mentor-chat] student notify failed", err?.message);
   }
 
-  return toMentorMessageDto(message);
+  return {
+    message: toMentorMessageDto(message),
+    thread: toMentorThreadDto(thread),
+  };
 }
 
 export async function getAdminInboxStats() {

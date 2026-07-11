@@ -9,15 +9,29 @@ import {
   formatChatTime,
   bindChatComposer,
   unbindChatComposer,
+  createOptimisticMessage,
+  upsertChatMessage,
+  patchChatFeed,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
+import { getSessionUser } from "../auth/session.js";
+import {
+  connectMentorChatSocket,
+  disconnectMentorChatSocket,
+  isMentorChatSocketConnected,
+  joinMentorThread,
+  onMentorChatSocket,
+  sendMentorChatMessage,
+} from "../services/mentorChatSocket.js";
 
-const POLL_MS = 5000;
+const POLL_MS = 30000;
+const POLL_MS_LIVE = 300000;
 
 let pollTimer = null;
 let activeThreadId = null;
 let activeStudentId = null;
 let inboxContainer = null;
+let socketCleanups = [];
 
 function stopPolling() {
   if (pollTimer) {
@@ -26,10 +40,28 @@ function stopPolling() {
   }
 }
 
+function startPolling(container, state) {
+  stopPolling();
+  const interval = isMentorChatSocketConnected() ? POLL_MS_LIVE : POLL_MS;
+  pollTimer = setInterval(() => {
+    void pollInbox(container, state);
+  }, interval);
+}
+
 function isThreadSelected(thread, activeThread) {
   if (!activeThread) return false;
   if (thread.id && activeThread.id) return thread.id === activeThread.id;
   return thread.studentId === activeThread.studentId;
+}
+
+function upsertThreadInList(threads, updated) {
+  if (!updated?.studentId) return threads;
+  const list = Array.isArray(threads) ? [...threads] : [];
+  const idx = list.findIndex((t) => t.studentId === updated.studentId || t.id === updated.id);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], ...updated };
+  }
+  return list;
 }
 
 function renderThreadItem(thread, activeThread) {
@@ -165,11 +197,55 @@ function patchThreadList(container, state) {
     : `<div class="mentor-inbox__empty-list">No students registered yet.</div>`;
 }
 
-function patchMessages(container, state) {
-  const feed = container.querySelector("[data-mentor-chat-feed]");
-  if (!feed) return;
-  feed.innerHTML = renderChatMessages(state.messages, { viewerRole: "admin" });
-  scrollChatToBottom(container);
+async function sendMessage(body, state, container) {
+  if (!state.activeThread) throw new Error("Select a student first.");
+
+  const user = getSessionUser();
+  const optimistic = createOptimisticMessage({
+    body,
+    user,
+    threadId: state.activeThread.id,
+  });
+  state.messages = upsertChatMessage(state.messages, optimistic);
+  patchChatFeed(container, state.messages, { viewerRole: "admin" });
+
+  const payload = {
+    body,
+    clientId: optimistic.clientId,
+    threadId: state.activeThread.id || undefined,
+    studentId: state.activeThread.id ? undefined : state.activeThread.studentId,
+  };
+
+  try {
+    if (isMentorChatSocketConnected()) {
+      const ack = await sendMentorChatMessage(payload);
+      state.activeThread = ack.thread || state.activeThread;
+      activeThreadId = state.activeThread?.id || null;
+      activeStudentId = state.activeThread?.studentId || null;
+      if (activeThreadId) joinMentorThread(activeThreadId);
+      state.messages = upsertChatMessage(state.messages, ack.message, { clientId: optimistic.clientId });
+      state.threads = upsertThreadInList(state.threads, ack.thread);
+      patchChatFeed(container, state.messages, { viewerRole: "admin" });
+      patchThreadList(container, state);
+      return;
+    }
+  } catch {
+    /* REST fallback */
+  }
+
+  const api = await import("../api/mentorChatApi.js");
+  const result = state.activeThread.id
+    ? await api.sendAdminChatMessage(state.activeThread.id, body)
+    : await api.sendAdminChatMessageToStudent(state.activeThread.studentId, body);
+
+  state.activeThread = result.thread || state.activeThread;
+  activeThreadId = state.activeThread?.id || null;
+  activeStudentId = state.activeThread?.studentId || null;
+  if (activeThreadId) joinMentorThread(activeThreadId);
+  state.messages = upsertChatMessage(state.messages, result.message, { clientId: optimistic.clientId });
+  state.threads = upsertThreadInList(state.threads, result.thread);
+  patchChatFeed(container, state.messages, { viewerRole: "admin" });
+  patchThreadList(container, state);
 }
 
 function bindInbox(container, state) {
@@ -193,29 +269,10 @@ function bindInbox(container, state) {
   bindChatComposer(container, {
     onSubmit: async (body) => {
       try {
-        if (!state.activeThread) {
-          throw new Error("Select a student first.");
-        }
-
-        const api = await import("../api/mentorChatApi.js");
-        if (state.activeThread.id) {
-          await api.sendAdminChatMessage(state.activeThread.id, body);
-        } else {
-          await api.sendAdminChatMessageToStudent(state.activeThread.studentId, body);
-        }
-
-        const data = state.activeThread.id
-          ? await loadThread(state.activeThread.id)
-          : await api.fetchAdminStudentThread(state.activeThread.studentId);
-        state.messages = data.messages || [];
-        state.activeThread = data.thread;
-        activeThreadId = data.thread?.id || null;
-        activeStudentId = data.thread?.studentId || null;
-        const inbox = await loadInbox();
-        state.threads = inbox.threads || [];
-        state.stats = inbox.stats || {};
-        refreshUI(container, state);
+        await sendMessage(body, state, container);
       } catch (err) {
+        state.messages = state.messages.filter((m) => !m.pending);
+        patchChatFeed(container, state.messages, { viewerRole: "admin" });
         showToast(Toast({ title: "Send failed", text: err?.message, variant: "danger" }));
         throw err;
       }
@@ -226,6 +283,7 @@ function bindInbox(container, state) {
 async function selectThread(container, state, threadId) {
   activeThreadId = threadId;
   activeStudentId = null;
+  joinMentorThread(threadId);
   try {
     const data = await loadThread(threadId);
     state.activeThread = data.thread;
@@ -248,7 +306,10 @@ async function selectStudent(container, state, studentId) {
     const data = await fetchAdminStudentThread(studentId);
     state.activeThread = data.thread;
     state.messages = data.messages || [];
-    if (data.thread?.id) activeThreadId = data.thread.id;
+    if (data.thread?.id) {
+      activeThreadId = data.thread.id;
+      joinMentorThread(data.thread.id);
+    }
     const inbox = await loadInbox();
     state.threads = inbox.threads || [];
     state.stats = inbox.stats || {};
@@ -298,11 +359,53 @@ async function pollInbox(container, state) {
     patchInboxStats(container, state.stats);
     if ((activeThreadId || activeStudentId)
       && (state.messages.length !== prevCount || state.messages.at(-1)?.id !== prevLastId)) {
-      patchMessages(container, state);
+      patchChatFeed(container, state.messages, { viewerRole: "admin" });
     }
   } catch {
-    /* ignore background poll errors */
+    /* ignore */
   }
+}
+
+function setupRealtime(container, state) {
+  socketCleanups.forEach((fn) => fn());
+  socketCleanups = [];
+
+  socketCleanups.push(onMentorChatSocket("message.new", ({ message, threadId }) => {
+    if (!message) return;
+    state.threads = upsertThreadInList(state.threads, {
+      id: threadId,
+      lastMessagePreview: message.body,
+      lastMessageAt: message.createdAt,
+      lastSenderRole: message.senderRole,
+    });
+
+    const viewing = state.activeThread?.id === threadId
+      || state.activeThread?.studentId === message.senderId;
+
+    if (viewing) {
+      state.messages = upsertChatMessage(state.messages, message);
+      patchChatFeed(container, state.messages, { viewerRole: "admin" });
+    }
+
+    patchThreadList(container, state);
+  }));
+
+  socketCleanups.push(onMentorChatSocket("thread.updated", ({ thread }) => {
+    if (!thread) return;
+    state.threads = upsertThreadInList(state.threads, thread);
+    if (state.activeThread?.studentId === thread.studentId) {
+      state.activeThread = { ...state.activeThread, ...thread };
+    }
+    if (thread.id) joinMentorThread(thread.id);
+    patchThreadList(container, state);
+  }));
+
+  socketCleanups.push(onMentorChatSocket("connect", () => startPolling(container, state)));
+  socketCleanups.push(onMentorChatSocket("disconnect", () => startPolling(container, state)));
+
+  void connectMentorChatSocket()
+    .then(() => startPolling(container, state))
+    .catch(() => startPolling(container, state));
 }
 
 export default {
@@ -329,15 +432,15 @@ export default {
       error: null,
     };
 
-    void refreshInbox(container, state);
-
-    stopPolling();
-    pollTimer = setInterval(() => {
-      void pollInbox(container, state);
-    }, POLL_MS);
+    void refreshInbox(container, state).then(() => {
+      setupRealtime(container, state);
+    });
   },
   onUnmount() {
     stopPolling();
+    socketCleanups.forEach((fn) => fn());
+    socketCleanups = [];
+    disconnectMentorChatSocket();
     unbindChatComposer(inboxContainer);
     inboxContainer = null;
     activeThreadId = null;

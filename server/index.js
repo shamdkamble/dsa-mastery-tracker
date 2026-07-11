@@ -5,9 +5,11 @@
  */
 
 import "./env.js";
+import http from "http";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import { attachMentorChatSocket, broadcastChatEvents } from "./mentor-chat-socket.js";
 import { TeachApiError, resolveApiKey, resolveModel } from "./gemini.js";
 import { isGroqConfigured, resolveGroqModel } from "./groq.js";
 import { getSystemArchitectureLiveSnapshot } from "./system-architecture-live.js";
@@ -1039,8 +1041,9 @@ app.get("/api/mentor-chat/thread", requireAuth, async (req, res) => {
 app.post("/api/mentor-chat/messages", requireAuth, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
-    const message = await sendStudentMessage(user, req.body?.body);
-    res.status(201).json({ message });
+    const result = await sendStudentMessage(user, req.body?.body);
+    broadcastChatEvents(result);
+    res.status(201).json(result);
   } catch (err) {
     if (handleAuthError(res, err)) return;
     if (handleMentorChatError(res, err)) return;
@@ -1091,8 +1094,9 @@ app.get("/api/auth/admin/mentor-chat/students/:studentId", requireAdmin, async (
 app.post("/api/auth/admin/mentor-chat/students/:studentId/messages", requireAdmin, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
-    const message = await sendAdminMessageToStudent(user, req.params.studentId, req.body?.body);
-    res.status(201).json({ message });
+    const result = await sendAdminMessageToStudent(user, req.params.studentId, req.body?.body);
+    broadcastChatEvents(result);
+    res.status(201).json(result);
   } catch (err) {
     if (handleAuthError(res, err)) return;
     if (handleMentorChatError(res, err)) return;
@@ -1104,8 +1108,9 @@ app.post("/api/auth/admin/mentor-chat/students/:studentId/messages", requireAdmi
 app.post("/api/auth/admin/mentor-chat/threads/:threadId/messages", requireAdmin, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
-    const message = await sendAdminMessage(user, req.params.threadId, req.body?.body);
-    res.status(201).json({ message });
+    const result = await sendAdminMessage(user, req.params.threadId, req.body?.body);
+    broadcastChatEvents(result);
+    res.status(201).json(result);
   } catch (err) {
     if (handleAuthError(res, err)) return;
     if (handleMentorChatError(res, err)) return;
@@ -1370,7 +1375,10 @@ const isMainModule = process.argv[1]
   && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 
 if (!IS_VERCEL && isMainModule) {
-  const server = app.listen(PORT, async () => {
+  const server = http.createServer(app);
+  attachMentorChatSocket(server);
+
+  server.listen(PORT, async () => {
     let geminiLabel = "not set";
     try {
       const key = resolveApiKey();
@@ -1386,6 +1394,7 @@ if (!IS_VERCEL && isMainModule) {
     console.log("");
     console.log("  DSAMantra");
     console.log(`  Serving at: http://localhost:${PORT}`);
+    console.log(`  WebSocket:  Socket.IO mentor chat at /socket.io`);
     console.log(`  API proxy:  POST http://localhost:${PORT}/api/teach`);
     console.log(`  AI routing: Gemini primary → Groq fallback (hooks: Groq primary)`);
     console.log(`  Gemini:     ${resolveModel()} — ${geminiLabel}`);

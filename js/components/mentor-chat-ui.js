@@ -18,6 +18,54 @@ export function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+export function createOptimisticMessage({ body, user, threadId = null }) {
+  const clientId = `client_${crypto.randomUUID()}`;
+  const role = user?.role === "admin"
+    ? "admin"
+    : user?.role === "tester"
+      ? "tester"
+      : "user";
+
+  return {
+    id: clientId,
+    clientId,
+    threadId,
+    senderId: user?.id || "",
+    senderRole: role,
+    senderName: user?.name || (role === "admin" ? "Mentor" : "Student"),
+    body,
+    createdAt: new Date().toISOString(),
+    pending: true,
+  };
+}
+
+export function upsertChatMessage(messages, incoming, { clientId } = {}) {
+  const list = Array.isArray(messages) ? [...messages] : [];
+  if (!incoming?.id && !incoming?.clientId && !clientId) return list;
+
+  const replaceIdx = list.findIndex((m) =>
+    (clientId && m.clientId === clientId)
+    || (incoming?.clientId && m.clientId === incoming.clientId)
+    || (incoming?.id && m.id === incoming.id));
+
+  if (replaceIdx >= 0) {
+    list[replaceIdx] = { ...incoming, pending: false };
+    return list;
+  }
+
+  if (incoming?.id && list.some((m) => m.id === incoming.id)) return list;
+
+  list.push({ ...incoming, pending: false });
+  return list;
+}
+
+export function patchChatFeed(container, messages, { viewerRole = "user" } = {}) {
+  const feed = container?.querySelector("[data-mentor-chat-feed]");
+  if (!feed) return;
+  feed.innerHTML = renderChatMessages(messages, { viewerRole });
+  scrollChatToBottom(container);
+}
+
 export function formatChatTime(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -45,8 +93,10 @@ export function renderChatMessages(messages, { viewerRole = "user" } = {}) {
     const bubbleClass = isMine ? "mentor-chat__bubble--mine" : "mentor-chat__bubble--theirs";
     const roleLabel = msg.senderRole === "admin" ? "Mentor" : escapeHtml(msg.senderName || "Student");
 
+    const pendingClass = msg.pending ? " mentor-chat__message--pending" : "";
+
     return `
-      <div class="mentor-chat__message${isMine ? " mentor-chat__message--mine" : ""}">
+      <div class="mentor-chat__message${isMine ? " mentor-chat__message--mine" : ""}${pendingClass}">
         <div class="mentor-chat__meta">
           <span class="mentor-chat__sender">${roleLabel}</span>
           <time class="mentor-chat__time" datetime="${msg.createdAt}">${formatChatTime(msg.createdAt)}</time>

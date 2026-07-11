@@ -7,20 +7,47 @@ import {
   escapeHtml,
   bindChatComposer,
   unbindChatComposer,
+  createOptimisticMessage,
+  upsertChatMessage,
+  patchChatFeed,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getSessionUser } from "../auth/session.js";
+import {
+  connectMentorChatSocket,
+  disconnectMentorChatSocket,
+  isMentorChatSocketConnected,
+  onMentorChatSocket,
+  sendMentorChatMessage,
+} from "../services/mentorChatSocket.js";
 
-const POLL_MS = 5000;
+const POLL_MS = 30000;
+const POLL_MS_LIVE = 300000;
 
 let pollTimer = null;
 let deskContainer = null;
+let socketCleanups = [];
 
 function stopPolling() {
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
   }
+}
+
+function startPolling(container, state) {
+  stopPolling();
+  const interval = isMentorChatSocketConnected() ? POLL_MS_LIVE : POLL_MS;
+  pollTimer = setInterval(() => {
+    void loadThread()
+      .then((msgs) => {
+        if (msgs.length !== state.messages.length || msgs.at(-1)?.id !== state.messages.at(-1)?.id) {
+          state.messages = msgs;
+          patchChatFeed(container, msgs, { viewerRole: getSessionUser()?.role || "user" });
+        }
+      })
+      .catch(() => {});
+  }, interval);
 }
 
 function renderDesk({ messages, loading, error, sending }) {
@@ -73,16 +100,40 @@ async function loadThread() {
   return data.messages || [];
 }
 
+async function sendMessage(body, state, container) {
+  const user = getSessionUser();
+  const optimistic = createOptimisticMessage({ body, user, threadId: state.threadId });
+  state.messages = upsertChatMessage(state.messages, optimistic);
+  patchChatFeed(container, state.messages, { viewerRole: user?.role || "user" });
+
+  try {
+    if (isMentorChatSocketConnected()) {
+      const ack = await sendMentorChatMessage({ body, clientId: optimistic.clientId });
+      state.threadId = ack.thread?.id || state.threadId;
+      state.messages = upsertChatMessage(state.messages, ack.message, { clientId: optimistic.clientId });
+      patchChatFeed(container, state.messages, { viewerRole: user?.role || "user" });
+      return;
+    }
+  } catch {
+    /* fall through to REST */
+  }
+
+  const { sendStudentChatMessage } = await import("../api/mentorChatApi.js");
+  const result = await sendStudentChatMessage(body);
+  state.threadId = result.thread?.id || state.threadId;
+  state.messages = upsertChatMessage(state.messages, result.message, { clientId: optimistic.clientId });
+  patchChatFeed(container, state.messages, { viewerRole: user?.role || "user" });
+}
+
 function bindDesk(container, state) {
   bindChatComposer(container, {
     onSubmit: async (body) => {
       try {
-        const { sendStudentChatMessage } = await import("../api/mentorChatApi.js");
-        await sendStudentChatMessage(body);
-        state.messages = await loadThread();
-        refreshUI(container, state);
+        await sendMessage(body, state, container);
         showToast(Toast({ title: "Message sent", variant: "success" }));
       } catch (err) {
+        state.messages = state.messages.filter((m) => !m.pending);
+        patchChatFeed(container, state.messages, { viewerRole: getSessionUser()?.role || "user" });
         showToast(Toast({ title: "Send failed", text: err?.message, variant: "danger" }));
         throw err;
       }
@@ -97,6 +148,25 @@ function refreshUI(container, state) {
   scrollChatToBottom(host);
 }
 
+function setupRealtime(container, state) {
+  socketCleanups.forEach((fn) => fn());
+  socketCleanups = [];
+
+  socketCleanups.push(onMentorChatSocket("message.new", ({ message, threadId }) => {
+    if (!message) return;
+    state.threadId = threadId || state.threadId;
+    state.messages = upsertChatMessage(state.messages, message);
+    patchChatFeed(container, state.messages, { viewerRole: getSessionUser()?.role || "user" });
+  }));
+
+  socketCleanups.push(onMentorChatSocket("connect", () => startPolling(container, state)));
+  socketCleanups.push(onMentorChatSocket("disconnect", () => startPolling(container, state)));
+
+  void connectMentorChatSocket()
+    .then(() => startPolling(container, state))
+    .catch(() => startPolling(container, state));
+}
+
 export default {
   title: "Mentor Desk",
   render() {
@@ -104,41 +174,31 @@ export default {
   },
   onMount(container) {
     deskContainer = container;
-    const state = { messages: [], loading: true, error: null, sending: false };
+    const state = { messages: [], threadId: null, loading: true, error: null, sending: false };
 
-    void loadThread()
-      .then((messages) => {
-        state.messages = messages;
+    import("../api/mentorChatApi.js")
+      .then(({ fetchStudentThread }) => fetchStudentThread())
+      .then((data) => {
+        state.messages = data.messages || [];
+        state.threadId = data.thread?.id || null;
         state.loading = false;
         refreshUI(container, state);
-
-        stopPolling();
-        pollTimer = setInterval(() => {
-          void loadThread()
-            .then((msgs) => {
-              if (msgs.length !== state.messages.length
-                || msgs.at(-1)?.id !== state.messages.at(-1)?.id) {
-                state.messages = msgs;
-                const feed = container.querySelector("[data-mentor-chat-feed]");
-                if (feed) {
-                  feed.innerHTML = renderChatMessages(msgs, { viewerRole: getSessionUser()?.role || "user" });
-                  scrollChatToBottom(container);
-                }
-              }
-            })
-            .catch(() => {});
-        }, POLL_MS);
+        setupRealtime(container, state);
       })
       .catch((err) => {
         state.loading = false;
         state.error = err?.message || "Could not load Mentor Desk.";
         refreshUI(container, state);
+        setupRealtime(container, state);
       });
 
     bindDesk(container, state);
   },
   onUnmount() {
     stopPolling();
+    socketCleanups.forEach((fn) => fn());
+    socketCleanups = [];
+    disconnectMentorChatSocket();
     unbindChatComposer(deskContainer);
     deskContainer = null;
   },
