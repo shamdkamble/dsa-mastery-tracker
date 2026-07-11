@@ -9,6 +9,7 @@ export const ADMIN_NAV = [
   { id: "topic-videos", path: "admin-topic-videos", label: "Topic Videos", icon: "video" },
   { id: "push-logs", path: "admin-push-logs", label: "Push Log", icon: "bell" },
   { id: "notifications", path: "admin-notifications", label: "System Architecture", icon: "layers" },
+  { id: "mentor-inbox", path: "admin-mentor-inbox", label: "Mentor Inbox", icon: "message" },
 ];
 
 export function adminSubnav(active) {

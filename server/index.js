@@ -39,6 +39,15 @@ import {
   createTestIssue,
   updateTestIssue,
 } from "./test-issues-store.js";
+import {
+  MentorChatError,
+  getStudentThreadView,
+  sendStudentMessage,
+  listAdminThreads,
+  getAdminThreadView,
+  sendAdminMessage,
+  getAdminInboxStats,
+} from "./mentor-chat-store.js";
 import { canAccessProblemAi, canAccessTeachTopic, canAccessTeachTopicById } from "./roadmap-access.js";
 import { sendAdminManualNotifications } from "./admin-manual-notifications.js";
 import {
@@ -243,6 +252,14 @@ function handleUserDataError(res, err) {
 
 function handleTestIssueError(res, err) {
   if (err instanceof TestIssueError) {
+    res.status(err.status).json({ error: { message: err.message, code: err.code } });
+    return true;
+  }
+  return false;
+}
+
+function handleMentorChatError(res, err) {
+  if (err instanceof MentorChatError) {
     res.status(err.status).json({ error: { message: err.message, code: err.code } });
     return true;
   }
@@ -1001,6 +1018,72 @@ app.patch("/api/test-issues/:id", requireTesterOrAdmin, async (req, res) => {
     if (handleTestIssueError(res, err)) return;
     console.error("[/api/test-issues/:id]", err);
     res.status(500).json({ error: { message: "Failed to update test issue.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/mentor-chat/thread", requireAuth, async (req, res) => {
+  try {
+    const user = await getCurrentUser(extractBearer(req));
+    const data = await getStudentThreadView(user);
+    res.json(data);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleMentorChatError(res, err)) return;
+    console.error("[/api/mentor-chat/thread]", err);
+    res.status(500).json({ error: { message: "Failed to load conversation.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/mentor-chat/messages", requireAuth, async (req, res) => {
+  try {
+    const user = await getCurrentUser(extractBearer(req));
+    const message = await sendStudentMessage(user, req.body?.body);
+    res.status(201).json({ message });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleMentorChatError(res, err)) return;
+    console.error("[/api/mentor-chat/messages]", err);
+    res.status(500).json({ error: { message: "Failed to send message.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/auth/admin/mentor-chat/threads", requireAdmin, async (_req, res) => {
+  try {
+    const [threads, stats] = await Promise.all([
+      listAdminThreads(),
+      getAdminInboxStats(),
+    ]);
+    res.json({ threads, stats });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleMentorChatError(res, err)) return;
+    console.error("[/api/auth/admin/mentor-chat/threads]", err);
+    res.status(500).json({ error: { message: "Failed to load inbox.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/auth/admin/mentor-chat/threads/:threadId", requireAdmin, async (req, res) => {
+  try {
+    const data = await getAdminThreadView(req.params.threadId);
+    res.json(data);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleMentorChatError(res, err)) return;
+    console.error("[/api/auth/admin/mentor-chat/threads/:threadId]", err);
+    res.status(500).json({ error: { message: "Failed to load conversation.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/auth/admin/mentor-chat/threads/:threadId/messages", requireAdmin, async (req, res) => {
+  try {
+    const user = await getCurrentUser(extractBearer(req));
+    const message = await sendAdminMessage(user, req.params.threadId, req.body?.body);
+    res.status(201).json({ message });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleMentorChatError(res, err)) return;
+    console.error("[/api/auth/admin/mentor-chat/threads/:threadId/messages]", err);
+    res.status(500).json({ error: { message: "Failed to send message.", code: "SERVER_ERROR" } });
   }
 });
 

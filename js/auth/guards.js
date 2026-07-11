@@ -14,9 +14,15 @@ import { loadRoadmapProgress, resetRoadmapProgress } from "../storage/roadmap-pr
 import { getSubscriptionTier, syncSubscriptionPresentation } from "../subscription-theme.js";
 
 export const PUBLIC_ROUTES = new Set(["login", "register"]);
-export const ADMIN_ROUTES = new Set(["admin", "admin-topic-videos", "admin-push-logs", "admin-notifications"]);
+export const ADMIN_ROUTES = new Set([
+  "admin",
+  "admin-topic-videos",
+  "admin-push-logs",
+  "admin-notifications",
+  "admin-mentor-inbox",
+]);
 export const TESTING_ROUTES = new Set(["testing-dashboard", "testing-issues"]);
-export const PENDING_USER_ROUTES = new Set(["dashboard", "settings"]);
+export const PENDING_USER_ROUTES = new Set(["dashboard", "settings", "mentor-desk"]);
 
 export function isTestingRoute(path) {
   return TESTING_ROUTES.has(path);

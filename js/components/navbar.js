@@ -112,6 +112,8 @@ const ROUTE_TITLES = {
   "admin-notifications": "System Architecture",
   "testing-dashboard": "QA Dashboard",
   "testing-issues": "Issue Tracker",
+  "mentor-desk": "Mentor Desk",
+  "admin-mentor-inbox": "Mentor Inbox",
 };
 
 function escapeHtml(str) {

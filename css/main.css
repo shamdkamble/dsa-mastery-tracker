@@ -37,6 +37,7 @@
 @import url("pages/auth.css");
 @import url("pages/admin-modern.css");
 @import url("pages/testing-panel.css");
+@import url("pages/mentor-chat.css");
 
 /* Responsive (must load last) */
 @import url("responsive.css");

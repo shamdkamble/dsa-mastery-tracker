@@ -53,6 +53,8 @@ import adminNotifications from "./pages/admin-notifications.js";
 import adminTopicVideos from "./pages/admin-topic-videos.js";
 import testingDashboard from "./pages/testing-dashboard.js";
 import testingIssues from "./pages/testing-issues.js";
+import mentorDesk from "./pages/mentor-desk.js";
+import adminMentorInbox from "./pages/admin-mentor-inbox.js";
 
 registerRoutes({
   login,
@@ -63,6 +65,8 @@ registerRoutes({
   "admin-notifications": adminNotifications,
   "testing-dashboard": testingDashboard,
   "testing-issues": testingIssues,
+  "mentor-desk": mentorDesk,
+  "admin-mentor-inbox": adminMentorInbox,
   dashboard,
   mission,
   problems,

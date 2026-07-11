@@ -8,7 +8,7 @@ import { navigate } from "../router.js";
 import { $, $$, on, debounce } from "../utils.js";
 import { getProblems } from "../storage/db.js";
 import { computeTodaysMission } from "../storage/computed.js";
-import { isAdmin, isTesterOrAdmin } from "../auth/session.js";
+import { isAdmin, isTesterOrAdmin, getSessionUser } from "../auth/session.js";
 import { BRAND } from "../constants/branding.js";
 
 function escapeAttr(str) {
@@ -46,6 +46,9 @@ function getNavSections() {
       label: "Tools",
       items: [
         { path: "search", label: "Search", icon: "search" },
+        ...(getSessionUser()?.role !== "admin"
+          ? [{ path: "mentor-desk", label: "Mentor Desk", icon: "message" }]
+          : []),
         { path: "settings", label: "Profile & Settings", icon: "user" },
       ],
     },
@@ -63,6 +66,7 @@ function getNavSections() {
         { path: "admin-topic-videos", label: "Topic Videos", icon: "video" },
         { path: "admin-push-logs", label: "Push Delivery Log", icon: "bell" },
         { path: "admin-notifications", label: "System Architecture", icon: "layers" },
+        { path: "admin-mentor-inbox", label: "Mentor Inbox", icon: "message" },
       ],
     }] : []),
   ];
