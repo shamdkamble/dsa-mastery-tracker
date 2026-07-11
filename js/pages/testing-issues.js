@@ -184,9 +184,16 @@ function renderPage({ issues, loading, error, filter = "all" }) {
 
         <div class="testing-toolbar">
           <div class="testing-filters">${renderFilterChips(filter)}</div>
-          <button type="button" class="btn btn--primary btn--sm" data-action="open-issue-modal">
-            ${icon("plus")}<span>Report Issue</span>
-          </button>
+          <div class="testing-toolbar__actions">
+            ${isAdmin() ? `
+              <button type="button" class="btn btn--danger btn--sm" data-action="clear-all-issues" title="Remove every QA issue from all testers">
+                ${icon("trash")}<span>Clear All Issues</span>
+              </button>
+            ` : ""}
+            <button type="button" class="btn btn--primary btn--sm" data-action="open-issue-modal">
+              ${icon("plus")}<span>Report Issue</span>
+            </button>
+          </div>
         </div>
 
         ${error ? `<div class="testing-alert testing-alert--danger">${escapeHtml(error)}</div>` : ""}
@@ -332,6 +339,32 @@ function bindIssuesPage(container) {
       const host = container.querySelector(".content-inner") || container;
       host.innerHTML = renderPage({ issues: issuesCache, loading: false, error: null, filter: activeFilter });
       bindIssuesPage(container);
+      return;
+    }
+
+    const clearBtn = e.target.closest("[data-action='clear-all-issues']");
+    if (clearBtn) {
+      const count = issuesCache.length;
+      const confirmed = confirm(
+        "Clear all QA test issues?\n\n"
+        + `This permanently deletes every issue reported by testers — pending, in progress, fixed, and resolved (${count} total). This cannot be undone.`,
+      );
+      if (!confirmed) return;
+
+      clearBtn.disabled = true;
+      try {
+        const { apiClearAllTestIssues } = await import("../api/testIssuesApi.js");
+        const { deletedCount } = await apiClearAllTestIssues();
+        showToast(Toast({
+          title: "QA data cleared",
+          text: `Removed ${deletedCount} issue${deletedCount === 1 ? "" : "s"} from all testers.`,
+          variant: "info",
+        }));
+        await reloadIssues(container);
+      } catch (err) {
+        showToast(Toast({ title: "Clear failed", text: err?.message, variant: "danger" }));
+        clearBtn.disabled = false;
+      }
       return;
     }
 
