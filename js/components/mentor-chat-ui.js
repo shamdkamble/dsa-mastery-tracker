@@ -65,17 +65,10 @@ function renderEmojiPicker() {
   `).join("");
 }
 
-export function renderChatComposer({ placeholder = "Type your message…", disabled = false } = {}) {
+export function renderChatComposer({ placeholder = "Type a message", disabled = false } = {}) {
   return `
     <form class="mentor-chat__composer" data-mentor-chat-form>
       <div class="mentor-chat__composer-bar">
-        <button
-          type="button"
-          class="mentor-chat__emoji-btn"
-          data-emoji-toggle
-          aria-label="Add emoji"
-          ${disabled ? "disabled" : ""}
-        >😊</button>
         <div class="mentor-chat__input-wrap">
           <textarea
             class="mentor-chat__input"
@@ -86,6 +79,13 @@ export function renderChatComposer({ placeholder = "Type your message…", disab
             ${disabled ? "disabled" : ""}
             aria-label="Message"
           ></textarea>
+          <button
+            type="button"
+            class="mentor-chat__emoji-btn"
+            data-emoji-toggle
+            aria-label="Open emoji picker"
+            ${disabled ? "disabled" : ""}
+          >${icon("smile")}</button>
         </div>
         <button class="mentor-chat__send" type="submit" aria-label="Send message" ${disabled ? "disabled" : ""}>
           ${icon("send")}
