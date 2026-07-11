@@ -79,7 +79,7 @@ elseif (Test-Path "$nodeDir\node.exe") {
 }
 
 if ($null -ne $nodeExe) {
-    if (-not (Test-Path "$root\node_modules\express") -or -not (Test-Path "$root\node_modules\socket.io")) {
+    if (-not (Test-Path "$root\node_modules\express")) {
         Write-Host "  Installing dependencies..." -ForegroundColor DarkGray
         if ($npmCmd) {
             & $npmCmd install

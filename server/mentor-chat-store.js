@@ -7,6 +7,7 @@ import { connectDB } from "./db/mongodb.js";
 import { MentorThread, toMentorThreadDto } from "./models/MentorThread.js";
 import { MentorMessage, toMentorMessageDto } from "./models/MentorMessage.js";
 import { createUserNotification } from "./notifications-db.js";
+import { deliverPushForNotification } from "./push-access-delivery.js";
 import { User } from "./models/User.js";
 
 const ADMIN_INBOX_USER_ID = "admin";
@@ -27,6 +28,29 @@ function preview(text) {
   return t.length > 120 ? `${t.slice(0, 117)}…` : t;
 }
 
+async function notifyUserWithPush(userId, payload, pushTag) {
+  let record = null;
+  try {
+    record = await createUserNotification(userId, payload, { pushTag });
+  } catch (err) {
+    console.warn("[mentor-chat] notify failed", userId, err?.message);
+    return;
+  }
+  if (!record) return;
+
+  try {
+    await deliverPushForNotification(userId, {
+      id: record.id,
+      title: payload.title,
+      text: payload.text,
+      href: payload.href || "#/dashboard",
+      pushTag,
+    }, { eventTag: pushTag, source: "mentor-chat" });
+  } catch (err) {
+    console.warn("[mentor-chat] push failed", userId, err?.message);
+  }
+}
+
 async function notifyAdmins(payload, pushTag) {
   const ids = new Set([ADMIN_INBOX_USER_ID]);
   try {
@@ -37,9 +61,7 @@ async function notifyAdmins(payload, pushTag) {
   }
 
   await Promise.all([...ids].map((userId) =>
-    createUserNotification(userId, payload, { pushTag }).catch((err) => {
-      console.warn("[mentor-chat] admin notify failed", userId, err?.message);
-    }),
+    notifyUserWithPush(userId, payload, pushTag),
   ));
 }
 
@@ -173,11 +195,7 @@ export async function sendStudentMessage(student, body) {
     href: "#/admin-mentor-inbox",
   }, `mentor-chat-${thread.id}-${message.id}`);
 
-  const updated = await MentorThread.findOne({ id: thread.id }).lean();
-  return {
-    message: toMentorMessageDto(message),
-    thread: toMentorThreadDto(updated),
-  };
+  return toMentorMessageDto(message);
 }
 
 function sortAdminThreads(threads) {
@@ -305,21 +323,14 @@ export async function sendAdminMessage(admin, threadId, body) {
   thread.updatedAt = now;
   await thread.save();
 
-  try {
-    await createUserNotification(thread.studentId, {
-      title: "Reply from your mentor",
-      text: preview(text),
-      variant: "info",
-      href: "#/mentor-desk",
-    }, { pushTag: `mentor-reply-${threadId}-${message.id}` });
-  } catch (err) {
-    console.warn("[mentor-chat] student notify failed", err?.message);
-  }
+  await notifyUserWithPush(thread.studentId, {
+    title: "Reply from your mentor",
+    text: preview(text),
+    variant: "info",
+    href: "#/mentor-desk",
+  }, `mentor-reply-${threadId}-${message.id}`);
 
-  return {
-    message: toMentorMessageDto(message),
-    thread: toMentorThreadDto(thread),
-  };
+  return toMentorMessageDto(message);
 }
 
 export async function getAdminInboxStats() {
