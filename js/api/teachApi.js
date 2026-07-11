@@ -99,3 +99,19 @@ export function completeRoadmapTopic(topicId) {
     body: { topicId },
   });
 }
+
+export function fetchTopicVideo(topicId) {
+  return request(`/api/teach/video/${encodeURIComponent(topicId)}`, { timeoutMs: 30_000 });
+}
+
+export function fetchAdminTopicVideos() {
+  return request("/api/auth/admin/topic-videos", { timeoutMs: 30_000 });
+}
+
+export function saveAdminTopicVideo(topicId, { youtubeUrl, title } = {}) {
+  return request(`/api/auth/admin/topic-videos/${encodeURIComponent(topicId)}`, {
+    method: "PUT",
+    body: { youtubeUrl, title },
+    timeoutMs: 30_000,
+  });
+}

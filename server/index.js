@@ -30,6 +30,12 @@ import {
 import { canAccessProblemAi, canAccessTeachTopic, canAccessTeachTopicById } from "./roadmap-access.js";
 import { sendAdminManualNotifications } from "./admin-manual-notifications.js";
 import {
+  TopicVideoError,
+  getTopicVideo,
+  listTopicVideosAdmin,
+  upsertTopicVideo,
+} from "./topic-video-store.js";
+import {
   LessonStoreError,
   getCachedLesson,
   getOrCreateStandardLesson,
@@ -225,6 +231,14 @@ function handleUserDataError(res, err) {
 
 function handleLessonStoreError(res, err) {
   if (err instanceof LessonStoreError) {
+    res.status(err.status).json({ error: { message: err.message, code: err.code } });
+    return true;
+  }
+  return false;
+}
+
+function handleTopicVideoError(res, err) {
+  if (err instanceof TopicVideoError) {
     res.status(err.status).json({ error: { message: err.message, code: err.code } });
     return true;
   }
@@ -973,6 +987,58 @@ app.post("/api/problem/analyze-complexity", requireAuth, async (req, res) => {
     }
     console.error("[/api/problem/analyze-complexity]", err);
     res.status(500).json({ error: { message: "Complexity analysis failed.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/teach/video/:topicId", requireAuth, async (req, res) => {
+  try {
+    const token = extractBearer(req);
+    const user = await getCurrentUser(token);
+
+    if (!canAccessTeachTopicById(user, req.params.topicId)) {
+      res.status(403).json({
+        error: {
+          message: "Subscribe to unlock learning content for this topic.",
+          code: "ROADMAP_LOCKED",
+        },
+      });
+      return;
+    }
+
+    const video = await getTopicVideo(req.params.topicId);
+    res.json(video);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/teach/video/:topicId]", err);
+    res.status(500).json({ error: { message: "Failed to load topic video.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.get("/api/auth/admin/topic-videos", requireAdmin, async (_req, res) => {
+  try {
+    const data = await listTopicVideosAdmin();
+    res.json(data);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    console.error("[/api/auth/admin/topic-videos]", err);
+    res.status(500).json({ error: { message: "Failed to load topic videos.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.put("/api/auth/admin/topic-videos/:topicId", requireAdmin, async (req, res) => {
+  try {
+    const { youtubeUrl, title } = req.body ?? {};
+    const result = await upsertTopicVideo(req.params.topicId, {
+      youtubeUrl,
+      title,
+      updatedBy: req.auth.sub,
+    });
+    res.json(result);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleTopicVideoError(res, err)) return;
+    console.error("[/api/auth/admin/topic-videos/:topicId]", err);
+    res.status(500).json({ error: { message: "Failed to save topic video.", code: "SERVER_ERROR" } });
   }
 });
 

@@ -6,7 +6,7 @@ import { icon } from "./icons.js";
 import { Badge, DifficultyBadge } from "./ui/index.js";
 import { openModal, closeModal, initModals } from "./ui/interactions.js";
 import { TeachApiError } from "../api/geminiApi.js";
-import { fetchCachedLesson, fetchLesson } from "../api/teachApi.js";
+import { fetchCachedLesson, fetchLesson, fetchTopicVideo } from "../api/teachApi.js";
 import {
   canAccessAiGeneration,
   canAccessCachedLesson,
@@ -44,6 +44,17 @@ let lessonState = {
   activeVariant: "standard",
   hasSimpler: false,
   cached: false,
+};
+
+/** @type {"ai" | "youtube"} */
+let learnMode = "ai";
+
+let videoState = {
+  loaded: false,
+  available: false,
+  embedUrl: null,
+  youtubeUrl: null,
+  title: null,
 };
 
 function escapeHtml(str) {
@@ -220,7 +231,120 @@ function renderCacheBadge() {
   return `<span class="teach-cache-badge">${icon("database")} Saved lesson</span>`;
 }
 
+function renderLearnModeBar() {
+  const isAi = learnMode === "ai";
+  const isYoutube = learnMode === "youtube";
+
+  return `
+    <div class="teach-learn-mode" id="teach-learn-mode" role="tablist" aria-label="Learning format">
+      <button
+        type="button"
+        class="teach-learn-mode__tab${isAi ? " is-active" : ""}"
+        data-learn-mode="ai"
+        role="tab"
+        aria-selected="${isAi}"
+      >
+        ${icon("zap")}
+        <span>AI Lesson</span>
+      </button>
+      <button
+        type="button"
+        class="teach-learn-mode__tab${isYoutube ? " is-active" : ""}"
+        data-learn-mode="youtube"
+        role="tab"
+        aria-selected="${isYoutube}"
+      >
+        ${icon("video")}
+        <span>YouTube Video</span>
+      </button>
+    </div>
+  `;
+}
+
+function wrapLearnBody(innerHtml) {
+  return `${renderLearnModeBar()}<div class="teach-learn-content">${innerHtml}</div>`;
+}
+
+function renderVideoLoading() {
+  return `
+    <div class="teach-video-loading">
+      <div class="teach-loading__spinner">${icon("loader")}</div>
+      <p class="teach-video-loading__text">Loading video…</p>
+    </div>
+  `;
+}
+
+function renderVideoComingSoon() {
+  return `
+    <div class="teach-video-empty">
+      <div class="teach-video-empty__icon" aria-hidden="true">${icon("video")}</div>
+      <h3 class="teach-video-empty__title">Video coming soon</h3>
+      <p class="teach-video-empty__text">
+        We're recording a walkthrough for <strong>${escapeHtml(currentTopic?.name || "this topic")}</strong>.
+        Use the AI lesson in the meantime — it's the primary way to learn here.
+      </p>
+    </div>
+  `;
+}
+
+function renderVideoPlayer(video) {
+  const title = escapeHtml(video.title || currentTopic?.name || "Topic video");
+  return `
+    <div class="teach-video">
+      <div class="teach-video__player">
+        <iframe
+          src="${escapeHtml(video.embedUrl)}?rel=0"
+          title="${title}"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen
+          loading="lazy"
+        ></iframe>
+      </div>
+      <div class="teach-video__meta">
+        <p class="teach-video__caption">${title}</p>
+        <a
+          href="${escapeHtml(video.youtubeUrl)}"
+          class="btn btn--outline btn--sm teach-video__external"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          ${icon("externalLink")}
+          <span>Watch on YouTube</span>
+        </a>
+      </div>
+    </div>
+  `;
+}
+
+function updateLearnEyebrow() {
+  const eyebrow = document.querySelector(`#${MODAL_ID}-overlay .teach-modal__eyebrow`);
+  if (!eyebrow) return;
+  if (learnMode === "youtube") {
+    eyebrow.innerHTML = `${icon("video")} YouTube Video`;
+  } else {
+    eyebrow.innerHTML = `${icon("zap")} AI Lesson`;
+  }
+}
+
+function renderCompleteButtonOnly() {
+  const completed = currentTopic?.id && isTopicCompleted(currentTopic.id);
+  return `
+    <button
+      type="button"
+      class="btn btn--primary btn--lg teach-complete-btn"
+      id="teach-complete-btn"
+    >
+      ${icon("check")}
+      <span>${completed ? "Continue to Next Topic" : "Mark Complete & Continue"}</span>
+    </button>
+  `;
+}
+
 function renderFooter() {
+  if (learnMode === "youtube") {
+    return renderCompleteButtonOnly();
+  }
+
   const user = getSessionUser();
   const simplerLocked = currentTopic && !canAccessSimplerWords(user, currentTopic);
   const hasSimpler = Boolean(lessonState.simpler);
@@ -344,11 +468,14 @@ function setFooterVisible(show) {
   }
 }
 
-function setModalState({ title, metaHtml, bodyHtml, showFooter = false }) {
+function setModalState({ title, metaHtml, bodyHtml, showFooter = false, wrapBody = true }) {
   const { titleEl, metaEl, bodyEl } = getElements();
   if (titleEl) titleEl.textContent = title;
   if (metaEl && metaHtml !== undefined) metaEl.innerHTML = metaHtml;
-  if (bodyEl) bodyEl.innerHTML = bodyHtml;
+  if (bodyEl) {
+    bodyEl.innerHTML = wrapBody ? wrapLearnBody(bodyHtml) : bodyHtml;
+  }
+  updateLearnEyebrow();
   setFooterVisible(showFooter);
 }
 
@@ -365,6 +492,72 @@ function renderLessonView() {
     bodyHtml: renderLesson(activeContent()),
     showFooter: true,
   });
+}
+
+async function loadTopicVideoView() {
+  if (!currentTopic?.id) return;
+
+  setModalState({
+    title: currentTopic.name,
+    metaHtml: renderMeta(currentTopic),
+    bodyHtml: renderVideoLoading(),
+    showFooter: true,
+  });
+
+  try {
+    const data = await fetchTopicVideo(currentTopic.id);
+    videoState = {
+      loaded: true,
+      available: Boolean(data.available),
+      embedUrl: data.embedUrl || null,
+      youtubeUrl: data.youtubeUrl || null,
+      title: data.title || null,
+    };
+    renderYoutubeView();
+  } catch (err) {
+    const message = err instanceof TeachApiError ? err.message : "Could not load video.";
+    setModalState({
+      title: currentTopic.name,
+      metaHtml: renderMeta(currentTopic),
+      bodyHtml: renderError(message),
+      showFooter: true,
+    });
+  }
+}
+
+function renderYoutubeView() {
+  const inner = videoState.available
+    ? renderVideoPlayer(videoState)
+    : renderVideoComingSoon();
+
+  setModalState({
+    title: currentTopic?.name || "Topic",
+    metaHtml: renderMeta(currentTopic),
+    bodyHtml: inner,
+    showFooter: true,
+  });
+}
+
+async function switchLearnMode(mode) {
+  if (mode !== "ai" && mode !== "youtube") return;
+  if (learnMode === mode) return;
+
+  learnMode = mode;
+  updateLearnEyebrow();
+
+  if (mode === "ai") {
+    if (lessonState.standard) {
+      setModalState({
+        title: currentTopic?.name || "Topic",
+        metaHtml: renderMeta(currentTopic, { cached: lessonState.cached }),
+        bodyHtml: renderLesson(activeContent()),
+        showFooter: true,
+      });
+    }
+    return;
+  }
+
+  await loadTopicVideoView();
 }
 
 function startLoadingAnimation() {
@@ -556,6 +749,14 @@ export async function openTeachLesson(topic, triggerBtn) {
   ensureTeachModalShell();
 
   currentTopic = normalizeTopic(topic);
+  learnMode = "ai";
+  videoState = {
+    loaded: false,
+    available: false,
+    embedUrl: null,
+    youtubeUrl: null,
+    title: null,
+  };
   lessonState = {
     standard: "",
     simpler: "",
@@ -690,6 +891,13 @@ function ensureTeachModalShell() {
 
   document.body.insertAdjacentHTML("beforeend", renderModalShell());
   initModals(document);
+
+  document.getElementById(`${MODAL_ID}-body`)?.addEventListener("click", (e) => {
+    const modeBtn = e.target.closest("[data-learn-mode]");
+    if (modeBtn) {
+      void switchLearnMode(modeBtn.dataset.learnMode);
+    }
+  });
 
   document.getElementById(`${MODAL_ID}-footer`)?.addEventListener("click", (e) => {
     const variantBtn = e.target.closest("[data-variant]");

@@ -282,6 +282,13 @@ export default {
 
           <div class="admin-quick-grid">
             ${adminQuickCard({
+              path: "admin-topic-videos",
+              iconName: "video",
+              title: "Topic Videos",
+              text: "Attach YouTube walkthroughs to roadmap topics for the Learn dialog.",
+              accent: "success",
+            })}
+            ${adminQuickCard({
               path: "admin-push-logs",
               iconName: "bell",
               title: "Push Delivery Log",

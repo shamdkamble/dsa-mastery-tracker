@@ -6,6 +6,7 @@ import { icon } from "./icons.js";
 
 export const ADMIN_NAV = [
   { id: "users", path: "admin", label: "Users", icon: "user" },
+  { id: "topic-videos", path: "admin-topic-videos", label: "Topic Videos", icon: "video" },
   { id: "push-logs", path: "admin-push-logs", label: "Push Log", icon: "bell" },
   { id: "notifications", path: "admin-notifications", label: "System Architecture", icon: "layers" },
 ];

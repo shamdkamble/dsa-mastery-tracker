@@ -53,6 +53,7 @@ function getNavSections() {
       label: "Administration",
       items: [
         { path: "admin", label: "Admin Panel", icon: "shield" },
+        { path: "admin-topic-videos", label: "Topic Videos", icon: "video" },
         { path: "admin-push-logs", label: "Push Delivery Log", icon: "bell" },
         { path: "admin-notifications", label: "System Architecture", icon: "layers" },
       ],

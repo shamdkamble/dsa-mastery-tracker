@@ -107,6 +107,7 @@ const ROUTE_TITLES = {
   login: "Sign In",
   register: "Create Account",
   admin: "Admin Panel",
+  "admin-topic-videos": "Topic Videos",
   "admin-push-logs": "Push Delivery Log",
   "admin-notifications": "System Architecture",
 };

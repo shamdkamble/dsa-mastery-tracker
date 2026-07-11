@@ -50,11 +50,13 @@ import register from "./pages/register.js";
 import admin from "./pages/admin.js";
 import adminPushLogs from "./pages/admin-push-logs.js";
 import adminNotifications from "./pages/admin-notifications.js";
+import adminTopicVideos from "./pages/admin-topic-videos.js";
 
 registerRoutes({
   login,
   register,
   admin,
+  "admin-topic-videos": adminTopicVideos,
   "admin-push-logs": adminPushLogs,
   "admin-notifications": adminNotifications,
   dashboard,
