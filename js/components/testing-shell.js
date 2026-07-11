@@ -6,6 +6,7 @@ import { icon } from "./icons.js";
 
 export const TESTING_NAV = [
   { id: "dashboard", path: "testing-dashboard", label: "Dashboard", icon: "dashboard" },
+  { id: "compass", path: "platform-compass", label: "Platform Compass", icon: "layers" },
   { id: "issues", path: "testing-issues", label: "Issues", icon: "alertCircle" },
 ];
 

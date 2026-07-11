@@ -21,7 +21,7 @@ export const ADMIN_ROUTES = new Set([
   "admin-notifications",
   "admin-mentor-inbox",
 ]);
-export const TESTING_ROUTES = new Set(["testing-dashboard", "testing-issues"]);
+export const TESTING_ROUTES = new Set(["testing-dashboard", "testing-issues", "platform-compass"]);
 export const PENDING_USER_ROUTES = new Set(["dashboard", "settings", "mentor-desk"]);
 
 export function isTestingRoute(path) {

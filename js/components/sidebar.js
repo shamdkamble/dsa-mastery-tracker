@@ -56,6 +56,7 @@ function getNavSections() {
       label: "Testing Panel",
       items: [
         { path: "testing-dashboard", label: "QA Dashboard", icon: "target" },
+        { path: "platform-compass", label: "Platform Compass", icon: "layers" },
         { path: "testing-issues", label: "Issue Tracker", icon: "alertCircle" },
       ],
     }] : []),
