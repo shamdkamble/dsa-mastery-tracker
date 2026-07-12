@@ -230,7 +230,7 @@ export default {
                     <li>Tap <strong>Allow</strong> when iOS asks for permission</li>
                   </ol>
                 </div>
-                ${settingsRow("System notifications", "Alerts on this phone or browser", Toggle({ checked: settings.notifications.pushEnabled, id: "push-notifications-toggle", attrs: 'data-push-system-toggle aria-describedby="push-status-text"' }))}
+                ${settingsRow("Allow alerts", "On this phone or browser", Toggle({ checked: settings.notifications.pushEnabled, id: "push-notifications-toggle", attrs: 'data-push-system-toggle aria-describedby="push-status-text"' }))}
                 <p class="settings-push-status" id="push-status-text" aria-live="polite"></p>
                 <div class="settings-push-actions">
                   <button type="button" class="btn btn--secondary btn--sm" id="push-test-btn">Send test notification</button>

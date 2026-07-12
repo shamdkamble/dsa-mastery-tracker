@@ -111,6 +111,31 @@
     align-self: flex-start;
   }
 
+  /* Notification toggles: keep label + switch on one row (matches laptop) */
+  .settings-card--nested .settings-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .settings-card--nested .settings-row__info {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: var(--space-2);
+  }
+
+  .settings-card--nested .settings-row > *:last-child {
+    align-self: center;
+    flex-shrink: 0;
+  }
+
+  .settings-card--flat.settings-card--nested .settings-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
   .admin-section__head {
     flex-wrap: wrap;
     gap: var(--space-3);
@@ -201,6 +226,37 @@
 
   .settings-account-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-block__body {
+    padding: var(--space-4);
+  }
+
+  .settings-block__head {
+    padding: var(--space-4);
+  }
+
+  .settings-card--nested .settings-card__subsection {
+    padding: var(--space-3) var(--space-4) var(--space-2);
+  }
+
+  .settings-card--nested .settings-row {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .settings-push-ios-callout {
+    margin-left: var(--space-4);
+    margin-right: var(--space-4);
+  }
+
+  .settings-push-status {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .settings-push-actions {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
   }
 
   .search-page {
