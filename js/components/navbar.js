@@ -538,8 +538,14 @@ function bindEvents(container) {
         searchInput.value = "";
         setState({ searchQuery: "" });
         searchInput.blur();
+        return;
       }
-      if (e.key === "Enter" && searchInput.value.trim()) {
+      if (e.key === "Enter") {
+        const q = searchInput.value.trim();
+        if (q) {
+          setState({ searchQuery: q });
+          addSearchRecent(q);
+        }
         navigate("search");
       }
     });

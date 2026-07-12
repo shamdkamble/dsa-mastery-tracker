@@ -354,9 +354,9 @@ export function searchAll(query) {
 
   const problems = getProblems()
     .filter((p) =>
-      p.title.toLowerCase().includes(q)
-      || p.topic.toLowerCase().includes(q)
-      || p.pattern.toLowerCase().includes(q)
+      String(p.title || "").toLowerCase().includes(q)
+      || String(p.topic || "").toLowerCase().includes(q)
+      || String(p.pattern || "").toLowerCase().includes(q)
     )
     .map((p) => ({
       id: p.id,
@@ -372,7 +372,10 @@ export function searchAll(query) {
     .map((p) => ({ title: p.name, count: p.problems }));
 
   const notes = getDB().notes
-    .filter((n) => n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q))
+    .filter((n) =>
+      String(n.title || "").toLowerCase().includes(q)
+      || String(n.content || "").toLowerCase().includes(q)
+    )
     .map((n) => ({
       id: n.id,
       title: n.title,

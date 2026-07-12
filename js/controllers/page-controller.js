@@ -189,15 +189,17 @@ export function bindFilterHandlers(root) {
 /* ── Search page ── */
 
 export function bindSearchHandlers(root) {
-  if (root.dataset.searchHandlersBound) return;
-  root.dataset.searchHandlersBound = "true";
+  const searchPage = root.querySelector(".search-page");
+  if (!searchPage || searchPage.dataset.searchHandlersBound) return;
 
-  const input = $("#search-page-input", root);
-  const resultsEl = $("#search-results", root);
-
+  const input = $("#search-page-input", searchPage);
+  const resultsEl = $("#search-results", searchPage);
   if (!input || !resultsEl) return;
 
+  searchPage.dataset.searchHandlersBound = "true";
+
   const runSearch = (q) => {
+    setState({ searchQuery: q });
     if (q.trim()) addSearchRecent(q);
     import("../storage/computed.js").then(({ searchAll }) => {
       const results = searchAll(q);
@@ -209,15 +211,15 @@ export function bindSearchHandlers(root) {
 
   input.addEventListener("input", (e) => runSearch(e.target.value));
 
-  root.addEventListener("click", (e) => {
+  searchPage.addEventListener("click", (e) => {
     const chip = e.target.closest("[data-recent-search]");
-    if (chip) {
-      input.value = chip.dataset.recentSearch;
-      runSearch(chip.textContent.trim());
-    }
+    if (!chip) return;
+    const q = chip.dataset.recentSearch || chip.textContent.trim();
+    input.value = q;
+    runSearch(q);
   });
 
-  if (input.value) runSearch(input.value);
+  if (input.value.trim()) runSearch(input.value);
 }
 
 /* ── Settings handlers ── */
@@ -513,9 +515,10 @@ export function bindPageHandlers(root) {
   if (isNewRoot) {
     bindMissionHandlers(root);
     bindFilterHandlers(root);
-    bindSearchHandlers(root);
     bindCalendarHandlers(root);
   }
+
+  bindSearchHandlers(root);
 
   // Settings controls are rendered after first bind; delegation handles late-mounted elements.
   bindSettingsHandlers(root);
