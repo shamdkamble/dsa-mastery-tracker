@@ -9,6 +9,7 @@ import { MentorMessage, toMentorMessageDto } from "./models/MentorMessage.js";
 import { createUserNotification } from "./notifications-db.js";
 import { deliverPushForNotification } from "./push-access-delivery.js";
 import { User } from "./models/User.js";
+import { isAllowedChatImageUrl } from "./r2-storage.js";
 
 const ADMIN_INBOX_USER_ID = "admin";
 const MAX_MESSAGE_LENGTH = 4000;
@@ -26,6 +27,42 @@ export class MentorChatError extends Error {
 function preview(text) {
   const t = String(text || "").trim();
   return t.length > 120 ? `${t.slice(0, 117)}…` : t;
+}
+
+function previewMessage({ body, imageUrl }) {
+  const text = String(body || "").trim();
+  if (imageUrl) return text ? preview(text) : "Photo";
+  return preview(text);
+}
+
+function normalizeMessageInput(input) {
+  if (typeof input === "string") {
+    return { body: input.trim(), imageUrl: null };
+  }
+  return {
+    body: String(input?.body || "").trim(),
+    imageUrl: String(input?.imageUrl || "").trim() || null,
+  };
+}
+
+function validateMessagePayload(threadId, payload) {
+  const { body, imageUrl } = normalizeMessageInput(payload);
+
+  if (!body && !imageUrl) {
+    throw new MentorChatError("Message cannot be empty.", { status: 400, code: "INVALID_INPUT" });
+  }
+  if (body.length > MAX_MESSAGE_LENGTH) {
+    throw new MentorChatError(`Message too long (max ${MAX_MESSAGE_LENGTH} characters).`, { status: 400, code: "INVALID_INPUT" });
+  }
+  if (imageUrl && !isAllowedChatImageUrl(imageUrl, threadId)) {
+    throw new MentorChatError("Invalid image attachment.", { status: 400, code: "INVALID_INPUT" });
+  }
+
+  return {
+    body,
+    imageUrl,
+    messageType: imageUrl ? "image" : "text",
+  };
 }
 
 async function notifyUserWithPush(userId, payload, pushTag) {
@@ -138,6 +175,8 @@ function toReplySnapshot(doc) {
   return {
     id: d.id,
     body: d.body,
+    imageUrl: d.imageUrl || null,
+    messageType: d.messageType || (d.imageUrl ? "image" : "text"),
     senderName: d.senderName || "",
     senderRole: d.senderRole,
   };
@@ -217,16 +256,9 @@ export async function getStudentThreadView(student, { markRead = false } = {}) {
   return { thread, messages };
 }
 
-export async function sendStudentMessage(student, body, replyToId) {
-  const text = String(body || "").trim();
-  if (!text) {
-    throw new MentorChatError("Message cannot be empty.", { status: 400, code: "INVALID_INPUT" });
-  }
-  if (text.length > MAX_MESSAGE_LENGTH) {
-    throw new MentorChatError(`Message too long (max ${MAX_MESSAGE_LENGTH} characters).`, { status: 400, code: "INVALID_INPUT" });
-  }
-
+export async function sendStudentMessage(student, payload, replyToId) {
   const thread = await getOrCreateStudentThread(student);
+  const content = validateMessagePayload(thread.id, payload);
   const now = new Date().toISOString();
   const validatedReplyId = await resolveReplyToId(thread.id, replyToId);
 
@@ -236,15 +268,19 @@ export async function sendStudentMessage(student, body, replyToId) {
     senderId: student.id,
     senderRole: student.role === "tester" ? "tester" : "user",
     senderName: student.name || "Student",
-    body: text,
+    messageType: content.messageType,
+    body: content.body,
+    ...(content.imageUrl ? { imageUrl: content.imageUrl } : {}),
     ...(validatedReplyId ? { replyToId: validatedReplyId } : {}),
     createdAt: now,
   });
 
+  const messagePreview = previewMessage(content);
+
   await MentorThread.updateOne({ id: thread.id }, {
     $set: {
       lastMessageAt: now,
-      lastMessagePreview: preview(text),
+      lastMessagePreview: messagePreview,
       lastSenderRole: student.role === "tester" ? "tester" : "user",
       studentName: student.name || thread.studentName,
       studentEmail: student.email || thread.studentEmail,
@@ -255,7 +291,7 @@ export async function sendStudentMessage(student, body, replyToId) {
 
   await notifyAdmins({
     title: "New Mentor Desk message",
-    text: `${student.name || "A student"}: ${preview(text)}`,
+    text: `${student.name || "A student"}: ${messagePreview}`,
     variant: "accent",
     href: "#/admin-mentor-inbox",
   }, `mentor-chat-${thread.id}-${message.id}`);
@@ -358,26 +394,19 @@ export async function getAdminThreadView(threadId, { markRead = false } = {}) {
   return { thread: dto, messages };
 }
 
-export async function sendAdminMessageToStudent(admin, studentId, body, replyToId) {
+export async function sendAdminMessageToStudent(admin, studentId, payload, replyToId) {
   const thread = await getOrCreateThreadForStudentId(studentId);
-  return sendAdminMessage(admin, thread.id, body, replyToId);
+  return sendAdminMessage(admin, thread.id, payload, replyToId);
 }
 
-export async function sendAdminMessage(admin, threadId, body, replyToId) {
-  const text = String(body || "").trim();
-  if (!text) {
-    throw new MentorChatError("Message cannot be empty.", { status: 400, code: "INVALID_INPUT" });
-  }
-  if (text.length > MAX_MESSAGE_LENGTH) {
-    throw new MentorChatError(`Message too long (max ${MAX_MESSAGE_LENGTH} characters).`, { status: 400, code: "INVALID_INPUT" });
-  }
-
+export async function sendAdminMessage(admin, threadId, payload, replyToId) {
   await connectDB();
   const thread = await MentorThread.findOne({ id: threadId });
   if (!thread) {
     throw new MentorChatError("Conversation not found.", { status: 404, code: "NOT_FOUND" });
   }
 
+  const content = validateMessagePayload(threadId, payload);
   const now = new Date().toISOString();
   const validatedReplyId = await resolveReplyToId(threadId, replyToId);
   const message = await MentorMessage.create({
@@ -386,13 +415,17 @@ export async function sendAdminMessage(admin, threadId, body, replyToId) {
     senderId: admin.id,
     senderRole: "admin",
     senderName: admin.name || "Mentor",
-    body: text,
+    messageType: content.messageType,
+    body: content.body,
+    ...(content.imageUrl ? { imageUrl: content.imageUrl } : {}),
     ...(validatedReplyId ? { replyToId: validatedReplyId } : {}),
     createdAt: now,
   });
 
+  const messagePreview = previewMessage(content);
+
   thread.lastMessageAt = now;
-  thread.lastMessagePreview = preview(text);
+  thread.lastMessagePreview = messagePreview;
   thread.lastSenderRole = "admin";
   thread.unreadByStudent = (thread.unreadByStudent || 0) + 1;
   thread.updatedAt = now;
@@ -400,7 +433,7 @@ export async function sendAdminMessage(admin, threadId, body, replyToId) {
 
   await notifyUserWithPush(thread.studentId, {
     title: "Reply from your mentor",
-    text: preview(text),
+    text: messagePreview,
     variant: "info",
     href: "#/mentor-desk",
   }, `mentor-reply-${threadId}-${message.id}`);

@@ -122,6 +122,12 @@ import {
   previewLearningFactForUser,
 } from "./learning-fact-delivery.js";
 import { getDailyWisdomAdminDashboard } from "./daily-wisdom-admin-stats.js";
+import {
+  MediaStorageError,
+  uploadProfilePhotoForUser,
+  removeProfilePhotoForUser,
+  uploadChatImageForUser,
+} from "./media-routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -269,6 +275,19 @@ function handleMentorChatError(res, err) {
   }
   return false;
 }
+
+function handleMediaStorageError(res, err) {
+  if (err instanceof MediaStorageError) {
+    res.status(err.status).json({ error: { message: err.message, code: err.code } });
+    return true;
+  }
+  return false;
+}
+
+const imageUploadParser = express.raw({
+  type: ["image/jpeg", "image/png", "image/webp"],
+  limit: 220 * 1024,
+});
 
 function handleLessonStoreError(res, err) {
   if (err instanceof LessonStoreError) {
@@ -1055,10 +1074,55 @@ app.get("/api/mentor-chat/thread", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/media/profile-photo", requireAuth, imageUploadParser, async (req, res) => {
+  try {
+    const user = await getCurrentUser(extractBearer(req));
+    const result = await uploadProfilePhotoForUser(user, req.body, req.headers["content-type"]);
+    res.status(201).json(result);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleMediaStorageError(res, err)) return;
+    console.error("[/api/media/profile-photo]", err);
+    res.status(500).json({ error: { message: "Failed to upload profile photo.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.delete("/api/media/profile-photo", requireAuth, async (req, res) => {
+  try {
+    const user = await getCurrentUser(extractBearer(req));
+    await removeProfilePhotoForUser(user, req.body?.currentUrl);
+    res.json({ ok: true });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleMediaStorageError(res, err)) return;
+    console.error("[DELETE /api/media/profile-photo]", err);
+    res.status(500).json({ error: { message: "Failed to remove profile photo.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/media/chat-image", requireAuth, imageUploadParser, async (req, res) => {
+  try {
+    const user = await getCurrentUser(extractBearer(req));
+    const threadId = String(req.headers["x-thread-id"] || req.query?.threadId || "").trim();
+    const studentId = String(req.headers["x-student-id"] || req.query?.studentId || "").trim();
+    const result = await uploadChatImageForUser(user, { threadId, studentId }, req.body, req.headers["content-type"]);
+    res.status(201).json(result);
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleMentorChatError(res, err)) return;
+    if (handleMediaStorageError(res, err)) return;
+    console.error("[/api/media/chat-image]", err);
+    res.status(500).json({ error: { message: "Failed to upload chat image.", code: "SERVER_ERROR" } });
+  }
+});
+
 app.post("/api/mentor-chat/messages", requireAuth, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
-    const message = await sendStudentMessage(user, req.body?.body, req.body?.replyToId);
+    const message = await sendStudentMessage(user, {
+      body: req.body?.body,
+      imageUrl: req.body?.imageUrl,
+    }, req.body?.replyToId);
     res.status(201).json({ message });
   } catch (err) {
     if (handleAuthError(res, err)) return;
@@ -1110,7 +1174,10 @@ app.get("/api/auth/admin/mentor-chat/students/:studentId", requireAdmin, async (
 app.post("/api/auth/admin/mentor-chat/students/:studentId/messages", requireAdmin, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
-    const message = await sendAdminMessageToStudent(user, req.params.studentId, req.body?.body, req.body?.replyToId);
+    const message = await sendAdminMessageToStudent(user, req.params.studentId, {
+      body: req.body?.body,
+      imageUrl: req.body?.imageUrl,
+    }, req.body?.replyToId);
     res.status(201).json({ message });
   } catch (err) {
     if (handleAuthError(res, err)) return;
@@ -1123,7 +1190,10 @@ app.post("/api/auth/admin/mentor-chat/students/:studentId/messages", requireAdmi
 app.post("/api/auth/admin/mentor-chat/threads/:threadId/messages", requireAdmin, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
-    const message = await sendAdminMessage(user, req.params.threadId, req.body?.body, req.body?.replyToId);
+    const message = await sendAdminMessage(user, req.params.threadId, {
+      body: req.body?.body,
+      imageUrl: req.body?.imageUrl,
+    }, req.body?.replyToId);
     res.status(201).json({ message });
   } catch (err) {
     if (handleAuthError(res, err)) return;

@@ -29,6 +29,9 @@ import { getState, setState } from "../state.js";
 import { getUser } from "../storage/db.js";
 import { getInitials } from "../storage/helpers.js";
 import { renderProfileAvatar } from "../utils/profile-avatar.js";
+import { compressImageFile } from "../utils/image-compress.js";
+import { uploadProfilePhoto, removeProfilePhoto } from "../api/mediaApi.js";
+import { getToken } from "../auth/session.js";
 import { debounce } from "../utils.js";
 
 let contentContainer = null;
@@ -196,8 +199,6 @@ export function bindSettingsHandlers(root) {
   if (root.dataset.settingsHandlersBound) return;
   root.dataset.settingsHandlersBound = "true";
 
-  const MAX_PHOTO_BYTES = 280_000;
-
   const saveProfile = debounce((scope) => {
     const profileForm = $("#settings-profile-form", scope);
     if (!profileForm) return;
@@ -232,25 +233,8 @@ export function bindSettingsHandlers(root) {
     if (e.target.id === "profile-photo-input") {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (!file.type.startsWith("image/")) {
-        showToast(Toast({ title: "Invalid file", text: "Please choose an image.", variant: "danger" }));
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = String(reader.result || "");
-        if (dataUrl.length > MAX_PHOTO_BYTES) {
-          showToast(Toast({ title: "Image too large", text: "Use a photo under 200 KB.", variant: "danger" }));
-          return;
-        }
-        const hidden = $("#profile-photo-data", root);
-        if (hidden) hidden.value = dataUrl;
-        updateUser({ profilePhoto: dataUrl });
-        syncUserState();
-        refreshProfilePreview(root);
-        showToast(Toast({ title: "Photo updated", variant: "success" }));
-      };
-      reader.readAsDataURL(file);
+      void handleProfilePhotoUpload(root, file);
+      e.target.value = "";
       return;
     }
 
@@ -373,9 +357,60 @@ function refreshProfilePreview(root) {
   }
 }
 
-function handlePhotoRemove(root) {
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read compressed image."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function handleProfilePhotoUpload(root, file) {
+  if (!file.type.startsWith("image/")) {
+    showToast(Toast({ title: "Invalid file", text: "Please choose an image.", variant: "danger" }));
+    return;
+  }
+
+  try {
+    const { blob, mimeType } = await compressImageFile(file);
+    let photoUrl = "";
+
+    if (getToken()) {
+      const result = await uploadProfilePhoto(blob, mimeType);
+      photoUrl = result.url;
+    } else {
+      photoUrl = await blobToDataUrl(blob);
+    }
+
+    const hidden = $("#profile-photo-data", root);
+    if (hidden) hidden.value = photoUrl;
+    updateUser({ profilePhoto: photoUrl });
+    syncUserState();
+    refreshProfilePreview(root);
+    showToast(Toast({ title: "Photo updated", variant: "success" }));
+  } catch (err) {
+    showToast(Toast({
+      title: "Photo upload failed",
+      text: err?.message || "Could not process image.",
+      variant: "danger",
+    }));
+  }
+}
+
+async function handlePhotoRemove(root) {
+  const currentPhoto = getUser().profilePhoto || "";
   const photoFileInput = $("#profile-photo-input", root);
   const hidden = $("#profile-photo-data", root);
+
+  if (currentPhoto.startsWith("http") && getToken()) {
+    try {
+      await removeProfilePhoto(currentPhoto);
+    } catch {
+      /* keep local removal even if remote delete fails */
+    }
+  }
+
   if (hidden) hidden.value = "";
   if (photoFileInput) photoFileInput.value = "";
   updateUser({ profilePhoto: "" });

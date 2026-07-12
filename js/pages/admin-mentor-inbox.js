@@ -27,6 +27,10 @@ import {
   sendAdminChatMessage,
   sendAdminChatMessageToStudent,
 } from "../api/mentorChatApi.js";
+import {
+  buildOptimisticChatImageMessage,
+  compressAndUploadChatImage,
+} from "../services/chat-media.js";
 
 const POLL_MS = 5000;
 
@@ -160,6 +164,11 @@ function previewText(body) {
   return text.length > 120 ? `${text.slice(0, 117)}…` : text;
 }
 
+function previewMessage(message) {
+  if (message?.imageUrl) return message.body?.trim() ? previewText(message.body) : "Photo";
+  return previewText(message?.body || "");
+}
+
 function buildOptimisticAdminMessage(body, { replyToId, replyTarget } = {}) {
   const user = getSessionUser();
   return {
@@ -174,6 +183,7 @@ function buildOptimisticAdminMessage(body, { replyToId, replyTarget } = {}) {
       replyTo: {
         id: replyTarget.id,
         body: replyTarget.body,
+        imageUrl: replyTarget.imageUrl || null,
         senderName: replyTarget.senderName,
         senderRole: replyTarget.senderRole,
       },
@@ -187,7 +197,7 @@ function bumpActiveThreadPreview(state, message) {
     ...state.activeThread,
     id: state.activeThread.id || message.threadId,
     lastMessageAt: message.createdAt,
-    lastMessagePreview: previewText(message.body),
+    lastMessagePreview: previewMessage(message),
     lastSenderRole: "admin",
   };
   activeThreadId = state.activeThread.id || activeThreadId;
@@ -201,7 +211,7 @@ function bumpActiveThreadPreview(state, message) {
       ...state.threads[idx],
       id: state.activeThread.id || state.threads[idx].id,
       lastMessageAt: message.createdAt,
-      lastMessagePreview: previewText(message.body),
+      lastMessagePreview: previewMessage(message),
       lastSenderRole: "admin",
     };
   }
@@ -289,6 +299,55 @@ function bindInbox(container, state) {
         removeChatMessage(container, optimistic.id);
         showToast(Toast({ title: "Send failed", text: err?.message, variant: "danger" }));
         throw err;
+      }
+    },
+    onImageAttach: async (file, { caption, replyToId, replyTarget } = {}) => {
+      if (!state.activeThread) {
+        showToast(Toast({ title: "Select a student first.", variant: "warning" }));
+        throw new Error("Select a student first.");
+      }
+
+      const user = getSessionUser();
+      const previewUrl = URL.createObjectURL(file);
+      const optimistic = buildOptimisticChatImageMessage({
+        caption,
+        imageUrl: previewUrl,
+        replyToId,
+        replyTarget,
+        senderRole: "admin",
+        senderName: user?.name || "Mentor",
+      });
+
+      state.messages = [...state.messages, optimistic];
+      appendChatMessage(container, optimistic, { viewerRole: "admin" });
+
+      try {
+        const { url, threadId } = await compressAndUploadChatImage(file, {
+          threadId: state.activeThread.id || "",
+          studentId: state.activeThread.studentId || "",
+        });
+        if (threadId && !state.activeThread.id) {
+          state.activeThread = { ...state.activeThread, id: threadId };
+          activeThreadId = threadId;
+        }
+
+        const result = state.activeThread.id
+          ? await sendAdminChatMessage(state.activeThread.id, { imageUrl: url, body: caption }, replyToId)
+          : await sendAdminChatMessageToStudent(state.activeThread.studentId, { imageUrl: url, body: caption }, replyToId);
+        const message = result.message;
+        state.messages = state.messages.map((msg) => (
+          msg.id === optimistic.id ? message : msg
+        ));
+        replaceChatMessage(container, optimistic.id, message, { viewerRole: "admin" });
+        bumpActiveThreadPreview(state, message);
+        patchThreadList(container, state);
+      } catch (err) {
+        state.messages = state.messages.filter((msg) => msg.id !== optimistic.id);
+        removeChatMessage(container, optimistic.id);
+        showToast(Toast({ title: "Image send failed", text: err?.message, variant: "danger" }));
+        throw err;
+      } finally {
+        URL.revokeObjectURL(previewUrl);
       }
     },
   });

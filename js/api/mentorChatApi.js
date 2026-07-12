@@ -62,13 +62,23 @@ export function fetchStudentThread({ markRead = false } = {}) {
   return request(`/api/mentor-chat/thread${threadQuery({ markRead })}`);
 }
 
-export function sendStudentChatMessage(body, replyToId) {
+function buildMessagePayload(payload, replyToId) {
+  const data = typeof payload === "string"
+    ? { body: payload }
+    : {
+      body: payload?.body,
+      imageUrl: payload?.imageUrl,
+    };
+  return {
+    ...data,
+    ...(replyToId ? { replyToId } : {}),
+  };
+}
+
+export function sendStudentChatMessage(payload, replyToId) {
   return request("/api/mentor-chat/messages", {
     method: "POST",
-    body: JSON.stringify({
-      body,
-      ...(replyToId ? { replyToId } : {}),
-    }),
+    body: JSON.stringify(buildMessagePayload(payload, replyToId)),
   });
 }
 
@@ -84,22 +94,16 @@ export function fetchAdminStudentThread(studentId, { markRead = false } = {}) {
   return request(`/api/auth/admin/mentor-chat/students/${encodeURIComponent(studentId)}${threadQuery({ markRead })}`);
 }
 
-export function sendAdminChatMessage(threadId, body, replyToId) {
+export function sendAdminChatMessage(threadId, payload, replyToId) {
   return request(`/api/auth/admin/mentor-chat/threads/${encodeURIComponent(threadId)}/messages`, {
     method: "POST",
-    body: JSON.stringify({
-      body,
-      ...(replyToId ? { replyToId } : {}),
-    }),
+    body: JSON.stringify(buildMessagePayload(payload, replyToId)),
   });
 }
 
-export function sendAdminChatMessageToStudent(studentId, body, replyToId) {
+export function sendAdminChatMessageToStudent(studentId, payload, replyToId) {
   return request(`/api/auth/admin/mentor-chat/students/${encodeURIComponent(studentId)}/messages`, {
     method: "POST",
-    body: JSON.stringify({
-      body,
-      ...(replyToId ? { replyToId } : {}),
-    }),
+    body: JSON.stringify(buildMessagePayload(payload, replyToId)),
   });
 }

@@ -32,9 +32,12 @@ export function formatChatTime(iso) {
   return `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} ${time}`;
 }
 
-function truncateReplyText(body, max = 120) {
+function truncateReplyText(message, max = 120) {
+  const body = typeof message === "string" ? message : message?.body;
+  const imageUrl = typeof message === "object" ? message?.imageUrl : null;
   const text = String(body || "").trim().replace(/\s+/g, " ");
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  const label = text || (imageUrl ? "Photo" : "");
+  return label.length > max ? `${label.slice(0, max - 1)}…` : label;
 }
 
 function replySenderLabel(replyTo) {
@@ -132,7 +135,7 @@ export function renderReplyQuote(replyTo, { viewerRole = "user" } = {}) {
       <span class="mentor-chat__quote-accent ${accentClass}" aria-hidden="true"></span>
       <div class="mentor-chat__quote-body">
         <span class="mentor-chat__quote-label">Replying to ${replySenderLabel(replyTo)}</span>
-        <span class="mentor-chat__quote-text">${escapeHtml(truncateReplyText(replyTo.body))}</span>
+        <span class="mentor-chat__quote-text">${escapeHtml(truncateReplyText(replyTo))}</span>
       </div>
     </button>
   `;
@@ -150,7 +153,7 @@ function renderReplyBarContent(replyTarget) {
       <span class="mentor-chat__reply-bar-accent" aria-hidden="true"></span>
       <div class="mentor-chat__reply-bar-content">
         <span class="mentor-chat__reply-bar-label">Replying to ${replySenderLabel(replyTarget)}</span>
-        <span class="mentor-chat__reply-bar-text">${escapeHtml(truncateReplyText(replyTarget.body, 100))}</span>
+        <span class="mentor-chat__reply-bar-text">${escapeHtml(truncateReplyText(replyTarget, 100))}</span>
       </div>
       <button type="button" class="mentor-chat__reply-bar-close" data-reply-cancel aria-label="Cancel reply">
         ${icon("close")}
@@ -197,6 +200,7 @@ export function setReplyTarget(container, message) {
   container._mentorChatReplyTarget = {
     id: message.id,
     body: message.body,
+    imageUrl: message.imageUrl || null,
     senderName: message.senderName,
     senderRole: message.senderRole,
   };
@@ -259,6 +263,14 @@ export function renderChatMessage(msg, { viewerRole = "user" } = {}) {
   const pendingClass = msg.pending ? " mentor-chat__bubble--pending" : "";
   const replyQuote = msg.replyTo ? renderReplyQuote(msg.replyTo, { viewerRole }) : "";
   const receipt = renderMessageReceipt(msg, { viewerRole });
+  const imageBlock = msg.imageUrl
+    ? `<a class="mentor-chat__image-link" href="${escapeHtml(msg.imageUrl)}" target="_blank" rel="noopener noreferrer">
+        <img class="mentor-chat__image" src="${escapeHtml(msg.imageUrl)}" alt="Shared image" loading="lazy">
+      </a>`
+    : "";
+  const textBlock = msg.body
+    ? `<div class="mentor-chat__bubble-text">${escapeHtml(msg.body).replace(/\n/g, "<br>")}</div>`
+    : "";
 
   return `
     <div
@@ -278,9 +290,10 @@ export function renderChatMessage(msg, { viewerRole = "user" } = {}) {
           ${icon("reply")}
         </button>
         <div class="mentor-chat__swipe-track" data-chat-swipe-track>
-          <div class="mentor-chat__bubble ${bubbleClass}${pendingClass}" draggable="false">
+          <div class="mentor-chat__bubble ${bubbleClass}${pendingClass}${msg.imageUrl ? " mentor-chat__bubble--image" : ""}" draggable="false">
             ${replyQuote}
-            <div class="mentor-chat__bubble-text">${escapeHtml(msg.body).replace(/\n/g, "<br>")}</div>
+            ${imageBlock}
+            ${textBlock}
           </div>
         </div>
       </div>
@@ -531,6 +544,17 @@ export function renderChatComposer({ placeholder = "Type a message", disabled = 
     <form class="mentor-chat__composer" data-mentor-chat-form>
       <div data-reply-slot></div>
       <div class="mentor-chat__composer-bar">
+        <label class="mentor-chat__attach-btn" aria-label="Attach image">
+          ${icon("image")}
+          <input
+            type="file"
+            accept="image/*"
+            data-chat-image-input
+            class="mentor-chat__attach-input"
+            ${disabled ? "disabled" : ""}
+            hidden
+          >
+        </label>
         <div class="mentor-chat__input-wrap">
           <textarea
             class="mentor-chat__input"
@@ -588,11 +612,43 @@ function closeEmojiPickers(container, except) {
   });
 }
 
-export function bindChatComposer(container, { onSubmit } = {}) {
+export function bindChatComposer(container, { onSubmit, onImageAttach } = {}) {
   if (!container) return;
   if (onSubmit) container._mentorChatOnSubmit = onSubmit;
+  if (onImageAttach) container._mentorChatOnImageAttach = onImageAttach;
   if (container.dataset.chatComposerBound) return;
   container.dataset.chatComposerBound = "true";
+
+  container.addEventListener("change", async (e) => {
+    const input = e.target.closest("[data-chat-image-input]");
+    if (!input || !container._mentorChatOnImageAttach) return;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+
+    const form = input.closest("[data-mentor-chat-form]");
+    if (form?.dataset.sending === "true") return;
+
+    const textarea = form?.querySelector("textarea");
+    const caption = textarea?.value?.trim() || "";
+    const replyTarget = getReplyTarget(container);
+    const replyToId = replyTarget?.id || null;
+
+    form.dataset.sending = "true";
+    if (textarea) textarea.value = "";
+    closeEmojiPickers(container);
+    clearReplyTarget(container);
+
+    try {
+      await container._mentorChatOnImageAttach(file, { caption, replyToId, replyTarget, form, textarea });
+    } catch {
+      if (textarea && caption && !textarea.value.trim()) textarea.value = caption;
+      if (replyTarget) setReplyTarget(container, replyTarget);
+    } finally {
+      delete form?.dataset.sending;
+      textarea?.focus();
+    }
+  });
 
   container.addEventListener("click", (e) => {
     const toggle = e.target.closest("[data-emoji-toggle]");
@@ -659,6 +715,7 @@ export function bindChatComposer(container, { onSubmit } = {}) {
 export function unbindChatComposer(container) {
   if (!container) return;
   delete container._mentorChatOnSubmit;
+  delete container._mentorChatOnImageAttach;
   clearReplyTarget(container);
 }
 

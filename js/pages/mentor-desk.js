@@ -19,6 +19,10 @@ import {
 import { showToast, Toast } from "../components/ui/index.js";
 import { getSessionUser } from "../auth/session.js";
 import { fetchStudentThread, sendStudentChatMessage } from "../api/mentorChatApi.js";
+import {
+  buildOptimisticChatImageMessage,
+  compressAndUploadChatImage,
+} from "../services/chat-media.js";
 
 const POLL_MS = 5000;
 
@@ -77,8 +81,7 @@ function renderDesk({ messages, loading, error, sending }) {
 }
 
 async function loadThread({ markRead = true } = {}) {
-  const data = await fetchStudentThread({ markRead });
-  return data.messages || [];
+  return fetchStudentThread({ markRead });
 }
 
 function buildOptimisticMessage(body, { replyToId, replyTarget } = {}) {
@@ -95,6 +98,7 @@ function buildOptimisticMessage(body, { replyToId, replyTarget } = {}) {
       replyTo: {
         id: replyTarget.id,
         body: replyTarget.body,
+        imageUrl: replyTarget.imageUrl || null,
         senderName: replyTarget.senderName,
         senderRole: replyTarget.senderRole,
       },
@@ -127,6 +131,42 @@ function bindDesk(container, state) {
         throw err;
       }
     },
+    onImageAttach: async (file, { caption, replyToId, replyTarget } = {}) => {
+      const user = getSessionUser();
+      const viewerRole = user?.role || "user";
+      const previewUrl = URL.createObjectURL(file);
+      const optimistic = buildOptimisticChatImageMessage({
+        caption,
+        imageUrl: previewUrl,
+        replyToId,
+        replyTarget,
+        senderRole: viewerRole === "tester" ? "tester" : "user",
+        senderName: user?.name || "Student",
+      });
+
+      state.messages = [...state.messages, optimistic];
+      appendChatMessage(container, optimistic, { viewerRole });
+
+      try {
+        const { url, threadId } = await compressAndUploadChatImage(file, {
+          threadId: state.threadId,
+        });
+        if (threadId && !state.threadId) state.threadId = threadId;
+
+        const { message } = await sendStudentChatMessage({ imageUrl: url, body: caption }, replyToId);
+        state.messages = state.messages.map((msg) => (
+          msg.id === optimistic.id ? message : msg
+        ));
+        replaceChatMessage(container, optimistic.id, message, { viewerRole });
+      } catch (err) {
+        state.messages = state.messages.filter((msg) => msg.id !== optimistic.id);
+        removeChatMessage(container, optimistic.id);
+        showToast(Toast({ title: "Image send failed", text: err?.message, variant: "danger" }));
+        throw err;
+      } finally {
+        URL.revokeObjectURL(previewUrl);
+      }
+    },
   });
 }
 
@@ -145,20 +185,23 @@ export default {
   },
   onMount(container) {
     deskContainer = container;
-    const state = { messages: [], loading: true, error: null, sending: false };
+    const state = { messages: [], threadId: null, loading: true, error: null, sending: false };
 
     void loadThread()
-      .then((messages) => {
-        state.messages = messages;
+      .then((data) => {
+        state.messages = data.messages || [];
+        state.threadId = data.thread?.id || null;
         state.loading = false;
         refreshUI(container, state);
 
         stopPolling();
         pollTimer = setInterval(() => {
           void loadThread({ markRead: true })
-            .then((msgs) => {
+            .then((payload) => {
               if (state.messages.some((msg) => msg.pending)) return;
               const viewerRole = getSessionUser()?.role || "user";
+              const msgs = payload.messages || [];
+              if (!state.threadId && payload.thread?.id) state.threadId = payload.thread.id;
               if (!chatMessagesChanged(state.messages, msgs, { viewerRole })) return;
               state.messages = msgs;
               const feed = container.querySelector("[data-mentor-chat-feed]");
