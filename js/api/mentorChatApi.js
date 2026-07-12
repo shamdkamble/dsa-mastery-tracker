@@ -54,8 +54,12 @@ async function request(path, options = {}) {
   return data;
 }
 
-export function fetchStudentThread() {
-  return request("/api/mentor-chat/thread");
+function threadQuery({ markRead = false } = {}) {
+  return markRead ? "?markRead=1" : "";
+}
+
+export function fetchStudentThread({ markRead = false } = {}) {
+  return request(`/api/mentor-chat/thread${threadQuery({ markRead })}`);
 }
 
 export function sendStudentChatMessage(body, replyToId) {
@@ -72,12 +76,12 @@ export function fetchAdminInbox() {
   return request("/api/auth/admin/mentor-chat/threads");
 }
 
-export function fetchAdminThread(threadId) {
-  return request(`/api/auth/admin/mentor-chat/threads/${encodeURIComponent(threadId)}`);
+export function fetchAdminThread(threadId, { markRead = false } = {}) {
+  return request(`/api/auth/admin/mentor-chat/threads/${encodeURIComponent(threadId)}${threadQuery({ markRead })}`);
 }
 
-export function fetchAdminStudentThread(studentId) {
-  return request(`/api/auth/admin/mentor-chat/students/${encodeURIComponent(studentId)}`);
+export function fetchAdminStudentThread(studentId, { markRead = false } = {}) {
+  return request(`/api/auth/admin/mentor-chat/students/${encodeURIComponent(studentId)}${threadQuery({ markRead })}`);
 }
 
 export function sendAdminChatMessage(threadId, body, replyToId) {

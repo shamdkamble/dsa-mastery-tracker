@@ -13,6 +13,8 @@ const mentorMessageSchema = new mongoose.Schema(
     senderName: { type: String, default: "" },
     body: { type: String, required: true },
     replyToId: { type: String, default: null, index: true },
+    deliveredAt: { type: String, default: null },
+    readAt: { type: String, default: null },
     createdAt: { type: String, required: true, index: true },
   },
   {

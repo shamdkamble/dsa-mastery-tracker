@@ -14,6 +14,7 @@ import {
   unbindChatSwipeReply,
   clearReplyTarget,
   updateReplyBar,
+  chatMessagesChanged,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getSessionUser } from "../auth/session.js";
@@ -75,8 +76,8 @@ function renderDesk({ messages, loading, error, sending }) {
   });
 }
 
-async function loadThread() {
-  const data = await fetchStudentThread();
+async function loadThread({ markRead = true } = {}) {
+  const data = await fetchStudentThread({ markRead });
   return data.messages || [];
 }
 
@@ -154,18 +155,17 @@ export default {
 
         stopPolling();
         pollTimer = setInterval(() => {
-          void loadThread()
+          void loadThread({ markRead: true })
             .then((msgs) => {
               if (state.messages.some((msg) => msg.pending)) return;
-              if (msgs.length !== state.messages.length
-                || msgs.at(-1)?.id !== state.messages.at(-1)?.id) {
-                state.messages = msgs;
-                const feed = container.querySelector("[data-mentor-chat-feed]");
-                if (feed) {
-                  feed.innerHTML = renderChatMessages(msgs, { viewerRole: getSessionUser()?.role || "user" });
-                  updateReplyBar(container);
-                  scrollChatToBottom(container);
-                }
+              const viewerRole = getSessionUser()?.role || "user";
+              if (!chatMessagesChanged(state.messages, msgs, { viewerRole })) return;
+              state.messages = msgs;
+              const feed = container.querySelector("[data-mentor-chat-feed]");
+              if (feed) {
+                feed.innerHTML = renderChatMessages(msgs, { viewerRole });
+                updateReplyBar(container);
+                scrollChatToBottom(container);
               }
             })
             .catch(() => {});

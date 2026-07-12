@@ -1037,10 +1037,15 @@ app.post("/api/auth/admin/test-issues/clear", requireAdmin, async (_req, res) =>
   }
 });
 
+function parseMarkReadQuery(req) {
+  const value = req.query?.markRead;
+  return value === "1" || value === "true";
+}
+
 app.get("/api/mentor-chat/thread", requireAuth, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
-    const data = await getStudentThreadView(user);
+    const data = await getStudentThreadView(user, { markRead: parseMarkReadQuery(req) });
     res.json(data);
   } catch (err) {
     if (handleAuthError(res, err)) return;
@@ -1080,7 +1085,7 @@ app.get("/api/auth/admin/mentor-chat/threads", requireAdmin, async (_req, res) =
 
 app.get("/api/auth/admin/mentor-chat/threads/:threadId", requireAdmin, async (req, res) => {
   try {
-    const data = await getAdminThreadView(req.params.threadId);
+    const data = await getAdminThreadView(req.params.threadId, { markRead: parseMarkReadQuery(req) });
     res.json(data);
   } catch (err) {
     if (handleAuthError(res, err)) return;
@@ -1092,7 +1097,7 @@ app.get("/api/auth/admin/mentor-chat/threads/:threadId", requireAdmin, async (re
 
 app.get("/api/auth/admin/mentor-chat/students/:studentId", requireAdmin, async (req, res) => {
   try {
-    const data = await getAdminStudentThreadView(req.params.studentId);
+    const data = await getAdminStudentThreadView(req.params.studentId, { markRead: parseMarkReadQuery(req) });
     res.json(data);
   } catch (err) {
     if (handleAuthError(res, err)) return;

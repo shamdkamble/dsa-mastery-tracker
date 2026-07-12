@@ -16,6 +16,7 @@ import {
   unbindChatSwipeReply,
   clearReplyTarget,
   updateReplyBar,
+  chatMessagesChanged,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getSessionUser } from "../auth/session.js";
@@ -150,8 +151,8 @@ async function loadInbox() {
   return fetchAdminInbox();
 }
 
-async function loadThread(threadId) {
-  return fetchAdminThread(threadId);
+async function loadThread(threadId, { markRead = true } = {}) {
+  return fetchAdminThread(threadId, { markRead });
 }
 
 function previewText(body) {
@@ -316,7 +317,7 @@ async function selectStudent(container, state, studentId) {
   activeThreadId = null;
   activeStudentId = studentId;
   try {
-    const data = await fetchAdminStudentThread(studentId);
+    const data = await fetchAdminStudentThread(studentId, { markRead: true });
     state.activeThread = data.thread;
     state.messages = data.messages || [];
     if (data.thread?.id) activeThreadId = data.thread.id;
@@ -338,13 +339,15 @@ async function syncInboxData(state, { skipMessages = false } = {}) {
 
   if (skipMessages) return;
 
+  const hasOpenConversation = Boolean(activeThreadId || activeStudentId);
+
   if (activeThreadId) {
-    const data = await loadThread(activeThreadId);
+    const data = await loadThread(activeThreadId, { markRead: hasOpenConversation });
     state.activeThread = data.thread;
     state.messages = data.messages || [];
     activeStudentId = data.thread?.studentId || null;
   } else if (activeStudentId) {
-    const data = await fetchAdminStudentThread(activeStudentId);
+    const data = await fetchAdminStudentThread(activeStudentId, { markRead: hasOpenConversation });
     state.activeThread = data.thread;
     state.messages = data.messages || [];
     if (data.thread?.id) activeThreadId = data.thread.id;
@@ -364,14 +367,13 @@ async function refreshInbox(container, state) {
 async function pollInbox(container, state) {
   try {
     const hasPending = state.messages.some((msg) => msg.pending);
-    const prevCount = state.messages.length;
-    const prevLastId = state.messages.at(-1)?.id;
+    const prevMessages = state.messages;
     await syncInboxData(state, { skipMessages: hasPending });
     patchThreadList(container, state);
     patchInboxStats(container, state.stats);
     if (!state.messages.some((msg) => msg.pending)
       && (activeThreadId || activeStudentId)
-      && (state.messages.length !== prevCount || state.messages.at(-1)?.id !== prevLastId)) {
+      && chatMessagesChanged(prevMessages, state.messages, { viewerRole: "admin" })) {
       patchMessages(container, state);
     }
   } catch {

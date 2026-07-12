@@ -41,6 +41,78 @@ function replySenderLabel(replyTo) {
   return replyTo.senderRole === "admin" ? "Mentor" : escapeHtml(replyTo.senderName || "Student");
 }
 
+function isOutgoingMessage(msg, viewerRole = "user") {
+  return msg.senderRole === "admin"
+    ? viewerRole === "admin"
+    : viewerRole !== "admin";
+}
+
+export function getMessageReceiptStatus(msg, { viewerRole = "user" } = {}) {
+  if (!msg || msg.pending || !isOutgoingMessage(msg, viewerRole)) return null;
+  if (msg.readAt) return "read";
+  if (msg.deliveredAt) return "delivered";
+  return "sent";
+}
+
+function receiptAriaLabel(status) {
+  if (status === "read") return "Read";
+  if (status === "delivered") return "Delivered";
+  return "Sent";
+}
+
+function renderReceiptTicks(status) {
+  if (status === "sent") {
+    return `
+      <svg class="mentor-chat__receipt-icon" viewBox="0 0 16 11" aria-hidden="true">
+        <path d="M1 6.2 L4.8 9.8 L14.2 1.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+  }
+
+  return `
+    <svg class="mentor-chat__receipt-icon mentor-chat__receipt-icon--double" viewBox="0 0 20 11" aria-hidden="true">
+      <path d="M1 6.2 L4.2 9.4 L12.2 1.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5.5 6.2 L8.7 9.4 L18.2 1.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  `;
+}
+
+function renderMessageReceipt(msg, { viewerRole = "user" } = {}) {
+  if (msg.pending) {
+    return `<span class="mentor-chat__receipt mentor-chat__receipt--pending" aria-label="Sending">${renderReceiptTicks("sent")}</span>`;
+  }
+
+  const status = getMessageReceiptStatus(msg, { viewerRole });
+  if (!status) return "";
+
+  return `
+    <span class="mentor-chat__receipt mentor-chat__receipt--${status}" aria-label="${receiptAriaLabel(status)}">
+      ${renderReceiptTicks(status)}
+    </span>
+  `;
+}
+
+function messageReceiptSignature(msg, viewerRole) {
+  if (!isOutgoingMessage(msg, viewerRole) || msg.pending) return "";
+  return `${msg.deliveredAt || ""}|${msg.readAt || ""}`;
+}
+
+export function chatMessagesChanged(prevMessages = [], nextMessages = [], { viewerRole = "user" } = {}) {
+  if (prevMessages.length !== nextMessages.length) return true;
+  if (prevMessages.at(-1)?.id !== nextMessages.at(-1)?.id) return true;
+
+  for (let i = 0; i < prevMessages.length; i += 1) {
+    const prev = prevMessages[i];
+    const next = nextMessages[i];
+    if (prev.id !== next.id) return true;
+    if (messageReceiptSignature(prev, viewerRole) !== messageReceiptSignature(next, viewerRole)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function renderReplyQuote(replyTo, { viewerRole = "user" } = {}) {
   if (!replyTo) return "";
   const roleClass = replyTo.senderRole === "admin"
@@ -180,14 +252,13 @@ export function renderChatEmptyState() {
 }
 
 export function renderChatMessage(msg, { viewerRole = "user" } = {}) {
-  const isMine = msg.senderRole === "admin"
-    ? viewerRole === "admin"
-    : viewerRole !== "admin";
+  const isMine = isOutgoingMessage(msg, viewerRole);
   const isReply = Boolean(msg.replyToId || msg.replyTo);
   const bubbleClass = isMine ? "mentor-chat__bubble--mine" : "mentor-chat__bubble--theirs";
   const roleLabel = msg.senderRole === "admin" ? "Mentor" : escapeHtml(msg.senderName || "Student");
   const pendingClass = msg.pending ? " mentor-chat__bubble--pending" : "";
   const replyQuote = msg.replyTo ? renderReplyQuote(msg.replyTo, { viewerRole }) : "";
+  const receipt = renderMessageReceipt(msg, { viewerRole });
 
   return `
     <div
@@ -197,8 +268,11 @@ export function renderChatMessage(msg, { viewerRole = "user" } = {}) {
     >
       ${isReply ? `<div class="mentor-chat__thread-connector" aria-hidden="true"></div>` : ""}
       <div class="mentor-chat__meta">
-        <span class="mentor-chat__sender">${roleLabel}</span>
-        <time class="mentor-chat__time" datetime="${msg.createdAt}">${formatChatTime(msg.createdAt)}</time>
+        ${isMine ? "" : `<span class="mentor-chat__sender">${roleLabel}</span>`}
+        <span class="mentor-chat__meta-end">
+          <time class="mentor-chat__time" datetime="${msg.createdAt}">${formatChatTime(msg.createdAt)}</time>
+          ${receipt}
+        </span>
       </div>
       <div class="mentor-chat__swipe-row" data-chat-swipe-row>
         <button type="button" class="mentor-chat__reply-action" data-chat-reply-btn aria-label="Reply" tabindex="-1">

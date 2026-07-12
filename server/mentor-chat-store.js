@@ -178,8 +178,33 @@ async function getThreadMessages(threadId) {
   return enrichMessagesWithReplies(messages);
 }
 
-export async function getStudentThreadView(student) {
+function otherPartySenderRoles(viewerRole) {
+  return viewerRole === "admin" ? ["user", "tester"] : ["admin"];
+}
+
+async function applyMessageReceipts(threadId, viewerRole, { markRead = false } = {}) {
+  if (!threadId) return;
+
+  const now = new Date().toISOString();
+  const senderRoles = otherPartySenderRoles(viewerRole);
+  const baseFilter = { threadId, senderRole: { $in: senderRoles } };
+
+  await MentorMessage.updateMany(
+    { ...baseFilter, deliveredAt: null },
+    { $set: { deliveredAt: now } },
+  );
+
+  if (markRead) {
+    await MentorMessage.updateMany(
+      { ...baseFilter, readAt: null },
+      { $set: { readAt: now } },
+    );
+  }
+}
+
+export async function getStudentThreadView(student, { markRead = false } = {}) {
   const thread = await getOrCreateStudentThread(student);
+  await applyMessageReceipts(thread.id, "student", { markRead });
   const messages = await getThreadMessages(thread.id);
 
   if (thread.unreadByStudent > 0) {
@@ -279,7 +304,7 @@ export async function listAdminThreads() {
   return sortAdminThreads(merged);
 }
 
-export async function getAdminStudentThreadView(studentId) {
+export async function getAdminStudentThreadView(studentId, { markRead = false } = {}) {
   await connectDB();
   const user = await User.findOne({ id: studentId }).lean();
   if (!user) {
@@ -299,6 +324,7 @@ export async function getAdminStudentThreadView(studentId) {
     studentName: user.name || threadDoc.studentName,
     studentEmail: user.email || threadDoc.studentEmail,
   };
+  await applyMessageReceipts(thread.id, "admin", { markRead });
   const messages = await getThreadMessages(thread.id);
 
   if (thread.unreadByAdmin > 0) {
@@ -311,13 +337,14 @@ export async function getAdminStudentThreadView(studentId) {
   return { thread, messages };
 }
 
-export async function getAdminThreadView(threadId) {
+export async function getAdminThreadView(threadId, { markRead = false } = {}) {
   await connectDB();
   const thread = await MentorThread.findOne({ id: threadId }).lean();
   if (!thread) {
     throw new MentorChatError("Conversation not found.", { status: 404, code: "NOT_FOUND" });
   }
 
+  await applyMessageReceipts(threadId, "admin", { markRead });
   const messages = await getThreadMessages(threadId);
   const dto = toMentorThreadDto(thread);
 
