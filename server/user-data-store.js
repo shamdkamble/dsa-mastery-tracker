@@ -21,7 +21,7 @@ const PROBLEM_FIELDS = [
   "title", "topic", "pattern", "difficulty", "status", "attempts", "estimatedMinutes",
   "leetcodeUrl", "leetcodeSlug", "leetcodeId", "topicTags", "approach", "solution",
   "timeComplexity", "spaceComplexity", "missionType", "inMission", "missionDone",
-  "missionDate", "nextReviewAt", "lastReviewAt", "solvedAt", "startedAt", "actualSolveMinutes",
+  "missionDate", "nextReviewAt", "lastReviewAt", "reviewStage", "solvedAt", "startedAt", "actualSolveMinutes",
   "source", "roadmapTopicId", "createdAt", "updatedAt",
 ];
 

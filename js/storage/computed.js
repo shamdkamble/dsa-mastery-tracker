@@ -12,6 +12,7 @@ import {
 import { PATTERN_CATALOG } from "./patterns-catalog.js";
 import { resolveProblemPattern } from "./pattern-resolver.js";
 import { normalizeTopicKey, resolveProblemTopic } from "./topic-resolver.js";
+import { isRevisionDue, isRevisionEligible, getRevisionRoundLabel } from "./revision-schedule.js";
 import {
   todayKey,
   yesterdayKey,
@@ -71,7 +72,7 @@ export function computeStats() {
   const streak = computeStreak();
 
   const markedDone = problems.filter(isProblemMarkedDone);
-  const revisionsDue = problems.filter((p) => p.nextReviewAt && p.nextReviewAt.slice(0, 10) <= today);
+  const revisionsDue = problems.filter((p) => isRevisionEligible(p) && isRevisionDue(p, today));
   const todaysMission = getTodaysMissionProblems();
   const todaysRevisions = todaysMission.filter((p) => p.missionType === "revision").length;
   const missionDoneToday = todaysMission.filter((p) => p.missionDone).length;
@@ -120,7 +121,7 @@ export function computeStats() {
 function sortMissionProblems(problems) {
   const today = todayKey();
   const yesterday = yesterdayKey();
-  const typeOrder = { new: 0, revision: 1, challenge: 2 };
+  const typeOrder = { revision: 0, new: 1, challenge: 2 };
 
   return [...problems].sort((a, b) => {
     if (a.missionDone !== b.missionDone) return a.missionDone ? 1 : -1;
@@ -156,6 +157,8 @@ export function computeTodaysMission() {
     }
     if (p.missionType === "challenge") due = "Optional";
 
+    const reviewStage = p.reviewStage ?? 0;
+
     return {
       id: p.id,
       title: p.title,
@@ -163,6 +166,8 @@ export function computeTodaysMission() {
       difficulty: p.difficulty,
       type: p.missionType || "new",
       due,
+      reviewLabel: p.missionType === "revision" ? getRevisionRoundLabel(reviewStage) : null,
+      reviewStage,
       done: p.missionDone,
       carriedOver: p.missionDate === yesterday && !p.missionDone,
       time: p.actualSolveMinutes ? `${p.actualSolveMinutes}m` : `${p.estimatedMinutes || 30}m`,
@@ -353,7 +358,11 @@ export function computeCalendarDays(year, month) {
 }
 
 export function computeUpcomingReviews() {
-  const problems = getProblems().filter((p) => p.nextReviewAt);
+  const today = todayKey();
+  const problems = getProblems()
+    .filter((p) => isRevisionEligible(p) && p.nextReviewAt && p.nextReviewAt.slice(0, 10) >= today)
+    .sort((a, b) => a.nextReviewAt.localeCompare(b.nextReviewAt));
+
   const map = new Map();
 
   problems.forEach((p) => {

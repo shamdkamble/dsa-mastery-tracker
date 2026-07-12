@@ -12,7 +12,8 @@ import {
   initSolveTimerTicker,
   stopSolveTimerTicker,
 } from "../components/solve-timer.js";
-import { getProblem } from "../storage/db.js";
+import { getProblem, syncDueRevisionsToMission } from "../storage/db.js";
+import { refreshPage } from "../controllers/page-controller.js";
 
 const TYPE_LABELS = {
   revision: { label: "Spaced Revisions", variant: "warning" },
@@ -29,9 +30,10 @@ function missionCard(item, index) {
       <div class="mission-card__body">
         <div class="mission-card__title">${item.title}</div>
         <div class="mission-card__topic">${item.topic}</div>
+        ${item.reviewLabel ? `<div class="mission-card__meta text-xs text-tertiary">${item.reviewLabel} · spaced repetition</div>` : ""}
       </div>
       <div class="mission-card__actions">
-        ${Badge({ label: item.due, variant: item.due === "Overdue" || item.due === "From yesterday" ? "danger" : "default", size: "sm" })}
+        ${Badge({ label: item.due, variant: item.due === "Overdue" || item.due === "From yesterday" ? "danger" : item.due === "Today" ? "warning" : "default", size: "sm" })}
         ${DifficultyBadge(item.difficulty)}
         <div class="mission-card__timer">
           ${item.done
@@ -89,7 +91,7 @@ export default {
         description: "Your personalized daily plan — revisions, new problems, and optional challenges.",
         children: EmptyState({
           title: "No missions scheduled",
-          text: "Go to Problems, add items, and enable \"Add to today's mission\" to build your plan.",
+          text: "Solve problems today — they'll return automatically on day 3, 6, and 12 for spaced revision. You can also add new items from Problems.",
           iconName: "mission",
           actions: `
             <button class="btn btn--primary" data-action="add-problem" type="button">Add Problem</button>
@@ -101,7 +103,7 @@ export default {
 
     return createPage({
       title: "Today's Mission",
-      description: "Today's plan plus any incomplete items carried over from yesterday.",
+      description: "Spaced revisions surface automatically — then new problems and optional challenges you add.",
       children: `
         <div class="mission-hero animate-fade-in-up" data-tour="mission-hero">
           <div class="mission-hero__progress">
@@ -130,8 +132,8 @@ export default {
           </div>
         </div>
 
-        ${groupMissions(mission, "new")}
         ${groupMissions(mission, "revision")}
+        ${groupMissions(mission, "new")}
         ${groupMissions(mission, "challenge")}
       `,
     });
@@ -139,6 +141,9 @@ export default {
   onMount(container) {
     bindPageHandlers(container);
     initSolveTimerTicker(container);
+
+    const added = syncDueRevisionsToMission({ silent: true });
+    if (added > 0) refreshPage();
   },
   onUnmount() {
     stopSolveTimerTicker();

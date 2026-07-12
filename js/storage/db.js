@@ -6,6 +6,13 @@
 import { dispatch } from "../utils.js";
 import { generateId, todayKey, yesterdayKey } from "./helpers.js";
 import { inferProblemTopic } from "./topic-resolver.js";
+import {
+  backfillRevisionFields,
+  buildInitialSolveSchedule,
+  buildRevisionCompleteSchedule,
+  buildMissionEnqueuePatch,
+  shouldEnqueueRevision,
+} from "./revision-schedule.js";
 import { getToken } from "../auth/session.js";
 import {
   fetchUserData,
@@ -284,6 +291,7 @@ export async function switchUserContext(authUser) {
 
   remoteSyncReady = true;
   persist({ silent: true });
+  syncDueRevisionsToMission({ silent: true });
   dispatch("data:change", { db: cache });
   return cache;
 }
@@ -452,6 +460,7 @@ export async function createProblem(data) {
     missionDate: data.inMission ? today : null,
     nextReviewAt: data.nextReviewAt || null,
     lastReviewAt: null,
+    reviewStage: Number.isFinite(data.reviewStage) ? data.reviewStage : 0,
     solvedAt: null,
     startedAt: data.startedAt || null,
     actualSolveMinutes: data.actualSolveMinutes ?? null,
@@ -504,8 +513,12 @@ export async function updateProblem(id, updates, { silent = false } = {}) {
   }
 
   if (updates.status === "mastered" && prev.status !== "mastered") {
-    updated.solvedAt = new Date().toISOString();
-    updated.nextReviewAt = new Date(Date.now() + 3 * 86400000).toISOString();
+    const completedAt = new Date().toISOString();
+    Object.assign(updated, buildInitialSolveSchedule(
+      { ...prev, solvedAt: prev.solvedAt || completedAt, reviewStage: prev.reviewStage ?? 0 },
+      completedAt,
+    ));
+    updated.status = "mastered";
   }
 
   if (!String(updated.topic || "").trim()) {
@@ -556,7 +569,49 @@ export async function deleteProblem(id) {
 
 /* ── Mission operations ── */
 
+export function syncDueRevisionsToMission(options = {}) {
+  const db = load();
+  const today = todayKey();
+  const yesterday = yesterdayKey();
+  const synced = [];
+
+  for (let i = 0; i < db.problems.length; i += 1) {
+    let problem = db.problems[i];
+    let updated = false;
+
+    const backfill = backfillRevisionFields(problem);
+    if (backfill) {
+      problem = { ...problem, ...backfill };
+      updated = true;
+    }
+
+    if (shouldEnqueueRevision(problem, today, yesterday)) {
+      problem = { ...problem, ...buildMissionEnqueuePatch(today) };
+      updated = true;
+    }
+
+    if (updated) {
+      db.problems[i] = problem;
+      synced.push(problem);
+    }
+  }
+
+  if (synced.length) {
+    touch(options);
+    if (isRemoteMode()) {
+      void Promise.all(
+        synced.map((p) => apiUpdateProblem(p.id, p).catch((err) => {
+          console.warn("[revision] Failed to sync problem", p.id, err);
+        })),
+      );
+    }
+  }
+
+  return synced.length;
+}
+
 export function getTodaysMissionProblems() {
+  syncDueRevisionsToMission({ silent: true });
   const today = todayKey();
   const yesterday = yesterdayKey();
   return load().problems.filter((p) => {
@@ -594,13 +649,21 @@ export async function toggleMissionDone(id) {
   const updates = { missionDone };
 
   if (missionDone) {
-    updates.lastReviewAt = new Date().toISOString();
+    const completedAt = new Date().toISOString();
+    updates.lastReviewAt = completedAt;
     updates.attempts = (problem.attempts || 0) + 1;
-    if (problem.status === "todo") updates.status = "learning";
     if (problem.startedAt) {
       updates.actualSolveMinutes = computeActualSolveMinutes(problem);
       updates.startedAt = null;
     }
+
+    if (problem.missionType === "revision") {
+      Object.assign(updates, buildRevisionCompleteSchedule(problem, completedAt));
+    } else {
+      Object.assign(updates, buildInitialSolveSchedule(problem, completedAt));
+      if (problem.status === "todo") updates.status = "learning";
+    }
+
     const activity = logActivity({
       action: problem.missionType === "revision" ? "Reviewed" : "Solved",
       problemId: id,
@@ -649,15 +712,15 @@ export async function markProblemSolved(id) {
   const problem = getProblem(id);
   if (!problem) return null;
 
+  const completedAt = new Date().toISOString();
   const actualSolveMinutes = computeActualSolveMinutes(problem);
   const patch = {
     status: "mastered",
     missionDone: true,
-    lastReviewAt: new Date().toISOString(),
     attempts: (problem.attempts || 0) + 1,
-    nextReviewAt: new Date(Date.now() + 7 * 86400000).toISOString(),
     startedAt: null,
     actualSolveMinutes,
+    ...buildInitialSolveSchedule(problem, completedAt),
   };
 
   if (!problem.pattern?.trim()) {

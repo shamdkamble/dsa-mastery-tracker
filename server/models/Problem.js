@@ -29,6 +29,7 @@ const problemSchema = new mongoose.Schema(
     missionDate: { type: String, default: null },
     nextReviewAt: { type: String, default: null },
     lastReviewAt: { type: String, default: null },
+    reviewStage: { type: Number, default: 0 },
     solvedAt: { type: String, default: null },
     startedAt: { type: String, default: null },
     actualSolveMinutes: { type: Number, default: null },

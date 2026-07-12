@@ -11,7 +11,8 @@ import { initNavbar } from "./components/navbar.js";
 import { getState, setState } from "./state.js";
 import { $ } from "./utils.js";
 import { bindPageHandlers } from "./controllers/page-controller.js";
-import { initDB, getUser } from "./storage/db.js";
+import { initDB, getUser, syncDueRevisionsToMission } from "./storage/db.js";
+import { showToast, Toast } from "./components/ui/index.js";
 import { getInitials } from "./storage/helpers.js";
 import { getSessionUser } from "./auth/session.js";
 import { getSubscriptionTier, syncSubscriptionPresentation } from "./subscription-theme.js";
@@ -186,6 +187,14 @@ async function init() {
 
   const sessionUser = await resolveAuthSession();
   await initDB(sessionUser || getSessionUser());
+  const revisionsQueued = syncDueRevisionsToMission({ silent: true });
+  if (revisionsQueued > 0 && sessionUser) {
+    showToast(Toast({
+      title: `${revisionsQueued} revision${revisionsQueued === 1 ? "" : "s"} ready`,
+      text: "Added to today's mission — revisit problems on your spaced schedule.",
+      variant: "info",
+    }));
+  }
   syncUserFromDB();
   syncSubscriptionPresentation(sessionUser || getSessionUser());
 

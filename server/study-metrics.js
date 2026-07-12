@@ -43,7 +43,9 @@ export function computeStudySnapshot(problems = [], activities = []) {
   const streak = computeStreak(activities);
 
   const revisionsDue = problems.filter(
-    (p) => p.nextReviewAt && p.nextReviewAt.slice(0, 10) <= today,
+    (p) => p.nextReviewAt
+      && p.nextReviewAt.slice(0, 10) <= today
+      && (p.solvedAt || p.status === "mastered" || (p.reviewStage ?? 0) > 0),
   ).length;
 
   const missionToday = problems.filter(
