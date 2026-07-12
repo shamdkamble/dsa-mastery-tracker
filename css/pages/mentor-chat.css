@@ -229,17 +229,18 @@
   color: var(--color-text-tertiary);
 }
 
-.mentor-chat__message--mine .mentor-chat__meta {
-  justify-content: flex-end;
-}
+.mentor-chat__sender { font-weight: var(--font-semibold); }
 
-.mentor-chat__meta-end {
+.mentor-chat__footer {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 4px;
+  margin-top: 3px;
+  padding-right: 2px;
+  font-size: 10px;
+  color: var(--color-text-tertiary);
 }
-
-.mentor-chat__sender { font-weight: var(--font-semibold); }
 
 .mentor-chat__receipt {
   display: inline-flex;

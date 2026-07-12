@@ -267,13 +267,12 @@ export function renderChatMessage(msg, { viewerRole = "user" } = {}) {
       ${msg.replyToId ? `data-reply-to="${escapeHtml(msg.replyToId)}"` : ""}
     >
       ${isReply ? `<div class="mentor-chat__thread-connector" aria-hidden="true"></div>` : ""}
-      <div class="mentor-chat__meta">
-        ${isMine ? "" : `<span class="mentor-chat__sender">${roleLabel}</span>`}
-        <span class="mentor-chat__meta-end">
+      ${isMine ? "" : `
+        <div class="mentor-chat__meta">
+          <span class="mentor-chat__sender">${roleLabel}</span>
           <time class="mentor-chat__time" datetime="${msg.createdAt}">${formatChatTime(msg.createdAt)}</time>
-          ${receipt}
-        </span>
-      </div>
+        </div>
+      `}
       <div class="mentor-chat__swipe-row" data-chat-swipe-row>
         <button type="button" class="mentor-chat__reply-action" data-chat-reply-btn aria-label="Reply" tabindex="-1">
           ${icon("reply")}
@@ -285,6 +284,12 @@ export function renderChatMessage(msg, { viewerRole = "user" } = {}) {
           </div>
         </div>
       </div>
+      ${isMine ? `
+        <div class="mentor-chat__footer">
+          <time class="mentor-chat__time" datetime="${msg.createdAt}">${formatChatTime(msg.createdAt)}</time>
+          ${receipt}
+        </div>
+      ` : ""}
     </div>
   `;
 }
