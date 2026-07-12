@@ -187,20 +187,20 @@
     height: 3rem;
   }
 
-  .settings-profile {
+  .settings-hero__top {
     flex-direction: column;
-    text-align: center;
-    align-items: center;
   }
 
-  .settings-nav {
-    flex-wrap: wrap;
-    position: static;
+  .settings-hero__identity {
+    width: 100%;
   }
 
-  .settings-nav__item {
-    flex: 1 1 auto;
-    min-width: 0;
+  .settings-hero__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-account-grid {
+    grid-template-columns: 1fr;
   }
 
   .search-page {
@@ -617,15 +617,6 @@
     text-align: center;
   }
 
-  .settings-nav {
-    flex-wrap: wrap;
-    overflow-x: visible;
-  }
-
-  .settings-nav__item {
-    flex: 1 1 calc(50% - var(--space-1));
-  }
-
   .problem-form__import-row {
     flex-direction: column;
   }
@@ -676,8 +667,15 @@
 
 /* Narrow portrait phones */
 @media (orientation: portrait) and (max-width: 480px) {
-  .settings-nav__item {
-    flex: 1 1 100%;
+  .settings-hero__identity {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .settings-hero__photo {
+    width: 100%;
+    justify-content: center;
   }
 
   .roadmap-phase__meta {

@@ -11,15 +11,6 @@ import { renderProfileAvatar } from "../utils/profile-avatar.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 import { BRAND } from "../constants/branding.js";
 
-const SETTINGS_NAV = [
-  { id: "profile", label: "Profile", icon: "user" },
-  { id: "subscription", label: "Subscription", icon: "zap" },
-  { id: "appearance", label: "Appearance", icon: "palette" },
-  { id: "notifications", label: "Notifications", icon: "bell" },
-  { id: "data", label: "Data", icon: "database" },
-  { id: "about", label: "About", icon: "info" },
-];
-
 function escapeHtml(str) {
   return String(str ?? "")
     .replace(/&/g, "&amp;")
@@ -51,14 +42,30 @@ function formatAccessLabel(sessionUser) {
   return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
-function renderReadOnlyField(label, value, hint = "") {
+function renderSettingsBlock({ id, iconName, title, description, body, priority }) {
   return `
-    <div class="profile-field profile-field--readonly">
-      <span class="profile-field__label">${label}</span>
-      <div class="profile-field__readonly">
-        <span>${escapeHtml(value || "—")}</span>
-        ${hint ? `<span class="profile-field__hint">${hint}</span>` : ""}
+    <section id="${id}" class="settings-block settings-section">
+      <header class="settings-block__head">
+        <span class="settings-block__priority" aria-hidden="true">${priority}</span>
+        <span class="settings-block__icon" aria-hidden="true">${icon(iconName)}</span>
+        <div class="settings-block__titles">
+          <h2 class="settings-block__title">${title}</h2>
+          ${description ? `<p class="settings-block__desc">${description}</p>` : ""}
+        </div>
+      </header>
+      <div class="settings-block__body">
+        ${body}
       </div>
+    </section>
+  `;
+}
+
+function renderAccountTile(label, value, hint = "") {
+  return `
+    <div class="settings-account-tile">
+      <span class="settings-account-tile__label">${label}</span>
+      <span class="settings-account-tile__value">${escapeHtml(value || "—")}</span>
+      ${hint ? `<span class="settings-account-tile__hint">${hint}</span>` : ""}
     </div>
   `;
 }
@@ -78,147 +85,140 @@ export default {
     const { sidebarCollapsed } = getState();
     const email = sessionUser?.email || user.email || "Not signed in";
     const subBadge = renderSubscriptionBadge(sessionUser);
+    const problemCount = getProblems().length;
 
     return createPage({
       title: "Profile & Settings",
-      description: "Your personal workspace — profile, subscription, and preferences.",
+      description: "Manage your identity, study reminders, and workspace preferences.",
       children: `
-        <div class="settings-layout">
-          <nav class="settings-nav" aria-label="Settings sections">
-            ${SETTINGS_NAV.map((item, i) => `
-              <a
-                href="#/settings/${item.id}"
-                class="settings-nav__item${i === 0 ? " is-active" : ""}"
-                data-settings-section="${item.id}"
-              >
-                ${icon(item.icon)}
-                ${item.label}
-              </a>
-            `).join("")}
-          </nav>
-
-          <div class="settings-panel">
-            <section id="profile" class="settings-section">
-              <div class="profile-hero">
-                <div class="profile-hero__glow" aria-hidden="true"></div>
-                <div class="profile-hero__main">
-                  <div class="profile-hero__avatar-wrap" id="profile-avatar-preview">
-                    ${renderProfileAvatar(user, stateUser, "profile-hero__avatar")}
-                  </div>
-                  <div class="profile-hero__content">
-                    <div class="profile-hero__badges">
-                      ${subBadge || Badge({ label: "Free", variant: "outline", size: "sm" })}
-                    </div>
-                    <h2 class="profile-hero__name" id="profile-preview-name">${escapeHtml(user.name || "Your name")}</h2>
-                    <p class="profile-hero__bio${user.bio ? "" : " profile-hero__bio--empty"}" id="profile-preview-bio">
-                      ${escapeHtml(user.bio || "Add a short bio to personalize your profile.")}
-                    </p>
-                    <p class="profile-hero__meta">
-                      ${icon("calendar")}
-                      <span>Member since ${escapeHtml(joined)}</span>
-                    </p>
-                  </div>
+        <div class="settings-page">
+          <div class="settings-hero">
+            <div class="settings-hero__glow" aria-hidden="true"></div>
+            <div class="settings-hero__top">
+              <div class="settings-hero__identity">
+                <div class="settings-hero__avatar" id="profile-avatar-preview">
+                  ${renderProfileAvatar(user, stateUser, "profile-hero__avatar")}
                 </div>
-                <div class="profile-hero__photo-actions">
-                  <label class="btn btn--secondary btn--sm profile-photo-btn">
-                    ${icon("user")}
-                    <span>Upload photo</span>
-                    <input type="file" id="profile-photo-input" accept="image/*" class="profile-photo-btn__input" hidden>
-                  </label>
-                  ${user.profilePhoto ? `
-                    <button type="button" class="btn btn--ghost btn--sm" id="profile-photo-remove">Remove</button>
-                  ` : ""}
-                  <span class="profile-hero__photo-hint">Optional · JPG or PNG, max 200 KB</span>
+                <div class="settings-hero__info">
+                  <div class="settings-hero__badges">
+                    ${subBadge || Badge({ label: "Free", variant: "outline", size: "sm" })}
+                    ${sessionUser ? Badge({ label: formatAccessLabel(sessionUser), variant: "default", size: "sm" }) : ""}
+                  </div>
+                  <h2 class="settings-hero__name" id="profile-preview-name">${escapeHtml(user.name || "Your name")}</h2>
+                  <p class="settings-hero__email">${escapeHtml(email)}</p>
+                  <p class="settings-hero__bio${user.bio ? "" : " settings-hero__bio--empty"}" id="profile-preview-bio">
+                    ${escapeHtml(user.bio || "Add a bio below — it appears here and on your dashboard.")}
+                  </p>
                 </div>
               </div>
+              <div class="settings-hero__photo">
+                <label class="btn btn--secondary btn--sm profile-photo-btn">
+                  ${icon("user")}
+                  <span>Photo</span>
+                  <input type="file" id="profile-photo-input" accept="image/*" class="profile-photo-btn__input" hidden>
+                </label>
+                ${user.profilePhoto ? `
+                  <button type="button" class="btn btn--ghost btn--sm" id="profile-photo-remove">Remove</button>
+                ` : ""}
+              </div>
+            </div>
+            <div class="settings-hero__stats">
+              <div class="settings-stat">
+                <span class="settings-stat__value">${stats.problemsSolved}</span>
+                <span class="settings-stat__label">Solved</span>
+              </div>
+              <div class="settings-stat">
+                <span class="settings-stat__value">${stats.currentStreak}d</span>
+                <span class="settings-stat__label">Streak</span>
+              </div>
+              <div class="settings-stat">
+                <span class="settings-stat__value">${stats.accuracy}%</span>
+                <span class="settings-stat__label">Accuracy</span>
+              </div>
+              <div class="settings-stat">
+                <span class="settings-stat__value">${problemCount}</span>
+                <span class="settings-stat__label">Tracked</span>
+              </div>
+            </div>
+          </div>
 
-              <form id="settings-profile-form" class="profile-cards">
+          ${renderSettingsBlock({
+            id: "profile",
+            iconName: "user",
+            priority: "1",
+            title: "Your profile",
+            description: "How you appear across DSAMantra. Changes save automatically.",
+            body: `
+              <form id="settings-profile-form" class="settings-form">
                 <input type="hidden" name="profilePhoto" id="profile-photo-data" value="${escapeAttr(user.profilePhoto || "")}">
-
-                <article class="profile-card">
-                  <header class="profile-card__head">
-                    <h3 class="profile-card__title">${icon("user")} About you</h3>
-                    <p class="profile-card__desc">How you appear across the app. Saves automatically.</p>
-                  </header>
-                  <div class="profile-card__body profile-card__body--stack">
-                    ${Field({
-                      label: "Display name",
-                      hint: "Shown in the navbar and dashboard greeting",
-                      children: Input({
-                        value: user.name || "",
-                        attrs: 'name="name" id="profile-name" placeholder="e.g. Alex Chen" autocomplete="name"',
-                      }),
-                    })}
-                    ${Field({
-                      label: "Bio",
-                      hint: "A short intro — goals, background, or what you're preparing for",
-                      children: Textarea({
-                        rows: 4,
-                        placeholder: "e.g. CS grad preparing for FAANG interviews. Focusing on graphs & DP.",
-                        attrs: 'name="bio" id="profile-bio" maxlength="280"',
-                        value: escapeHtml(user.bio || ""),
-                      }),
-                    })}
-                  </div>
-                </article>
-
-                <article class="profile-card">
-                  <header class="profile-card__head">
-                    <h3 class="profile-card__title">${icon("target")} Learning goals</h3>
-                    <p class="profile-card__desc">Your north star — surfaced on the dashboard.</p>
-                  </header>
-                  <div class="profile-card__body">
-                    ${Field({
-                      label: "Current focus",
-                      hint: "Interview date, target companies, or skills you're building",
-                      children: Textarea({
-                        rows: 3,
-                        placeholder: "e.g. Google L4 by September · Master DP patterns · 300 problems",
-                        attrs: 'name="goal" id="profile-goal" maxlength="200"',
-                        value: escapeHtml(user.goal || ""),
-                      }),
-                    })}
-                  </div>
-                </article>
-
-                <article class="profile-card profile-card--readonly">
-                  <header class="profile-card__head">
-                    <h3 class="profile-card__title">${icon("shield")} Account</h3>
-                    <p class="profile-card__desc">Managed by your account — contact admin to change.</p>
-                  </header>
-                  <div class="profile-card__body profile-card__body--grid">
-                    ${renderReadOnlyField("Email", email, "Read-only for security")}
-                    ${renderReadOnlyField("Access level", formatAccessLabel(sessionUser))}
-                    ${renderReadOnlyField("Member since", joined)}
-                    ${renderReadOnlyField("Problems tracked", `${getProblems().length} total · ${stats.problemsSolved} solved`)}
-                  </div>
-                </article>
+                <div class="settings-form__grid">
+                  ${Field({
+                    label: "Display name",
+                    hint: "Navbar greeting and profile",
+                    children: Input({
+                      value: user.name || "",
+                      attrs: 'name="name" id="profile-name" placeholder="e.g. Alex Chen" autocomplete="name"',
+                    }),
+                  })}
+                  ${Field({
+                    label: "Bio",
+                    hint: "Short intro — max 280 characters",
+                    children: Textarea({
+                      rows: 3,
+                      placeholder: "e.g. CS grad preparing for FAANG interviews. Focusing on graphs & DP.",
+                      attrs: 'name="bio" id="profile-bio" maxlength="280"',
+                      value: escapeHtml(user.bio || ""),
+                    }),
+                  })}
+                </div>
               </form>
-            </section>
+            `,
+          })}
 
-            <section id="subscription" class="settings-section settings-group settings-group--subscription">
-              <h2 class="settings-group__title">Subscription</h2>
-              <p class="settings-group__desc">Your plan controls roadmap access and AI features.</p>
-              ${renderSubscriptionStatusCard(sessionUser)}
-            </section>
-
-            <section id="appearance" class="settings-section settings-group">
-              <h2 class="settings-group__title">Appearance</h2>
-              <p class="settings-group__desc">Theme applies for this session only — resets when you close the tab.</p>
-              <div class="settings-card">
-                ${settingsRow("Dark mode", "Use dark theme across the app", Toggle({ checked: isDark, id: "dark-mode", attrs: 'data-setting="darkMode"' }))}
-                ${settingsRow("Compact sidebar", "Collapse sidebar by default", Toggle({ checked: sidebarCollapsed || settings.compactSidebar, attrs: 'data-setting="compactSidebar"' }))}
+          ${renderSettingsBlock({
+            id: "goals",
+            iconName: "target",
+            priority: "2",
+            title: "Learning focus",
+            description: "Your north star — keep interview targets and skills visible.",
+            body: `
+              <div class="settings-form">
+                ${Field({
+                  label: "Current goals",
+                  hint: "Interview date, companies, or patterns you're mastering",
+                  children: Textarea({
+                    rows: 3,
+                    placeholder: "e.g. Google L4 by September · Master DP · 300 problems",
+                    attrs: 'name="goal" id="profile-goal" maxlength="200" form="settings-profile-form"',
+                    value: escapeHtml(user.goal || ""),
+                  }),
+                })}
               </div>
-            </section>
+            `,
+          })}
 
-            <section id="notifications" class="settings-section settings-group">
-              <h2 class="settings-group__title">Notifications</h2>
-              <p class="settings-group__desc">Control system alerts on this device and in-app study reminders.</p>
+          ${renderSettingsBlock({
+            id: "subscription",
+            iconName: "zap",
+            priority: "3",
+            title: "Plan & access",
+            description: "Roadmap phases, AI lessons, and premium features.",
+            body: renderSubscriptionStatusCard(sessionUser) || `
+              <p class="text-sm text-secondary">Sign in to view your subscription status.</p>
+            `,
+          })}
 
-              <div class="settings-card settings-card--system-notifications">
+          ${renderSettingsBlock({
+            id: "notifications",
+            iconName: "bell",
+            priority: "4",
+            title: "Notifications",
+            description: "System alerts and spaced-revision reminders on this device.",
+            body: `
+              <div class="settings-card settings-card--nested">
                 <div class="settings-card__subsection">
                   <h3 class="settings-card__subtitle">System notifications</h3>
-                  <p class="settings-card__subsection-desc">Turning this on opens your device permission prompt — Allow or Block alerts outside the app.</p>
+                  <p class="settings-card__subsection-desc">Enabling opens your device permission prompt — Allow or Block alerts outside the app.</p>
                 </div>
                 <div class="settings-push-ios-callout" id="push-ios-callout" hidden>
                   <p class="settings-push-ios-callout__title">For iOS users</p>
@@ -230,50 +230,89 @@ export default {
                     <li>Tap <strong>Allow</strong> when iOS asks for permission</li>
                   </ol>
                 </div>
-                ${settingsRow("System notifications", "Enable or disable alerts on this phone or browser", Toggle({ checked: settings.notifications.pushEnabled, id: "push-notifications-toggle", attrs: 'data-push-system-toggle aria-describedby="push-status-text"' }))}
+                ${settingsRow("System notifications", "Alerts on this phone or browser", Toggle({ checked: settings.notifications.pushEnabled, id: "push-notifications-toggle", attrs: 'data-push-system-toggle aria-describedby="push-status-text"' }))}
                 <p class="settings-push-status" id="push-status-text" aria-live="polite"></p>
                 <div class="settings-push-actions">
                   <button type="button" class="btn btn--secondary btn--sm" id="push-test-btn">Send test notification</button>
                 </div>
               </div>
-
-              <div class="settings-card settings-card--study-reminders">
+              <div class="settings-card settings-card--nested settings-card--study-reminders">
                 <div class="settings-card__subsection">
                   <h3 class="settings-card__subtitle">Study reminders</h3>
-                  <p class="settings-card__subsection-desc">Scheduled system push when System notifications are enabled. Times use Asia/Kolkata.</p>
+                  <p class="settings-card__subsection-desc">Scheduled push when system notifications are on · Asia/Kolkata timezone.</p>
                 </div>
-                ${settingsRow("Daily mission reminder", "9:00 AM — today's mission tasks", Toggle({ checked: settings.notifications.dailyReminder, attrs: 'data-setting="notif.dailyReminder"' }))}
-                ${settingsRow("Streak at risk alert", "8:00 PM — if you have not solved today", Toggle({ checked: settings.notifications.streakAlert, attrs: 'data-setting="notif.streakAlert"' }))}
-                ${settingsRow("Review due notifications", "9:00 AM — spaced repetition reviews due", Toggle({ checked: settings.notifications.reviewDue, attrs: 'data-setting="notif.reviewDue"' }))}
-                ${settingsRow("Weekly progress summary", "Sunday 6:00 PM — weekly recap", Toggle({ checked: settings.notifications.weeklySummary, attrs: 'data-setting="notif.weeklySummary"' }))}
-                ${settingsRow("Daily Wisdom", "9:00 AM — personalized insight for your next roadmap topic", Toggle({ checked: settings.notifications.dailyWisdom !== false, attrs: 'data-setting="notif.dailyWisdom"' }))}
+                ${settingsRow("Daily mission", "9:00 AM — today's mission tasks", Toggle({ checked: settings.notifications.dailyReminder, attrs: 'data-setting="notif.dailyReminder"' }))}
+                ${settingsRow("Streak at risk", "8:00 PM — if you haven't solved today", Toggle({ checked: settings.notifications.streakAlert, attrs: 'data-setting="notif.streakAlert"' }))}
+                ${settingsRow("Revision due", "9:00 AM — spaced repetition reviews", Toggle({ checked: settings.notifications.reviewDue, attrs: 'data-setting="notif.reviewDue"' }))}
+                ${settingsRow("Weekly summary", "Sunday 6:00 PM — progress recap", Toggle({ checked: settings.notifications.weeklySummary, attrs: 'data-setting="notif.weeklySummary"' }))}
+                ${settingsRow("Daily Wisdom", "9:00 AM — insight for your next roadmap topic", Toggle({ checked: settings.notifications.dailyWisdom !== false, attrs: 'data-setting="notif.dailyWisdom"' }))}
               </div>
-            </section>
+            `,
+          })}
 
-            <section id="data" class="settings-section settings-group">
-              <h2 class="settings-group__title">Data</h2>
-              <p class="settings-group__desc">Export, import, or delete your study progress. Profile and settings are kept when you delete.</p>
-              <div class="settings-card settings-card--data">
+          ${renderSettingsBlock({
+            id: "appearance",
+            iconName: "palette",
+            priority: "5",
+            title: "Appearance",
+            description: "Visual preferences for this device.",
+            body: `
+              <div class="settings-card settings-card--nested settings-card--flat">
+                ${settingsRow("Dark mode", "Comfortable low-light theme", Toggle({ checked: isDark, id: "dark-mode", attrs: 'data-setting="darkMode"' }))}
+                ${settingsRow("Compact sidebar", "More room for content", Toggle({ checked: sidebarCollapsed || settings.compactSidebar, attrs: 'data-setting="compactSidebar"' }))}
+              </div>
+            `,
+          })}
+
+          ${renderSettingsBlock({
+            id: "account",
+            iconName: "shield",
+            priority: "6",
+            title: "Account",
+            description: "Read-only details — contact an admin to change access.",
+            body: `
+              <div class="settings-account-grid">
+                ${renderAccountTile("Email", email, "Secured sign-in")}
+                ${renderAccountTile("Access", formatAccessLabel(sessionUser))}
+                ${renderAccountTile("Member since", joined)}
+                ${renderAccountTile("Progress", `${stats.problemsSolved} solved · ${problemCount} tracked`)}
+              </div>
+            `,
+          })}
+
+          ${renderSettingsBlock({
+            id: "data",
+            iconName: "database",
+            priority: "7",
+            title: "Study data",
+            description: "Export a backup, import progress, or wipe problems and activity.",
+            body: `
+              <div class="settings-card settings-card--nested settings-card--data">
                 <div class="settings-data-summary">
                   <div>
-                    <div class="settings-data-summary__title">${getProblems().length} problems · ${stats.problemsSolved} solved</div>
+                    <div class="settings-data-summary__title">${problemCount} problems · ${stats.problemsSolved} solved</div>
                     <div class="settings-data-summary__hint">Problems sync to your account when signed in</div>
                   </div>
                   ${sessionUser ? Badge({ label: "Cloud sync", variant: "outline" }) : Badge({ label: "This device", variant: "outline" })}
                 </div>
-                <div class="cluster">
-                  <button class="btn btn--secondary" id="export-data-btn" type="button">${icon("download")}<span>Export Data</span></button>
-                  <button class="btn btn--outline" id="import-data-btn" type="button">Import Data</button>
+                <div class="settings-data-actions">
+                  <button class="btn btn--secondary" id="export-data-btn" type="button">${icon("download")}<span>Export</span></button>
+                  <button class="btn btn--outline" id="import-data-btn" type="button">Import</button>
                   <input type="file" id="import-data-input" accept=".json" class="hidden" aria-hidden="true">
-                  <button class="btn btn--danger" id="clear-data-btn" type="button">Delete All Study Data</button>
+                  <button class="btn btn--danger btn--ghost" id="clear-data-btn" type="button">Delete all study data</button>
                 </div>
               </div>
-            </section>
+            `,
+          })}
 
-            <section id="about" class="settings-section settings-group">
-              <h2 class="settings-group__title">About</h2>
-              <p class="settings-group__desc">Product information and credits.</p>
-              <article class="about-brand-card">
+          ${renderSettingsBlock({
+            id: "about",
+            iconName: "info",
+            priority: "8",
+            title: "About",
+            description: "Product information.",
+            body: `
+              <article class="about-brand-card about-brand-card--compact">
                 <div class="about-brand-card__glow" aria-hidden="true"></div>
                 <div class="about-brand-card__head">
                   <div class="about-brand-card__logo" aria-hidden="true">${icon("logo")}</div>
@@ -294,8 +333,8 @@ export default {
                   </div>
                 </div>
               </article>
-            </section>
-          </div>
+            `,
+          })}
         </div>
       `,
     });
@@ -305,11 +344,7 @@ export default {
     import("../router.js").then(({ getCurrentSection, SETTINGS_SECTION_IDS }) => {
       const section = getCurrentSection();
       if (section && SETTINGS_SECTION_IDS.has(section)) {
-        const el = document.getElementById(section);
-        el?.scrollIntoView({ block: "start" });
-        container.querySelectorAll(".settings-nav__item").forEach((item) => {
-          item.classList.toggle("is-active", item.dataset.settingsSection === section);
-        });
+        document.getElementById(section)?.scrollIntoView({ block: "start" });
       }
     });
     import("../push-notifications.js").then(({ bindPushSettingsUI, bindPushTestButton, bindPushToggleHandler }) => {

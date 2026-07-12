@@ -11,11 +11,13 @@ const routes = new Map();
 /** Settings sub-sections — #/settings/notifications etc. */
 export const SETTINGS_SECTION_IDS = new Set([
   "profile",
+  "goals",
   "subscription",
   "appearance",
   "notifications",
   "data",
   "about",
+  "account",
 ]);
 
 export function registerRoute(path, config) {
@@ -89,10 +91,6 @@ function scrollToSettingsSection(sectionId) {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  document.querySelectorAll(".settings-nav__item").forEach((item) => {
-    const target = item.dataset.settingsSection || "";
-    item.classList.toggle("is-active", target === sectionId);
-  });
 }
 
 async function renderRouteContent(path, container) {

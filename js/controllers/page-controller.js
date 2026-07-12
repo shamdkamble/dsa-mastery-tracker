@@ -202,6 +202,8 @@ export function bindSettingsHandlers(root) {
     const profileForm = $("#settings-profile-form", scope);
     if (!profileForm) return;
     const fd = new FormData(profileForm);
+    const goalEl = $("#profile-goal", scope);
+    if (goalEl) fd.set("goal", goalEl.value);
     const photoInput = $("#profile-photo-data", scope);
     updateUser({
       name: String(fd.get("name") || "").trim(),
@@ -215,7 +217,8 @@ export function bindSettingsHandlers(root) {
   }, 500);
 
   root.addEventListener("input", (e) => {
-    if (!e.target.closest("#settings-profile-form")) return;
+    const inProfileForm = e.target.closest("#settings-profile-form") || e.target.id === "profile-goal";
+    if (!inProfileForm) return;
     refreshProfilePreview(root);
     saveProfile(root);
   });
@@ -315,25 +318,6 @@ export function bindSettingsHandlers(root) {
     }
   });
 
-  const navItems = $$(".settings-nav__item", root);
-  const sections = SETTINGS_SECTION_IDS.map((id) => $(`#${id}`, root)).filter(Boolean);
-  if (navItems.length && sections.length && typeof IntersectionObserver !== "undefined") {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (!visible) return;
-        const id = visible.target.id;
-        navItems.forEach((item) => {
-          const target = item.dataset.settingsSection || "";
-          item.classList.toggle("is-active", target === id);
-        });
-      },
-      { rootMargin: "-20% 0px -60% 0px", threshold: [0, 0.25, 0.5, 1] },
-    );
-    sections.forEach((section) => observer.observe(section));
-  }
 }
 
 const SETTINGS_SECTION_IDS = [...SETTINGS_SECTIONS];
@@ -363,7 +347,7 @@ function refreshProfilePreview(root) {
   if (previewName) previewName.textContent = displayName;
   if (previewBio) {
     previewBio.textContent = displayBio || "Add a short bio to personalize your profile.";
-    previewBio.classList.toggle("profile-hero__bio--empty", !displayBio);
+    previewBio.classList.toggle("settings-hero__bio--empty", !displayBio);
   }
   if (avatarHost) {
     const stateUser = getState().user;
@@ -376,7 +360,7 @@ function refreshProfilePreview(root) {
 
   const removeBtn = $("#profile-photo-remove", root);
   if (u.profilePhoto && !removeBtn) {
-    const actions = $(".profile-hero__photo-actions", root);
+    const actions = $(".settings-hero__photo", root);
     const uploadLabel = actions?.querySelector(".profile-photo-btn");
     if (actions && uploadLabel) {
       uploadLabel.insertAdjacentHTML(
