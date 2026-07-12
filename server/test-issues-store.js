@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { connectDB } from "./db/mongodb.js";
 import { TestIssue, toTestIssueDto } from "./models/TestIssue.js";
+import { User } from "./models/User.js";
 import { TEST_ISSUE_SEVERITIES, TEST_ISSUE_STATUSES } from "./user-constants.js";
 import { createUserNotification } from "./notifications-db.js";
 
@@ -142,6 +143,40 @@ async function notifyReporter(issue, payload, pushTag) {
   }
 }
 
+async function notifyAdmins(issue, payload, pushTag) {
+  try {
+    const admins = await User.find({ role: "admin" }).select("id").lean();
+    await Promise.all(admins.map((admin) => createUserNotification(admin.id, {
+      ...payload,
+      href: payload.href || "#/testing-issues",
+    }, { pushTag: `${pushTag}-${admin.id}` })));
+  } catch (err) {
+    console.warn("[test-issues] admin notification failed", err);
+  }
+}
+
+function canAddIssueComment(actor, doc) {
+  if (actor.role === "admin") return true;
+  if (actor.role === "tester" && doc.reporterId === actor.id && doc.status !== "resolved") {
+    return true;
+  }
+  return false;
+}
+
+function appendIssueComment(doc, actor, body, now) {
+  const comment = {
+    id: `comment_${randomUUID()}`,
+    authorId: actor.id,
+    authorName: actor.name || (actor.role === "admin" ? "Admin" : "Tester"),
+    authorRole: actor.role,
+    body,
+    createdAt: now,
+  };
+  if (!Array.isArray(doc.comments)) doc.comments = [];
+  doc.comments.push(comment);
+  return comment;
+}
+
 export async function updateTestIssue(actor, issueId, updates) {
   await connectDB();
   const doc = await TestIssue.findOne({ id: issueId });
@@ -153,7 +188,21 @@ export async function updateTestIssue(actor, issueId, updates) {
   const now = new Date().toISOString();
   const prevStatus = doc.status;
 
-  if (role === "admin") {
+  if (updates.action === "add_comment" || updates.adminNotes !== undefined) {
+    const body = String(updates.body ?? updates.adminNotes ?? "").trim();
+    if (!body) {
+      throw new TestIssueError("Comment cannot be empty.", { status: 400, code: "INVALID_INPUT" });
+    }
+    if (!canAddIssueComment(actor, doc)) {
+      throw new TestIssueError("You cannot comment on this issue.", { status: 403, code: "FORBIDDEN" });
+    }
+
+    appendIssueComment(doc, actor, body, now);
+
+    if (role === "admin") {
+      doc.adminNotes = body;
+    }
+  } else if (role === "admin") {
     if (updates.status === "resolved") {
       throw new TestIssueError("Only testers can mark issues as resolved.", { status: 403, code: "FORBIDDEN" });
     }
@@ -170,9 +219,6 @@ export async function updateTestIssue(actor, issueId, updates) {
       }
     }
 
-    if (updates.adminNotes !== undefined) {
-      doc.adminNotes = String(updates.adminNotes || "").trim();
-    }
   } else if (role === "tester") {
     const isOwner = doc.reporterId === actor.id;
 
@@ -233,6 +279,25 @@ export async function updateTestIssue(actor, issueId, updates) {
       variant: "info",
       href: "#/testing-issues",
     }, `issue-progress-${issue.id}`);
+  }
+
+  const commentBody = String(updates.body ?? updates.adminNotes ?? "").trim();
+  if ((updates.action === "add_comment" || updates.adminNotes !== undefined) && commentBody) {
+    if (role === "admin") {
+      await notifyReporter(issue, {
+        title: "Admin replied on your issue",
+        text: `"${issue.title}": ${commentBody.slice(0, 120)}${commentBody.length > 120 ? "…" : ""}`,
+        variant: "info",
+        href: "#/testing-issues",
+      }, `issue-comment-admin-${issue.id}-${Date.now()}`);
+    } else if (role === "tester") {
+      await notifyAdmins(issue, {
+        title: "Tester replied on QA issue",
+        text: `#${issue.issueNumber} "${issue.title}": ${commentBody.slice(0, 120)}${commentBody.length > 120 ? "…" : ""}`,
+        variant: "info",
+        href: "#/testing-issues",
+      }, `issue-comment-tester-${issue.id}-${Date.now()}`);
+    }
   }
 
   return issue;

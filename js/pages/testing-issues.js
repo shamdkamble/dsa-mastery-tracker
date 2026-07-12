@@ -54,6 +54,46 @@ function testerCanEdit(issue, user) {
     && (issue.status === "pending" || issue.status === "in_progress");
 }
 
+function canReplyToIssue(issue, user) {
+  if (!issue || !user) return false;
+  if (isAdmin()) return true;
+  return issue.reporterId === user.id && issue.status !== "resolved";
+}
+
+function getIssueComments(issue) {
+  const comments = Array.isArray(issue?.comments) ? [...issue.comments] : [];
+  if (!comments.length && issue?.adminNotes?.trim()) {
+    comments.push({
+      id: `legacy_${issue.id}`,
+      authorName: issue.fixedByName || "Admin",
+      authorRole: "admin",
+      body: issue.adminNotes.trim(),
+      createdAt: issue.updatedAt || issue.createdAt,
+    });
+  }
+  return comments.sort(
+    (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
+  );
+}
+
+function renderCommentsThread(issue) {
+  const comments = getIssueComments(issue);
+  if (!comments.length) {
+    return `<p class="testing-thread__empty">No responses yet. Start the discussion below.</p>`;
+  }
+
+  return comments.map((comment) => `
+    <article class="testing-comment testing-comment--${comment.authorRole === "admin" ? "admin" : "tester"}">
+      <div class="testing-comment__head">
+        <span class="testing-comment__author">${escapeHtml(comment.authorName || (comment.authorRole === "admin" ? "Admin" : "Tester"))}</span>
+        <span class="testing-comment__role">${comment.authorRole === "admin" ? "Admin" : "Tester"}</span>
+        <time class="testing-comment__time">${formatDate(comment.createdAt)}</time>
+      </div>
+      <p class="testing-comment__body">${escapeHtml(comment.body)}</p>
+    </article>
+  `).join("");
+}
+
 function renderActions(issue, user) {
   const admin = isAdmin();
   const actions = [];
@@ -71,6 +111,9 @@ function renderActions(issue, user) {
   } else {
     if (testerCanEdit(issue, user)) {
       actions.push(`<button type="button" class="btn btn--xs btn--secondary" data-action="issue-edit" data-id="${issue.id}">${icon("notes")}<span>Edit</span></button>`);
+    }
+    if (canReplyToIssue(issue, user)) {
+      actions.push(`<button type="button" class="btn btn--xs btn--ghost" data-action="issue-note" data-id="${issue.id}">${icon("message")}<span>Reply</span></button>`);
     }
     if (issue.status === "fixed") {
       actions.push(`<button type="button" class="btn btn--xs btn--primary" data-action="issue-confirm" data-id="${issue.id}">Confirm Resolved</button>`);
@@ -151,13 +194,22 @@ function renderIssueModal() {
           </div>
           </div>
           <div id="testing-modal-details" class="testing-modal-details" hidden></div>
-          <label class="field" id="testing-admin-note-field" hidden>
-            <span class="field__label">Admin Response</span>
-            <textarea class="input testing-textarea" name="adminNotes" rows="3" placeholder="Comment for the tester — status updates, questions, or fix notes"></textarea>
-          </label>
+          <section id="testing-issue-thread" class="testing-thread" hidden>
+            <div class="testing-thread__head">
+              <h3 class="testing-thread__title">${icon("message")}<span>Discussion</span></h3>
+            </div>
+            <div id="testing-issue-comments" class="testing-thread__list"></div>
+          </section>
         </form>
+        <div id="testing-issue-reply" class="testing-reply" hidden>
+          <label class="field">
+            <span class="field__label" id="testing-reply-label">Your reply</span>
+            <textarea id="testing-reply-input" class="input testing-textarea" rows="3" placeholder="Write a reply for the other party…"></textarea>
+          </label>
+        </div>
         <div class="testing-modal__footer">
           <button type="button" class="btn btn--ghost" data-action="close-issue-modal">Cancel</button>
+          <button type="button" class="btn btn--primary" id="testing-issue-reply-btn" data-action="issue-reply" hidden>Send Reply</button>
           <button type="submit" form="testing-issue-form" class="btn btn--primary" id="testing-issue-submit">Submit Issue</button>
         </div>
       </div>
@@ -265,27 +317,27 @@ async function reloadIssues(container) {
   paintIssuesPage(container, { issues: issuesCache, loading: false, error: null, filter: activeFilter });
 }
 
-function openModal(mode = "create", issue = null) {
+function openModal(mode = "create", issue = null, { focusReply = false } = {}) {
   const modal = document.getElementById("testing-issue-modal");
   const form = document.getElementById("testing-issue-form");
   const title = document.getElementById("testing-modal-title");
   const submit = document.getElementById("testing-issue-submit");
+  const replyBtn = document.getElementById("testing-issue-reply-btn");
   const details = document.getElementById("testing-modal-details");
-  const adminNoteField = document.getElementById("testing-admin-note-field");
   const issueFields = document.getElementById("testing-issue-fields");
+  const thread = document.getElementById("testing-issue-thread");
+  const commentsHost = document.getElementById("testing-issue-comments");
+  const replyWrap = document.getElementById("testing-issue-reply");
+  const replyInput = document.getElementById("testing-reply-input");
+  const replyLabel = document.getElementById("testing-reply-label");
+  const user = getSessionUser();
 
   if (!modal || !form) return;
 
   form.reset();
   form.mode.value = mode;
   form.issueId.value = issue?.id || "";
-
-  const readOnly = mode === "view";
-  [...form.elements].forEach((el) => {
-    if (el.name && el.name !== "mode" && el.name !== "issueId") {
-      el.disabled = readOnly && el.name !== "adminNotes";
-    }
-  });
+  if (replyInput) replyInput.value = "";
 
   if (issue) {
     form.title.value = issue.title || "";
@@ -295,15 +347,24 @@ function openModal(mode = "create", issue = null) {
     form.stepsToReproduce.value = issue.stepsToReproduce || "";
     form.expectedBehavior.value = issue.expectedBehavior || "";
     form.actualBehavior.value = issue.actualBehavior || "";
-    if (form.adminNotes) form.adminNotes.value = issue.adminNotes || "";
   }
 
+  const showReply = mode === "view" && issue && canReplyToIssue(issue, user);
+
   if (issueFields) issueFields.hidden = mode === "view";
+  if (thread) thread.hidden = mode !== "view";
+  if (commentsHost && mode === "view" && issue) {
+    commentsHost.innerHTML = renderCommentsThread(issue);
+  }
+  if (replyWrap) replyWrap.hidden = !showReply;
+  if (replyBtn) replyBtn.hidden = !showReply;
+  if (replyLabel) {
+    replyLabel.textContent = isAdmin() ? "Reply to tester" : "Reply to admin";
+  }
 
   if (mode === "view" && issue) {
     title.textContent = `Issue #${issue.issueNumber}`;
     submit.hidden = true;
-    adminNoteField.hidden = true;
 
     details.hidden = false;
     details.innerHTML = `
@@ -322,46 +383,30 @@ function openModal(mode = "create", issue = null) {
       ${issue.stepsToReproduce ? `<div class="testing-detail-notes"><span class="testing-detail-label">Steps to Reproduce</span><p class="testing-detail-pre">${escapeHtml(issue.stepsToReproduce)}</p></div>` : ""}
       ${issue.expectedBehavior ? `<div class="testing-detail-notes"><span class="testing-detail-label">Expected Behavior</span><p>${escapeHtml(issue.expectedBehavior)}</p></div>` : ""}
       ${issue.actualBehavior ? `<div class="testing-detail-notes"><span class="testing-detail-label">Actual Behavior</span><p>${escapeHtml(issue.actualBehavior)}</p></div>` : ""}
-      ${issue.adminNotes ? `<div class="testing-detail-notes testing-detail-notes--accent"><span class="testing-detail-label">Admin Response</span><p>${escapeHtml(issue.adminNotes)}</p></div>` : ""}
     `;
   } else if (mode === "edit" && issue) {
     title.textContent = `Edit Issue #${issue.issueNumber}`;
     submit.hidden = false;
     submit.textContent = "Save Changes";
-    adminNoteField.hidden = true;
     details.hidden = true;
     if (issueFields) issueFields.hidden = false;
-    [...form.elements].forEach((el) => {
-      if (el.name && el.name !== "mode" && el.name !== "issueId") el.disabled = false;
-    });
-  } else if (mode === "note" && issue) {
-    title.textContent = `Respond — #${issue.issueNumber}`;
-    submit.hidden = false;
-    submit.textContent = "Save Response";
-    adminNoteField.hidden = false;
-    details.hidden = false;
-    if (issueFields) issueFields.hidden = true;
-    details.innerHTML = `
-      <div class="testing-detail-notes">
-        <span class="testing-detail-label">Issue</span>
-        <p><strong>#${issue.issueNumber}</strong> — ${escapeHtml(issue.title)}</p>
-      </div>
-    `;
-    form.adminNotes.disabled = false;
   } else {
     title.textContent = "Report Issue";
     submit.hidden = false;
     submit.textContent = "Submit Issue";
-    adminNoteField.hidden = true;
     details.hidden = true;
     if (issueFields) issueFields.hidden = false;
-    [...form.elements].forEach((el) => {
-      if (el.name && el.name !== "mode" && el.name !== "issueId") el.disabled = false;
-    });
   }
 
   modal.hidden = false;
   document.body.classList.add("testing-modal-open");
+
+  if (focusReply && replyInput) {
+    requestAnimationFrame(() => {
+      replyInput.focus();
+      replyInput.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }
 }
 
 function closeModal() {
@@ -446,7 +491,33 @@ function bindIssuesPage(container) {
 
     const noteBtn = e.target.closest("[data-action='issue-note']");
     if (noteBtn) {
-      openModal("note", findIssue(noteBtn.dataset.id));
+      openModal("view", findIssue(noteBtn.dataset.id), { focusReply: true });
+      return;
+    }
+
+    const replyBtn = e.target.closest("[data-action='issue-reply']");
+    if (replyBtn) {
+      const form = document.getElementById("testing-issue-form");
+      const issueId = form?.issueId?.value;
+      const replyInput = document.getElementById("testing-reply-input");
+      const body = String(replyInput?.value || "").trim();
+      if (!issueId || !body) {
+        showToast(Toast({ title: "Reply required", text: "Write a message before sending.", variant: "warning" }));
+        return;
+      }
+
+      replyBtn.disabled = true;
+      try {
+        const { apiUpdateTestIssue } = await import("../api/testIssuesApi.js");
+        await apiUpdateTestIssue(issueId, { action: "add_comment", body });
+        showToast(Toast({ title: "Reply sent", variant: "success" }));
+        await reloadIssues(container);
+        openModal("view", findIssue(issueId), { focusReply: true });
+      } catch (err) {
+        showToast(Toast({ title: "Reply failed", text: err?.message, variant: "danger" }));
+      } finally {
+        replyBtn.disabled = false;
+      }
       return;
     }
 
@@ -505,9 +576,6 @@ function bindIssuesPage(container) {
       } else if (mode === "edit") {
         await apiUpdateTestIssue(issueId, payload);
         showToast(Toast({ title: "Issue updated", text: "Your corrections were saved.", variant: "success" }));
-      } else if (mode === "note") {
-        await apiUpdateTestIssue(issueId, { adminNotes: String(fd.get("adminNotes") || "").trim() });
-        showToast(Toast({ title: "Response saved", variant: "success" }));
       }
 
       closeModal();

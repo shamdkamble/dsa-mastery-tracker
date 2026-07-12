@@ -31,7 +31,7 @@ function barChart(weeklyActivity) {
 function donutChart(stats, breakdown) {
   const total = breakdown.reduce((s, d) => s + d.count, 0);
   if (!total) {
-    return EmptyState({ title: "No solved problems", text: "Mark problems as mastered to see breakdown.", iconName: "analytics", compact: true, flat: true });
+    return EmptyState({ title: "No solved problems", text: "Mark problems as Done to see breakdown.", iconName: "analytics", compact: true, flat: true });
   }
 
   const easy = breakdown[0].percent;

@@ -253,7 +253,7 @@ export default {
         <div class="dash-stats stagger-children" data-tour="dash-stats">
           ${StatCard({ label: "Today's Revisions", value: String(stats.todaysRevisions), change: `${stats.revisionsDue} due total`, icon: icon("repeat") })}
           ${StatCard({ label: "Current Streak", value: `${stats.currentStreak}d`, change: `Best: ${stats.longestStreak} days`, changeType: stats.currentStreak > 0 ? "up" : undefined, icon: icon("flame") })}
-          ${StatCard({ label: "Problems Solved", value: String(stats.missionDoneToday), change: `${stats.problemsSolved} mastered total`, changeType: stats.missionDoneToday > 0 ? "up" : undefined, icon: icon("problems") })}
+          ${StatCard({ label: "Problems Solved", value: String(stats.problemsSolved), change: `${stats.missionDoneToday} marked done today`, changeType: stats.problemsSolved > 0 ? "up" : undefined, icon: icon("problems") })}
           ${StatCard({ label: "Accuracy Rate", value: `${stats.accuracy}%`, change: `Avg ${stats.avgTime} per solve`, icon: icon("analytics") })}
         </div>
 

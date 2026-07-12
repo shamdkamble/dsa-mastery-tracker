@@ -22,6 +22,20 @@ import {
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+function normalizeProblemDifficulty(difficulty) {
+  const d = String(difficulty || "").trim().toLowerCase();
+  if (d === "easy") return "Easy";
+  if (d === "medium") return "Medium";
+  if (d === "hard") return "Hard";
+  return null;
+}
+
+export function isProblemMarkedDone(problem) {
+  return problem?.status === "mastered"
+    || Boolean(problem?.missionDone)
+    || Boolean(problem?.solvedAt);
+}
+
 function getActiveDays() {
   const days = new Set(getActivities().map((a) => a.timestamp.slice(0, 10)));
   return days;
@@ -55,7 +69,7 @@ export function computeStats() {
   const today = todayKey();
   const streak = computeStreak();
 
-  const mastered = problems.filter((p) => p.status === "mastered");
+  const markedDone = problems.filter(isProblemMarkedDone);
   const revisionsDue = problems.filter((p) => p.nextReviewAt && p.nextReviewAt.slice(0, 10) <= today);
   const todaysMission = getTodaysMissionProblems();
   const todaysRevisions = todaysMission.filter((p) => p.missionType === "revision").length;
@@ -92,7 +106,7 @@ export function computeStats() {
     revisionsDue: revisionsDue.length,
     currentStreak: streak.current,
     longestStreak: streak.longest,
-    problemsSolved: mastered.length,
+    problemsSolved: markedDone.length,
     missionDoneToday,
     totalProblems: problems.length,
     weeklySolved,
@@ -210,7 +224,7 @@ export function computeTopicProgress() {
     if (!map.has(topic)) map.set(topic, { name: topic, solved: 0, total: 0 });
     const entry = map.get(topic);
     entry.total++;
-    if (p.status === "mastered") entry.solved++;
+    if (isProblemMarkedDone(p)) entry.solved++;
   });
 
   return [...map.values()]
@@ -230,7 +244,7 @@ export function computePatternStats() {
     if (!patternName || !tallies.has(patternName)) continue;
     const entry = tallies.get(patternName);
     entry.problems += 1;
-    if (problem.status === "mastered") entry.solved += 1;
+    if (isProblemMarkedDone(problem)) entry.solved += 1;
   }
 
   return PATTERN_CATALOG.map((template) => {
@@ -270,7 +284,8 @@ export function computeWeeklyActivity() {
 
 export function computeDifficultyBreakdown() {
   const problems = getProblems();
-  const total = problems.length || 1;
+  const solved = problems.filter(isProblemMarkedDone);
+  const solvedTotal = solved.length || 1;
   const levels = [
     { label: "Easy", color: "easy", key: "Easy" },
     { label: "Medium", color: "medium", key: "Medium" },
@@ -278,8 +293,10 @@ export function computeDifficultyBreakdown() {
   ];
 
   return levels.map((l) => {
-    const count = problems.filter((p) => p.difficulty === l.key && p.status === "mastered").length;
-    return { ...l, count, percent: Math.round((count / total) * 100) };
+    const count = solved.filter(
+      (p) => normalizeProblemDifficulty(p.difficulty) === l.key,
+    ).length;
+    return { ...l, count, percent: Math.round((count / solvedTotal) * 100) };
   });
 }
 
