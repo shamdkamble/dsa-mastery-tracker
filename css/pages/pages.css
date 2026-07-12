@@ -2360,6 +2360,12 @@
   margin: 0;
 }
 
+.problem-form__grid--classify .input[readonly] {
+  cursor: default;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+}
+
 .problem-form__mission {
   display: flex;
   align-items: flex-end;

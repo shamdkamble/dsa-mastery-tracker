@@ -293,12 +293,12 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
           <div class="field problem-form__field">
             <div class="problem-form__field-head">
               <label class="field__label" for="problem-topic">Topic</label>
-              <span class="problem-form__field-meta">From LeetCode tags</span>
+              <span class="problem-form__field-meta">Auto-filled · not editable</span>
             </div>
             ${Input({
-              placeholder: "e.g. Array · Hash Table",
-              value: p.topic || "",
-              attrs: 'name="topic" id="problem-topic"',
+              placeholder: "Import a LeetCode URL above to auto-fill",
+              value: escapeAttr(p.topic || ""),
+              attrs: 'name="topic" id="problem-topic" readonly aria-readonly="true"',
             })}
           </div>
           <div class="field problem-form__field">
