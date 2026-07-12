@@ -106,11 +106,11 @@ export function getTourSteps() {
     {
       id: "search",
       route: "problems",
-      target: '[data-tour="search"]',
+      target: '[data-tour="page-search"]',
       placement: "bottom",
       icon: "search",
-      title: "Quick search",
-      body: "Press Ctrl+K (or ⌘K on Mac) to search problems, topics, and notes from anywhere in the app.",
+      title: "Search problems",
+      body: "Use the search box on Problems, Patterns, or Roadmap to filter that page only — each page has its own search.",
     },
     {
       id: "settings",

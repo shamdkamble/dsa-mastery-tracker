@@ -748,6 +748,32 @@
    Problems
    ═══════════════════════════════════════════ */
 
+.page-search {
+  position: relative;
+  flex: 1 1 220px;
+  min-width: min(100%, 220px);
+  max-width: 360px;
+}
+
+.page-search__icon {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+}
+
+.page-search__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.page-search__input {
+  width: 100%;
+  padding-left: calc(var(--space-3) + 20px);
+}
+
 .problems-toolbar {
   display: flex;
   align-items: center;
@@ -755,6 +781,29 @@
   gap: var(--space-4);
   margin-bottom: var(--space-5);
   flex-wrap: wrap;
+}
+
+.problems-toolbar__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.patterns-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.roadmap-search-wrap {
+  margin-bottom: var(--space-5);
+  max-width: 360px;
 }
 
 .problems-filters {

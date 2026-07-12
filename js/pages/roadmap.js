@@ -29,6 +29,11 @@ import {
   getTopicRecommendationSummary,
   openTopicRecommendations,
 } from "../services/topic-recommendations.js";
+import {
+  renderPageSearch,
+  bindPageSearchInput,
+  normalizeSearchQuery,
+} from "../utils/page-search.js";
 
 const ROADMAP_META = {
   totalPhases: ROADMAP_PHASES.length,
@@ -225,6 +230,7 @@ function topicCard(topic, { locked = false, aiGenerationLocked = false, step } =
   return `
     <div
       class="roadmap-topic ${trackClass}${locked ? " roadmap-topic--locked" : ""}"
+      data-roadmap-topic-search="${escapeAttr(topic.name.toLowerCase())}"
       ${locked ? 'data-roadmap-locked tabindex="0" role="button" aria-label="Locked — subscribe to unlock"' : ""}
     >
       ${locked ? `<div class="roadmap-topic__lock-overlay" aria-hidden="true">${icon("lock")}</div>` : ""}
@@ -598,6 +604,13 @@ export default {
               ${hasFullRoadmapAccess(user) ? "" : ` · <span class="roadmap-access-hint">${accessHint}</span>`}
             </span>
           </div>
+          <div class="roadmap-search-wrap">
+            ${renderPageSearch({
+              id: "roadmap-search",
+              placeholder: "Search topics…",
+              tourAttr: "page-search",
+            })}
+          </div>
           ${renderTierBanner(user)}
           <div class="roadmap-phase-list" id="roadmap-phases" data-roadmap-accordion>
             ${ROADMAP_PHASES.map((phase) => phaseSection(phase, user, { isOpen: openPhaseIds.has(phase.id) })).join("")}
@@ -611,6 +624,7 @@ export default {
     bindLockedContentHandlers(container);
     bindTeachTopicHandlers(container);
     bindTopicPracticeHandlers(container);
+    mountRoadmapTopicSearch(container);
     void tryOpenTopicFromHash(container);
 
     if (!container.dataset.roadmapProgressBound) {
@@ -621,3 +635,38 @@ export default {
     }
   },
 };
+
+function applyRoadmapTopicSearch(container, query) {
+  const q = normalizeSearchQuery(query);
+  const topics = container.querySelectorAll("[data-roadmap-topic-search]");
+
+  topics.forEach((topic) => {
+    const haystack = topic.dataset.roadmapTopicSearch || "";
+    topic.hidden = Boolean(q && !haystack.includes(q));
+  });
+
+  container.querySelectorAll(".roadmap-step").forEach((step) => {
+    const hasVisible = [...step.querySelectorAll("[data-roadmap-topic-search]")].some((t) => !t.hidden);
+    step.hidden = Boolean(q && !hasVisible);
+  });
+
+  container.querySelectorAll(".roadmap-phase").forEach((phase) => {
+    const hasVisible = [...phase.querySelectorAll("[data-roadmap-topic-search]")].some((t) => !t.hidden);
+    phase.hidden = Boolean(q && !hasVisible);
+
+    if (q && hasVisible) {
+      const phaseId = Number(phase.dataset.phase);
+      if (phaseId) openPhaseIds.add(phaseId);
+      phase.classList.add("is-open");
+      phase.querySelector(".roadmap-phase__toggle")?.setAttribute("aria-expanded", "true");
+      phase.querySelector(".roadmap-phase__panel")?.setAttribute("aria-hidden", "false");
+    }
+  });
+}
+
+function mountRoadmapTopicSearch(container) {
+  const input = container.querySelector("#roadmap-search");
+  if (!input) return;
+  bindPageSearchInput(input, (value) => applyRoadmapTopicSearch(container, value));
+  applyRoadmapTopicSearch(container, input.value);
+}

@@ -43,7 +43,7 @@ import patterns from "./pages/patterns.js";
 import roadmap from "./pages/roadmap.js";
 import analytics from "./pages/analytics.js";
 import calendar from "./pages/calendar.js";
-import search from "./pages/search.js";
+
 import settings from "./pages/settings.js";
 import login from "./pages/login.js";
 import register from "./pages/register.js";
@@ -76,7 +76,6 @@ registerRoutes({
   roadmap,
   analytics,
   calendar,
-  search,
   settings,
 });
 
@@ -148,7 +147,6 @@ const DATA_DRIVEN_ROUTES = new Set([
   "analytics",
   "calendar",
   "settings",
-  "search",
 ]);
 
 function initDataRefresh() {

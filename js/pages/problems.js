@@ -16,6 +16,11 @@ import {
   initSolveTimerTicker,
   stopSolveTimerTicker,
 } from "../components/solve-timer.js";
+import {
+  renderPageSearch,
+  bindPageSearchInput,
+  normalizeSearchQuery,
+} from "../utils/page-search.js";
 
 const STATUS_MAP = {
   mastered: { label: "Mastered", class: "mastered" },
@@ -31,6 +36,20 @@ function statusPill(status) {
 
 function isMissionItemDone(p) {
   return Boolean(p.missionDone && isProblemOnTodaysMission(p));
+}
+
+function escapeAttr(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+function problemSearchText(p) {
+  return [p.title, p.topic, p.pattern, p.leetcodeId]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 function problemRow(p, i) {
@@ -50,6 +69,7 @@ function problemRow(p, i) {
       data-topic="${p.topic?.toLowerCase() || ""}"
       data-status="${p.status}"
       data-source="${p.source || "manual"}"
+      data-search="${escapeAttr(problemSearchText(p))}"
       class="${missionDone ? "" : "cursor-pointer"}${inProgress ? " is-solving" : ""}${missionDone ? " is-mission-done" : ""}"
       ${missionDone ? "" : 'tabindex="0" role="button"'}
     >
@@ -110,14 +130,21 @@ export default {
       description: "Track every problem in your DSA journey — filter, sort, and monitor mastery.",
       children: `
         <div class="problems-toolbar">
-          <div class="problems-filters">
-            <button class="chip is-selected" data-filter="all" type="button">All</button>
-            <button class="chip" data-filter="roadmap" type="button">Roadmap</button>
-            <button class="chip" data-filter="Easy" type="button">Easy</button>
-            <button class="chip" data-filter="Medium" type="button">Medium</button>
-            <button class="chip" data-filter="Hard" type="button">Hard</button>
-            <button class="chip" data-filter="todo" type="button">To Do</button>
-            <button class="chip" data-filter="learning" type="button">In Progress</button>
+          <div class="problems-toolbar__main">
+            <div class="problems-filters">
+              <button class="chip is-selected" data-filter="all" type="button">All</button>
+              <button class="chip" data-filter="roadmap" type="button">Roadmap</button>
+              <button class="chip" data-filter="Easy" type="button">Easy</button>
+              <button class="chip" data-filter="Medium" type="button">Medium</button>
+              <button class="chip" data-filter="Hard" type="button">Hard</button>
+              <button class="chip" data-filter="todo" type="button">To Do</button>
+              <button class="chip" data-filter="learning" type="button">In Progress</button>
+            </div>
+            ${renderPageSearch({
+              id: "problems-search",
+              placeholder: "Search problems…",
+              tourAttr: "page-search",
+            })}
           </div>
           <div class="problems-summary">
             <span><strong>${problems.length}</strong> total</span>
@@ -143,7 +170,10 @@ export default {
         </div>
 
         <div class="flex items-center justify-between mt-6">
-          <span class="text-sm text-secondary">Showing ${problems.length} problem${problems.length !== 1 ? "s" : ""}</span>
+          <span class="text-sm text-secondary">
+            Showing <span data-problems-visible-count>${problems.length}</span>
+            of ${problems.length} problem${problems.length !== 1 ? "s" : ""}
+          </span>
           <button class="btn btn--primary btn--sm" data-action="add-problem" type="button">
             ${icon("plus")}<span>Add Problem</span>
           </button>
@@ -154,14 +184,23 @@ export default {
   onMount(container) {
     bindPageHandlers(container);
     initSolveTimerTicker(container);
+    mountProblemsSearch(container);
 
     if (container.dataset.problemsRowBound) return;
     container.dataset.problemsRowBound = "true";
 
     container.addEventListener("click", (e) => {
+      const chip = e.target.closest("[data-filter]");
+      if (chip) {
+        container.querySelectorAll("[data-filter]").forEach((c) => c.classList.remove("is-selected"));
+        chip.classList.add("is-selected");
+        applyProblemsFilters(container);
+        return;
+      }
+
       if (e.target.closest("[data-action]")) return;
       const row = e.target.closest("tr[data-problem-row]");
-      if (!row || row.classList.contains("is-mission-done")) return;
+      if (!row || row.classList.contains("is-mission-done") || row.hidden) return;
       openProblemModal(row.dataset.id);
     });
   },
@@ -169,3 +208,42 @@ export default {
     stopSolveTimerTicker();
   },
 };
+
+function getSelectedProblemFilter(container) {
+  const chip = container.querySelector("[data-filter].is-selected");
+  return chip?.dataset.filter || "all";
+}
+
+function problemRowMatchesFilter(row, filter) {
+  return filter === "all"
+    || (filter === "roadmap" && row.dataset.source === "roadmap")
+    || row.dataset.difficulty === filter
+    || row.dataset.topic?.includes(filter)
+    || row.dataset.status === filter;
+}
+
+function applyProblemsFilters(container) {
+  const input = container.querySelector("#problems-search");
+  const filter = getSelectedProblemFilter(container);
+  const q = normalizeSearchQuery(input?.value);
+  const rows = container.querySelectorAll("[data-problem-row]");
+  let visible = 0;
+
+  rows.forEach((row) => {
+    const filterMatch = problemRowMatchesFilter(row, filter);
+    const searchMatch = !q || (row.dataset.search || "").includes(q);
+    const show = filterMatch && searchMatch;
+    row.hidden = !show;
+    if (show) visible += 1;
+  });
+
+  const countEl = container.querySelector("[data-problems-visible-count]");
+  if (countEl) countEl.textContent = String(visible);
+}
+
+function mountProblemsSearch(container) {
+  const input = container.querySelector("#problems-search");
+  if (!input) return;
+  bindPageSearchInput(input, () => applyProblemsFilters(container));
+  applyProblemsFilters(container);
+}

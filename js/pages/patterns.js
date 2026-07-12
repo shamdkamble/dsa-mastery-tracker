@@ -5,6 +5,11 @@ import { computePatternStats } from "../storage/computed.js";
 import { getProblems } from "../storage/db.js";
 import { refreshPage } from "../controllers/page-controller.js";
 import { getCurrentPath } from "../router.js";
+import {
+  renderPageSearch,
+  bindPageSearchInput,
+  normalizeSearchQuery,
+} from "../utils/page-search.js";
 
 function patternCard(p) {
   const iconVariant = p.color !== "accent" ? ` pattern-card__icon--${p.color}` : "";
@@ -45,7 +50,12 @@ export default {
       title: "Patterns",
       description: "Master essential DSA patterns — mastery is computed from solved problems matched by pattern, roadmap topic, or LeetCode tags.",
       children: `
-        <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+        <div class="patterns-toolbar">
+          ${renderPageSearch({
+            id: "patterns-search",
+            placeholder: "Search patterns…",
+            tourAttr: "page-search",
+          })}
           <div class="cluster">
             ${Badge({ label: `${patterns.length} patterns`, variant: "accent" })}
             ${totalProblems > 0 ? Badge({ label: `Avg ${avgMastery}% mastery`, variant: "default" }) : ""}
@@ -71,6 +81,7 @@ export default {
   },
   onMount(container) {
     import("../controllers/page-controller.js").then(({ bindPageHandlers }) => bindPageHandlers(container));
+    mountPatternSearch(container);
 
     if (!container.dataset.patternsLiveBound) {
       container.dataset.patternsLiveBound = "true";
@@ -80,3 +91,18 @@ export default {
     }
   },
 };
+
+function applyPatternSearch(container, query) {
+  const q = normalizeSearchQuery(query);
+  container.querySelectorAll("[data-pattern]").forEach((card) => {
+    const name = (card.dataset.pattern || "").toLowerCase();
+    card.hidden = Boolean(q && !name.includes(q));
+  });
+}
+
+function mountPatternSearch(container) {
+  const input = container.querySelector("#patterns-search");
+  if (!input) return;
+  bindPageSearchInput(input, (value) => applyPatternSearch(container, value));
+  applyPatternSearch(container, input.value);
+}

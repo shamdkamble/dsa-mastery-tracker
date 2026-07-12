@@ -45,7 +45,6 @@ function getNavSections() {
     {
       label: "Tools",
       items: [
-        { path: "search", label: "Search", icon: "search" },
         ...(getSessionUser()?.role !== "admin"
           ? [{ path: "mentor-desk", label: "Mentor Desk", icon: "message" }]
           : []),

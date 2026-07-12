@@ -15,7 +15,6 @@ import {
   exportData,
   importData,
   clearAllData,
-  addSearchRecent,
 } from "../storage/db.js";
 import {
   navigate,
@@ -157,69 +156,6 @@ export function bindMissionHandlers(root) {
       return;
     }
   });
-}
-
-/* ── Problem filters ── */
-
-export function bindFilterHandlers(root) {
-  if (root.dataset.filterHandlersBound) return;
-  root.dataset.filterHandlersBound = "true";
-
-  root.addEventListener("click", (e) => {
-    const chip = e.target.closest("[data-filter]");
-    if (!chip) return;
-
-    $$("[data-filter]", root).forEach((c) => c.classList.remove("is-selected"));
-    chip.classList.add("is-selected");
-
-    const filter = chip.dataset.filter;
-    const rows = $$("[data-problem-row]", root);
-
-    rows.forEach((row) => {
-      const match = filter === "all"
-        || (filter === "roadmap" && row.dataset.source === "roadmap")
-        || row.dataset.difficulty === filter
-        || row.dataset.topic?.toLowerCase().includes(filter)
-        || row.dataset.status === filter;
-      row.style.display = match ? "" : "none";
-    });
-  });
-}
-
-/* ── Search page ── */
-
-export function bindSearchHandlers(root) {
-  const searchPage = root.querySelector(".search-page");
-  if (!searchPage || searchPage.dataset.searchHandlersBound) return;
-
-  const input = $("#search-page-input", searchPage);
-  const resultsEl = $("#search-results", searchPage);
-  if (!input || !resultsEl) return;
-
-  searchPage.dataset.searchHandlersBound = "true";
-
-  const runSearch = (q) => {
-    setState({ searchQuery: q });
-    if (q.trim()) addSearchRecent(q);
-    import("../storage/computed.js").then(({ searchAll }) => {
-      const results = searchAll(q);
-      import("../pages/search.js").then(({ renderResults }) => {
-        resultsEl.innerHTML = renderResults(results, q);
-      });
-    });
-  };
-
-  input.addEventListener("input", (e) => runSearch(e.target.value));
-
-  searchPage.addEventListener("click", (e) => {
-    const chip = e.target.closest("[data-recent-search]");
-    if (!chip) return;
-    const q = chip.dataset.recentSearch || chip.textContent.trim();
-    input.value = q;
-    runSearch(q);
-  });
-
-  if (input.value.trim()) runSearch(input.value);
 }
 
 /* ── Settings handlers ── */
@@ -514,11 +450,8 @@ export function bindPageHandlers(root) {
 
   if (isNewRoot) {
     bindMissionHandlers(root);
-    bindFilterHandlers(root);
     bindCalendarHandlers(root);
   }
-
-  bindSearchHandlers(root);
 
   // Settings controls are rendered after first bind; delegation handles late-mounted elements.
   bindSettingsHandlers(root);

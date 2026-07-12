@@ -6,7 +6,7 @@ import { icon } from "./icons.js";
 import { getState, setState, subscribe } from "../state.js";
 import { toggleTheme } from "../theme.js";
 import { navigate } from "../router.js";
-import { addSearchRecent, getUser } from "../storage/db.js";
+import { getUser } from "../storage/db.js";
 import { logout } from "../services/auth.js";
 import { renderProfileAvatar } from "../utils/profile-avatar.js";
 import {
@@ -102,7 +102,6 @@ const ROUTE_TITLES = {
   roadmap: "FAANG Mastery Roadmap",
   analytics: "Analytics",
   calendar: "Calendar",
-  search: "Search",
   settings: "Profile & Settings",
   login: "Sign In",
   register: "Create Account",
@@ -177,7 +176,7 @@ function renderNotificationPanel() {
 }
 
 function renderNavbar(state) {
-  const { currentRoute, searchQuery, notifications, user } = state;
+  const { currentRoute, notifications, user } = state;
   const pageTitle = ROUTE_TITLES[currentRoute] || "Dashboard";
   const badge = notifications > 0
     ? `<span class="navbar__notification-badge" aria-hidden="true">${notifications > 9 ? "9+" : notifications}</span>`
@@ -198,22 +197,6 @@ function renderNavbar(state) {
         <span class="navbar__breadcrumb-current">${pageTitle}</span>
       </nav>
       <span class="navbar__mobile-title" aria-hidden="false">${pageTitle}</span>
-    </div>
-
-    <div class="navbar__center"${currentRoute === "dashboard" ? " hidden" : ""}>
-      <div class="search-input-wrapper" data-tour="search">
-        <span class="search-icon" aria-hidden="true">${icon("search")}</span>
-        <input
-          type="search"
-          class="input search-input"
-          id="navbar-search"
-          placeholder="Search problems, topics, notes..."
-          value="${searchQuery}"
-          aria-label="Search"
-          autocomplete="off"
-        />
-        <kbd class="search-shortcut" aria-hidden="true">⌘K</kbd>
-      </div>
     </div>
 
     <div class="navbar__right">
@@ -525,32 +508,6 @@ function bindEvents(container) {
     menuBtn.setAttribute("aria-expanded", String(!sidebarOpen));
   });
 
-  const searchInput = $("#navbar-search", container);
-  if (searchInput) {
-    const handleSearch = debounce((e) => {
-      setState({ searchQuery: e.target.value });
-      if (e.target.value.trim()) addSearchRecent(e.target.value);
-    }, 200);
-    searchInput.addEventListener("input", handleSearch);
-
-    searchInput.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        searchInput.value = "";
-        setState({ searchQuery: "" });
-        searchInput.blur();
-        return;
-      }
-      if (e.key === "Enter") {
-        const q = searchInput.value.trim();
-        if (q) {
-          setState({ searchQuery: q });
-          addSearchRecent(q);
-        }
-        navigate("search");
-      }
-    });
-  }
-
   const themeBtn = $("#navbar-theme-toggle", container);
   themeBtn?.addEventListener("click", () => toggleTheme());
 
@@ -584,7 +541,7 @@ function bindEvents(container) {
     if (action === "guide") {
       void startTour({ fromStep: 0 });
     } else if (action === "shortcuts") {
-      window.alert("Keyboard shortcuts:\n\nCtrl+K or ⌘K — Focus search\nEsc — Close panels and menus");
+      window.alert("Keyboard shortcuts:\n\nEsc — Close panels and menus");
     }
   });
 
@@ -641,22 +598,6 @@ function bindEvents(container) {
     });
   }
 
-  if (!document.body.dataset.shortcutBound) {
-    document.body.dataset.shortcutBound = "true";
-    document.addEventListener("keydown", handleGlobalShortcut);
-  }
-}
-
-function handleGlobalShortcut(e) {
-  if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-    e.preventDefault();
-    const searchInput = $("#navbar-search");
-    if (searchInput) {
-      searchInput.focus();
-    } else {
-      navigate("search");
-    }
-  }
 }
 
 function updateBreadcrumb(container, currentRoute) {
@@ -667,12 +608,7 @@ function updateBreadcrumb(container, currentRoute) {
   const mobileTitle = $(".navbar__mobile-title", container);
   if (mobileTitle) mobileTitle.textContent = title;
 
-  const searchCenter = $(".navbar__center", container);
-  const hideSearch = currentRoute === "dashboard";
-  if (searchCenter) {
-    searchCenter.toggleAttribute("hidden", hideSearch);
-  }
-  container.classList.toggle("navbar--no-search", hideSearch);
+  container.classList.add("navbar--no-search");
 }
 
 export function refreshNavbarNotifications() {
