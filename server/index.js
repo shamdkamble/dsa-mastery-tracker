@@ -128,6 +128,7 @@ import {
   removeProfilePhotoForUser,
   uploadChatImageForUser,
 } from "./media-routes.js";
+import { getR2ConfigDiagnostics } from "./r2-storage.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -278,7 +279,13 @@ function handleMentorChatError(res, err) {
 
 function handleMediaStorageError(res, err) {
   if (err instanceof MediaStorageError) {
-    res.status(err.status).json({ error: { message: err.message, code: err.code } });
+    res.status(err.status).json({
+      error: {
+        message: err.message,
+        code: err.code,
+        ...(err.details ? { details: err.details } : {}),
+      },
+    });
     return true;
   }
   return false;
@@ -1072,6 +1079,10 @@ app.get("/api/mentor-chat/thread", requireAuth, async (req, res) => {
     console.error("[/api/mentor-chat/thread]", err);
     res.status(500).json({ error: { message: "Failed to load conversation.", code: "SERVER_ERROR" } });
   }
+});
+
+app.get("/api/media/status", requireAuth, (_req, res) => {
+  res.json(getR2ConfigDiagnostics());
 });
 
 app.post("/api/media/profile-photo", requireAuth, imageUploadParser, async (req, res) => {

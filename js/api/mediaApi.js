@@ -30,7 +30,12 @@ function errorFromResponse(status, data) {
     ? data.error
     : (data?.error?.message || data?.message || `Request failed (${status}).`);
 
-  return new MediaApiError(apiMessage, {
+  const missing = data?.error?.details?.missing;
+  const hint = Array.isArray(missing) && missing.length
+    ? ` Missing server env: ${missing.join(", ")}.`
+    : "";
+
+  return new MediaApiError(`${apiMessage}${hint}`, {
     status,
     code: data?.error?.code || "API_ERROR",
     details: data,

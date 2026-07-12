@@ -35,7 +35,7 @@ export function loadEnv() {
       value = value.slice(1, -1);
     }
 
-    if (key) {
+    if (key && process.env[key] === undefined) {
       process.env[key] = value;
     }
   }

@@ -14,14 +14,29 @@ function cleanEnv(value) {
   return String(value || "").trim().replace(/^["']|["']$/g, "");
 }
 
+function firstEnv(...keys) {
+  for (const key of keys) {
+    const value = cleanEnv(process.env[key]);
+    if (value) return value;
+  }
+  return "";
+}
+
+function accountIdFromEndpoint(endpoint) {
+  const match = String(endpoint || "").match(/https:\/\/([a-f0-9]{32})\.r2\.cloudflarestorage\.com/i);
+  return match?.[1] || "";
+}
+
 export function getR2Config() {
-  const accountId = cleanEnv(process.env.R2_ACCOUNT_ID);
-  const accessKeyId = cleanEnv(process.env.R2_ACCESS_KEY_ID);
-  const secretAccessKey = cleanEnv(process.env.R2_SECRET_ACCESS_KEY);
-  const bucket = cleanEnv(process.env.R2_BUCKET_NAME);
-  const publicBaseUrl = cleanEnv(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/, "");
-  const endpoint = cleanEnv(process.env.R2_S3_ENDPOINT)
-    || (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
+  const endpoint = firstEnv("R2_S3_ENDPOINT", "R2_ENDPOINT", "S3_ENDPOINT")
+    || "";
+  const accountId = firstEnv("R2_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID")
+    || accountIdFromEndpoint(endpoint);
+  const accessKeyId = firstEnv("R2_ACCESS_KEY_ID", "R2_ACCESS_KEY", "AWS_ACCESS_KEY_ID");
+  const secretAccessKey = firstEnv("R2_SECRET_ACCESS_KEY", "R2_SECRET_KEY", "AWS_SECRET_ACCESS_KEY");
+  const bucket = firstEnv("R2_BUCKET_NAME", "R2_BUCKET", "S3_BUCKET_NAME");
+  const publicBaseUrl = firstEnv("R2_PUBLIC_BASE_URL", "R2_PUBLIC_URL", "CDN_BASE_URL").replace(/\/$/, "");
+  const resolvedEndpoint = endpoint || (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
 
   return {
     accountId,
@@ -29,18 +44,49 @@ export function getR2Config() {
     secretAccessKey,
     bucket,
     publicBaseUrl,
-    endpoint,
+    endpoint: resolvedEndpoint,
+  };
+}
+
+const REQUIRED_ENV_HINTS = [
+  ["accessKeyId", "R2_ACCESS_KEY_ID"],
+  ["secretAccessKey", "R2_SECRET_ACCESS_KEY"],
+  ["bucket", "R2_BUCKET_NAME"],
+  ["publicBaseUrl", "R2_PUBLIC_BASE_URL"],
+  ["endpoint", "R2_ACCOUNT_ID or R2_S3_ENDPOINT"],
+];
+
+export function getR2ConfigDiagnostics() {
+  const cfg = getR2Config();
+  const missing = REQUIRED_ENV_HINTS
+    .filter(([field]) => !cfg[field])
+    .map(([, hint]) => hint);
+
+  return {
+    configured: missing.length === 0,
+    missing,
+    hasAccessKey: Boolean(cfg.accessKeyId),
+    hasSecret: Boolean(cfg.secretAccessKey),
+    hasBucket: Boolean(cfg.bucket),
+    hasPublicBaseUrl: Boolean(cfg.publicBaseUrl),
+    hasEndpoint: Boolean(cfg.endpoint),
   };
 }
 
 export function isR2Configured() {
-  const cfg = getR2Config();
-  return Boolean(
-    cfg.accessKeyId
-    && cfg.secretAccessKey
-    && cfg.bucket
-    && cfg.endpoint
-    && cfg.publicBaseUrl,
+  return getR2ConfigDiagnostics().configured;
+}
+
+export function assertR2Configured() {
+  const diagnostics = getR2ConfigDiagnostics();
+  if (diagnostics.configured) return diagnostics;
+
+  const missing = diagnostics.missing.join(", ");
+  throw new MediaStorageError(
+    missing
+      ? `Image storage is not configured. Missing: ${missing}`
+      : "Image storage is not configured.",
+    { status: 503, code: "STORAGE_UNAVAILABLE", details: diagnostics },
   );
 }
 
