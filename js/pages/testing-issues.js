@@ -109,9 +109,6 @@ function renderActions(issue, user) {
     }
     actions.push(`<button type="button" class="btn btn--xs btn--ghost" data-action="issue-note" data-id="${issue.id}">${icon("message")}<span>Respond</span></button>`);
   } else {
-    if (testerCanEdit(issue, user)) {
-      actions.push(`<button type="button" class="btn btn--xs btn--secondary" data-action="issue-edit" data-id="${issue.id}">${icon("notes")}<span>Edit</span></button>`);
-    }
     if (canReplyToIssue(issue, user)) {
       actions.push(`<button type="button" class="btn btn--xs btn--ghost" data-action="issue-note" data-id="${issue.id}">${icon("message")}<span>Reply</span></button>`);
     }
@@ -350,8 +347,9 @@ function openModal(mode = "create", issue = null, { focusReply = false } = {}) {
   }
 
   const showReply = mode === "view" && issue && canReplyToIssue(issue, user);
+  const testerEditableView = mode === "view" && issue && testerCanEdit(issue, user);
 
-  if (issueFields) issueFields.hidden = mode === "view";
+  if (issueFields) issueFields.hidden = mode === "view" && !testerEditableView;
   if (thread) thread.hidden = mode !== "view";
   if (commentsHost && mode === "view" && issue) {
     commentsHost.innerHTML = renderCommentsThread(issue);
@@ -362,28 +360,45 @@ function openModal(mode = "create", issue = null, { focusReply = false } = {}) {
     replyLabel.textContent = isAdmin() ? "Reply to tester" : "Reply to admin";
   }
 
+  const issueMetaHtml = issue ? `
+    <div class="testing-detail-grid">
+      <div><span class="testing-detail-label">Status</span>${issueStatusBadge(issue.status)}</div>
+      <div><span class="testing-detail-label">Reporter</span>${escapeHtml(issue.reporterName)}</div>
+      <div><span class="testing-detail-label">Fixed by</span>${escapeHtml(issue.fixedByName || "—")}</div>
+      <div><span class="testing-detail-label">Fixed at</span>${formatDate(issue.fixedAt)}</div>
+      <div><span class="testing-detail-label">Resolved at</span>${formatDate(issue.resolvedAt)}</div>
+      <div><span class="testing-detail-label">Updated</span>${formatDate(issue.updatedAt)}</div>
+    </div>
+  ` : "";
+
   if (mode === "view" && issue) {
     title.textContent = `Issue #${issue.issueNumber}`;
-    submit.hidden = true;
-
     details.hidden = false;
-    details.innerHTML = `
-      <div class="testing-detail-grid">
-        <div><span class="testing-detail-label">Status</span>${issueStatusBadge(issue.status)}</div>
-        <div><span class="testing-detail-label">Severity</span>${issueSeverityBadge(issue.severity)}</div>
-        <div><span class="testing-detail-label">Reporter</span>${escapeHtml(issue.reporterName)}</div>
-        <div><span class="testing-detail-label">Page / Area</span>${escapeHtml(issue.pageArea || "—")}</div>
-        <div><span class="testing-detail-label">Fixed by</span>${escapeHtml(issue.fixedByName || "—")}</div>
-        <div><span class="testing-detail-label">Fixed at</span>${formatDate(issue.fixedAt)}</div>
-        <div><span class="testing-detail-label">Resolved at</span>${formatDate(issue.resolvedAt)}</div>
-        <div><span class="testing-detail-label">Updated</span>${formatDate(issue.updatedAt)}</div>
-      </div>
-      <div class="testing-detail-notes"><span class="testing-detail-label">Title</span><p>${escapeHtml(issue.title)}</p></div>
-      ${issue.description ? `<div class="testing-detail-notes"><span class="testing-detail-label">Description</span><p>${escapeHtml(issue.description)}</p></div>` : ""}
-      ${issue.stepsToReproduce ? `<div class="testing-detail-notes"><span class="testing-detail-label">Steps to Reproduce</span><p class="testing-detail-pre">${escapeHtml(issue.stepsToReproduce)}</p></div>` : ""}
-      ${issue.expectedBehavior ? `<div class="testing-detail-notes"><span class="testing-detail-label">Expected Behavior</span><p>${escapeHtml(issue.expectedBehavior)}</p></div>` : ""}
-      ${issue.actualBehavior ? `<div class="testing-detail-notes"><span class="testing-detail-label">Actual Behavior</span><p>${escapeHtml(issue.actualBehavior)}</p></div>` : ""}
-    `;
+    details.innerHTML = testerEditableView
+      ? issueMetaHtml
+      : `
+        ${issueMetaHtml}
+        <div class="testing-detail-grid">
+          <div><span class="testing-detail-label">Severity</span>${issueSeverityBadge(issue.severity)}</div>
+          <div><span class="testing-detail-label">Page / Area</span>${escapeHtml(issue.pageArea || "—")}</div>
+        </div>
+        <div class="testing-detail-notes"><span class="testing-detail-label">Title</span><p>${escapeHtml(issue.title)}</p></div>
+        ${issue.description ? `<div class="testing-detail-notes"><span class="testing-detail-label">Description</span><p>${escapeHtml(issue.description)}</p></div>` : ""}
+        ${issue.stepsToReproduce ? `<div class="testing-detail-notes"><span class="testing-detail-label">Steps to Reproduce</span><p class="testing-detail-pre">${escapeHtml(issue.stepsToReproduce)}</p></div>` : ""}
+        ${issue.expectedBehavior ? `<div class="testing-detail-notes"><span class="testing-detail-label">Expected Behavior</span><p>${escapeHtml(issue.expectedBehavior)}</p></div>` : ""}
+        ${issue.actualBehavior ? `<div class="testing-detail-notes"><span class="testing-detail-label">Actual Behavior</span><p>${escapeHtml(issue.actualBehavior)}</p></div>` : ""}
+      `;
+
+    if (testerEditableView) {
+      submit.hidden = false;
+      submit.textContent = "Save Changes";
+      form.mode.value = "edit";
+      [...form.elements].forEach((el) => {
+        if (el.name && el.name !== "mode" && el.name !== "issueId") el.disabled = false;
+      });
+    } else {
+      submit.hidden = true;
+    }
   } else if (mode === "edit" && issue) {
     title.textContent = `Edit Issue #${issue.issueNumber}`;
     submit.hidden = false;
@@ -480,12 +495,6 @@ function bindIssuesPage(container) {
     const viewBtn = e.target.closest("[data-action='issue-view']");
     if (viewBtn) {
       openModal("view", findIssue(viewBtn.dataset.id));
-      return;
-    }
-
-    const editBtn = e.target.closest("[data-action='issue-edit']");
-    if (editBtn) {
-      openModal("edit", findIssue(editBtn.dataset.id));
       return;
     }
 
