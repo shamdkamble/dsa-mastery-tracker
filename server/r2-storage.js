@@ -35,7 +35,13 @@ export function getR2Config() {
   const accessKeyId = firstEnv("R2_ACCESS_KEY_ID", "R2_ACCESS_KEY", "AWS_ACCESS_KEY_ID");
   const secretAccessKey = firstEnv("R2_SECRET_ACCESS_KEY", "R2_SECRET_KEY", "AWS_SECRET_ACCESS_KEY");
   const bucket = firstEnv("R2_BUCKET_NAME", "R2_BUCKET", "S3_BUCKET_NAME");
-  const publicBaseUrl = firstEnv("R2_PUBLIC_BASE_URL", "R2_PUBLIC_URL", "CDN_BASE_URL").replace(/\/$/, "");
+  const publicBaseUrl = firstEnv(
+    "R2_PUBLIC_BASE_URL",
+    "R2_PUBLIC_URL",
+    "R2_PUBLIC_BASE",
+    "CDN_BASE_URL",
+    "PUBLIC_BASE_URL",
+  ).replace(/\/$/, "");
   const resolvedEndpoint = endpoint || (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "");
 
   return {
