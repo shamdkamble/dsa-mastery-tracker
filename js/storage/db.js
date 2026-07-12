@@ -5,6 +5,7 @@
 
 import { dispatch } from "../utils.js";
 import { generateId, todayKey, yesterdayKey } from "./helpers.js";
+import { inferProblemTopic } from "./topic-resolver.js";
 import { getToken } from "../auth/session.js";
 import {
   fetchUserData,
@@ -460,6 +461,10 @@ export async function createProblem(data) {
     updatedAt: now,
   };
 
+  if (!problem.topic) {
+    problem.topic = inferProblemTopic(problem);
+  }
+
   db.problems.unshift(problem);
   const activity = logActivity({
     action: "Added",
@@ -501,6 +506,10 @@ export async function updateProblem(id, updates, { silent = false } = {}) {
   if (updates.status === "mastered" && prev.status !== "mastered") {
     updated.solvedAt = new Date().toISOString();
     updated.nextReviewAt = new Date(Date.now() + 3 * 86400000).toISOString();
+  }
+
+  if (!String(updated.topic || "").trim()) {
+    updated.topic = inferProblemTopic(updated);
   }
 
   db.problems[idx] = updated;

@@ -9,10 +9,13 @@ import {
   computeTodaysMission,
   computeRecentActivity,
   computeTopicProgress,
+  hasMeaningfulTopicProgress,
 } from "../storage/computed.js";
+import { renderTopicProgressBars } from "../components/topic-progress.js";
 import { formatGreeting } from "../storage/helpers.js";
 import { getDailyScientistQuote } from "../data/scientist-quotes.js";
-import { bindPageHandlers } from "../controllers/page-controller.js";
+import { bindPageHandlers, refreshPage } from "../controllers/page-controller.js";
+import { getCurrentPath } from "../router.js";
 import { bindTeachTopicHandlers } from "../components/teach-modal.js";
 import {
   canOpenLesson,
@@ -211,7 +214,11 @@ export default {
     const stats = computeStats();
     const mission = computeTodaysMission();
     const activity = computeRecentActivity(ACTIVITY_PREVIEW_LIMIT);
-    const topics = computeTopicProgress();
+    const topics = computeTopicProgress({ limit: 6 });
+    const meaningfulTopics = hasMeaningfulTopicProgress(topics);
+    const displayTopics = meaningfulTopics
+      ? topics.filter((t) => !t.isUncategorized)
+      : topics;
     const continueTopic = getContinueLearningTopic(sessionUser);
     const displayName = sessionUser?.name || profile.name || "Learner";
     const firstName = displayName.split(" ")[0] || "there";
@@ -266,19 +273,14 @@ export default {
             <section class="page-section page-section--flush dash-topics-section">
               <div class="page-section__header">
                 <h2 class="page-section__title">Topic Mastery</h2>
-                <a href="#/patterns" class="page-section__link">All patterns →</a>
+                <a href="#/analytics" class="page-section__link">Full analytics →</a>
               </div>
-              ${topics.length ? Card({
+              ${meaningfulTopics ? Card({
                 variant: "compact",
-                body: `<div class="dash-topics">${topics.map((t) => ProgressBar({
-                  label: t.name,
-                  value: t.percent,
-                  variant: t.percent >= 80 ? "success" : t.percent >= 65 ? "warning" : "danger",
-                  showValue: true,
-                })).join("")}</div>`,
+                body: `<div class="dash-topics">${renderTopicProgressBars(displayTopics.slice(0, 5), { showValue: true })}</div>`,
               }) : EmptyState({
-                title: "No topics yet",
-                text: "Add problems with topics to see your mastery breakdown.",
+                title: "No topic labels yet",
+                text: "Add roadmap or LeetCode problems — topics are detected from lessons and tags.",
                 iconName: "topics",
                 compact: true,
                 flat: true,
@@ -313,6 +315,13 @@ export default {
   },
   onMount(container) {
     bindPageHandlers(container);
+
+    if (!container.dataset.dashboardLiveBound) {
+      container.dataset.dashboardLiveBound = "true";
+      document.addEventListener("data:change", () => {
+        if (getCurrentPath() === "dashboard") refreshPage();
+      });
+    }
 
     const pendingBtn = container.querySelector("#pending-enable-push-btn");
     if (pendingBtn && !pendingBtn.dataset.bound) {

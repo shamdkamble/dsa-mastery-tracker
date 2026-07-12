@@ -23,6 +23,7 @@ import { detectPattern, analyzeComplexity, validateSolutionCode } from "../api/p
 import { canAccessProblemAi } from "../auth/access.js";
 import { getSessionUser } from "../auth/session.js";
 import { debounce } from "../utils.js";
+import { inferProblemTopic } from "../storage/topic-resolver.js";
 import { refreshPage } from "../controllers/page-controller.js";
 import { renderLockedAiButton } from "./access-ui.js";
 import { openUpgradeModal } from "./upgrade-modal.js";
@@ -536,7 +537,13 @@ function applyMetadata(host, meta) {
   };
 
   updateProblemHero(host, meta);
-  if (meta.topic) setVal("topic", meta.topic);
+  const topic = meta.topic || inferProblemTopic({
+    topic: "",
+    topicTags: meta.topicTags || [],
+    roadmapTopicId: meta.roadmapTopicId || null,
+    pattern: meta.pattern || "",
+  });
+  if (topic) setVal("topic", topic);
   const patternSelect = form.querySelector("#problem-pattern");
   if (patternSelect) patternSelect.value = "";
   if (meta.estimatedMinutes) setVal("estimatedMinutes", meta.estimatedMinutes);

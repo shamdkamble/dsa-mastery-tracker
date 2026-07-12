@@ -1,13 +1,17 @@
 import { createPage } from "../components/page-shell.js";
-import { StatCard, ProgressBar, Badge, EmptyState } from "../components/ui/index.js";
+import { StatCard, EmptyState } from "../components/ui/index.js";
 import { icon } from "../components/icons.js";
 import {
   computeStats,
   computeWeeklyActivity,
   computeDifficultyBreakdown,
   computeTopicProgress,
+  hasMeaningfulTopicProgress,
 } from "../storage/computed.js";
 import { getProblems } from "../storage/db.js";
+import { renderTopicPerformanceSection } from "../components/topic-progress.js";
+import { refreshPage } from "../controllers/page-controller.js";
+import { getCurrentPath } from "../router.js";
 
 function barChart(weeklyActivity) {
   const max = Math.max(...weeklyActivity.map((d) => d.solved), 1);
@@ -71,7 +75,9 @@ export default {
     const stats = computeStats();
     const weekly = computeWeeklyActivity();
     const breakdown = computeDifficultyBreakdown();
-    const topics = computeTopicProgress();
+    const topics = computeTopicProgress({ limit: 8 });
+    const meaningfulTopics = hasMeaningfulTopicProgress(topics);
+    const uncategorized = topics.find((t) => t.isUncategorized);
     const totalMinutes = weekly.reduce((s, d) => s + d.minutes, 0);
     const totalSolved = weekly.reduce((s, d) => s + d.solved, 0);
     const problems = getProblems();
@@ -126,25 +132,21 @@ export default {
           </div>
         </div>
 
-        ${topics.length ? `
-          <section class="page-section">
-            <div class="page-section__header">
-              <h2 class="page-section__title">Topic Performance</h2>
-              ${Badge({ label: "Live data", variant: "outline" })}
-            </div>
-            <div class="stack stack-md">
-              ${topics.map((t) => ProgressBar({
-                label: `${t.name} (${t.solved}/${t.total})`,
-                value: t.percent,
-                variant: t.percent >= 80 ? "success" : t.percent >= 65 ? "warning" : "danger",
-              })).join("")}
-            </div>
-          </section>
-        ` : ""}
+        ${renderTopicPerformanceSection(topics, {
+          meaningful: meaningfulTopics,
+          uncategorized,
+        })}
       `,
     });
   },
   onMount(container) {
     import("../controllers/page-controller.js").then(({ bindPageHandlers }) => bindPageHandlers(container));
+
+    if (!container.dataset.analyticsLiveBound) {
+      container.dataset.analyticsLiveBound = "true";
+      document.addEventListener("data:change", () => {
+        if (getCurrentPath() === "analytics") refreshPage();
+      });
+    }
   },
 };

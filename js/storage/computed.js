@@ -11,6 +11,7 @@ import {
 } from "./db.js";
 import { PATTERN_CATALOG } from "./patterns-catalog.js";
 import { resolveProblemPattern } from "./pattern-resolver.js";
+import { normalizeTopicKey, resolveProblemTopic } from "./topic-resolver.js";
 import {
   todayKey,
   yesterdayKey,
@@ -215,22 +216,40 @@ export function computeRecentActivity(limit = 5) {
   }));
 }
 
-export function computeTopicProgress() {
+export function computeTopicProgress({ limit = 8 } = {}) {
   const problems = getProblems();
   const map = new Map();
 
   problems.forEach((p) => {
-    const topic = p.topic || "Uncategorized";
-    if (!map.has(topic)) map.set(topic, { name: topic, solved: 0, total: 0 });
-    const entry = map.get(topic);
-    entry.total++;
-    if (isProblemMarkedDone(p)) entry.solved++;
+    const label = resolveProblemTopic(p);
+    const key = normalizeTopicKey(label);
+    if (!map.has(key)) {
+      map.set(key, { name: label, solved: 0, total: 0, isUncategorized: label === "Uncategorized" });
+    }
+    const entry = map.get(key);
+    entry.total += 1;
+    if (isProblemMarkedDone(p)) entry.solved += 1;
   });
 
   return [...map.values()]
-    .map((t) => ({ ...t, percent: t.total ? Math.round((t.solved / t.total) * 100) : 0 }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 6);
+    .map((t) => ({
+      ...t,
+      pending: t.total - t.solved,
+      percent: t.total ? Math.round((t.solved / t.total) * 100) : 0,
+    }))
+    .sort((a, b) => {
+      if (a.isUncategorized !== b.isUncategorized) {
+        return a.isUncategorized ? 1 : -1;
+      }
+      if (a.percent !== b.percent) return a.percent - b.percent;
+      if (b.pending !== a.pending) return b.pending - a.pending;
+      return b.total - a.total;
+    })
+    .slice(0, limit);
+}
+
+export function hasMeaningfulTopicProgress(topics = []) {
+  return topics.some((t) => !t.isUncategorized);
 }
 
 export function computePatternStats() {
