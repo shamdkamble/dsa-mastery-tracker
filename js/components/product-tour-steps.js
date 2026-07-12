@@ -42,12 +42,12 @@ export function getTourSteps() {
     },
     {
       id: "add-problem",
-      route: "dashboard",
+      route: "problems",
       target: '[data-tour="add-problem"]',
       placement: "bottom",
       icon: "plus",
       title: "Add a problem",
-      body: "Click New anytime to log a LeetCode problem. Paste a URL to auto-fill details, or enter them manually.",
+      body: "Use New on the Problems page to log a LeetCode problem manually. Most problems come from FAANG Roadmap topics — this is for extras.",
     },
     {
       id: "mission",

@@ -62,9 +62,6 @@ export default {
             ${strong > 0 ? Badge({ label: `${strong} strong`, variant: "success" }) : ""}
             ${weak > 0 ? Badge({ label: `${weak} needs work`, variant: "warning" }) : ""}
           </div>
-          <button class="btn btn--primary btn--sm" data-action="add-problem" type="button">
-            ${icon("plus")}<span>Add Problem</span>
-          </button>
         </div>
 
         ${totalProblems === 0 ? Alert({

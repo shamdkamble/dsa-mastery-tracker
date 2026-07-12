@@ -200,16 +200,18 @@ function renderNavbar(state) {
     </div>
 
     <div class="navbar__right">
-      <button
-        class="btn btn--primary btn--sm navbar__new-btn"
-        type="button"
-        data-action="add-problem"
-        data-tour="add-problem"
-        aria-label="Add new problem"
-      >
-        ${icon("plus")}
-        <span>New</span>
-      </button>
+      ${currentRoute === "problems" ? `
+        <button
+          class="btn btn--primary btn--sm navbar__new-btn"
+          type="button"
+          data-action="add-problem"
+          data-tour="add-problem"
+          aria-label="Add new problem"
+        >
+          ${icon("plus")}
+          <span>New</span>
+        </button>
+      ` : ""}
 
       <div class="navbar__tool-group" role="group" aria-label="Quick actions">
         <button

@@ -120,7 +120,7 @@ export default {
           title: "No problems yet",
           text: "Complete a roadmap lesson to get recommended problems, or add your own.",
           iconName: "problems",
-          actions: `<button class="btn btn--primary" data-action="add-problem" type="button">${icon("plus")}<span>Add Problem</span></button>`,
+          actions: `<button class="btn btn--primary" data-action="add-problem" data-tour="add-problem" type="button">${icon("plus")}<span>Add Problem</span></button>`,
         }),
       });
     }
@@ -174,7 +174,7 @@ export default {
             Showing <span data-problems-visible-count>${problems.length}</span>
             of ${problems.length} problem${problems.length !== 1 ? "s" : ""}
           </span>
-          <button class="btn btn--primary btn--sm" data-action="add-problem" type="button">
+          <button class="btn btn--primary btn--sm" data-action="add-problem" data-tour="add-problem" type="button">
             ${icon("plus")}<span>Add Problem</span>
           </button>
         </div>

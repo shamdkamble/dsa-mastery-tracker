@@ -94,8 +94,8 @@ export default {
           text: "Solve problems today — they'll return automatically on day 3, 6, and 12 for spaced revision. You can also add new items from Problems.",
           iconName: "mission",
           actions: `
-            <button class="btn btn--primary" data-action="add-problem" type="button">Add Problem</button>
-            <a href="#/problems" class="btn btn--secondary">Browse Problems</a>
+            <a href="#/roadmap" class="btn btn--primary">Browse Roadmap</a>
+            <a href="#/problems" class="btn btn--secondary">Problems</a>
           `,
         }),
       });

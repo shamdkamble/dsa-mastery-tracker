@@ -90,7 +90,10 @@ export default {
           title: "No analytics yet",
           text: "Add and solve problems to unlock performance insights.",
           iconName: "analytics",
-          actions: `<button class="btn btn--primary" data-action="add-problem" type="button">Add Problem</button>`,
+          actions: `
+            <a href="#/roadmap" class="btn btn--primary">Browse Roadmap</a>
+            <a href="#/problems" class="btn btn--secondary">Problems</a>
+          `,
         }),
       });
     }

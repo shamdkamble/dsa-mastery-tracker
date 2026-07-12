@@ -44,10 +44,7 @@ export function renderTopicPerformanceSection(topics, {
           iconName: "topics",
           compact: true,
           flat: true,
-          actions: `
-            <a href="#/roadmap" class="btn btn--secondary btn--sm">Browse Roadmap</a>
-            <button class="btn btn--primary btn--sm" data-action="add-problem" type="button">Add Problem</button>
-          `,
+          actions: `<a href="#/roadmap" class="btn btn--primary btn--sm">Browse Roadmap</a>`,
         })}
       </section>
     `;
