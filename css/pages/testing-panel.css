@@ -388,6 +388,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
+  align-items: center;
 }
 
 .testing-status,
@@ -544,6 +545,13 @@ body.testing-modal-open { overflow: hidden; }
   margin: var(--space-1) 0 0;
   color: var(--color-text-secondary);
   white-space: pre-wrap;
+}
+
+.testing-detail-notes--accent {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-info) 8%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-info) 20%, var(--color-border));
 }
 
 @media (max-width: 900px) {

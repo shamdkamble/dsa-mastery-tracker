@@ -160,6 +160,16 @@ export function requireTesterOrAdmin(req, res, next) {
   });
 }
 
+export function requireTester(req, res, next) {
+  requireAuth(req, res, () => {
+    if (req.auth?.role !== "tester") {
+      res.status(403).json({ error: { message: "Only testers can report issues.", code: "FORBIDDEN" } });
+      return;
+    }
+    next();
+  });
+}
+
 export function buildSession(user) {
   const token = signToken({
     sub: user.id,

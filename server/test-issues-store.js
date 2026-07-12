@@ -22,6 +22,24 @@ const ISSUE_FIELDS = [
   "stepsToReproduce", "expectedBehavior", "actualBehavior", "adminNotes",
 ];
 
+const TESTER_EDIT_FIELDS = [
+  "title", "description", "pageArea", "severity",
+  "stepsToReproduce", "expectedBehavior", "actualBehavior",
+];
+
+function pickTesterFields(data) {
+  const out = {};
+  for (const key of TESTER_EDIT_FIELDS) {
+    if (data[key] !== undefined) out[key] = data[key];
+  }
+  return out;
+}
+
+function testerCanEditIssue(doc, actorId) {
+  return doc.reporterId === actorId
+    && (doc.status === "pending" || doc.status === "in_progress");
+}
+
 function pickFields(data) {
   const out = {};
   for (const key of ISSUE_FIELDS) {
@@ -76,6 +94,10 @@ export async function getTestIssueStats() {
 }
 
 export async function createTestIssue(reporter, data) {
+  if (reporter.role === "admin") {
+    throw new TestIssueError("Admins cannot report issues.", { status: 403, code: "FORBIDDEN" });
+  }
+
   if (!data?.title?.trim()) {
     throw new TestIssueError("Issue title is required.", { status: 400, code: "INVALID_INPUT" });
   }
@@ -170,11 +192,18 @@ export async function updateTestIssue(actor, issueId, updates) {
       doc.fixedAt = null;
       doc.fixedById = null;
       doc.fixedByName = null;
-    } else if (isOwner && doc.status === "pending") {
-      const fields = pickFields(updates);
+    } else if (isOwner && testerCanEditIssue(doc, actor.id)) {
+      const fields = pickTesterFields(updates);
+      if (!Object.keys(fields).length) {
+        throw new TestIssueError("No valid fields to update.", { status: 400, code: "INVALID_INPUT" });
+      }
+      if (fields.title !== undefined && !String(fields.title).trim()) {
+        throw new TestIssueError("Issue title is required.", { status: 400, code: "INVALID_INPUT" });
+      }
       if (fields.severity && !TEST_ISSUE_SEVERITIES.includes(fields.severity)) {
         throw new TestIssueError("Invalid severity.", { status: 400, code: "INVALID_INPUT" });
       }
+      if (fields.title !== undefined) fields.title = String(fields.title).trim();
       Object.assign(doc, fields);
     } else {
       throw new TestIssueError("You cannot update this issue.", { status: 403, code: "FORBIDDEN" });

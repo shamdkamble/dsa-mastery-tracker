@@ -100,13 +100,15 @@ function renderShell({ stats, issues, loading, error }) {
                 body: `<div class="testing-recent__list">${recent.map(renderRecentIssue).join("")}</div>`,
               }) : EmptyState({
                 title: "No active issues",
-                text: "Everything looks clean — log a new issue when you spot something.",
+                text: isAdmin()
+                  ? "No open issues right now — testers will report bugs here."
+                  : "Everything looks clean — log a new issue when you spot something.",
                 iconName: "check",
                 compact: true,
                 flat: true,
               })}
-            <a href="#/testing-issues" class="btn btn--primary btn--sm testing-panel__cta">
-              ${icon("plus")}<span>Report Issue</span>
+            <a href="#/testing-issues" class="btn ${isAdmin() ? "btn--secondary" : "btn--primary"} btn--sm testing-panel__cta">
+              ${isAdmin() ? `${icon("notes")}<span>View All Issues</span>` : `${icon("plus")}<span>Report Issue</span>`}
             </a>
           </section>
 

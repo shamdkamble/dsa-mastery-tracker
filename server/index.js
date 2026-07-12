@@ -29,6 +29,7 @@ import {
   requireAuth,
   requireAdmin,
   requireTesterOrAdmin,
+  requireTester,
   extractBearer,
   buildSession,
 } from "./auth.js";
@@ -998,7 +999,7 @@ app.get("/api/test-issues/stats", requireTesterOrAdmin, async (_req, res) => {
   }
 });
 
-app.post("/api/test-issues", requireTesterOrAdmin, async (req, res) => {
+app.post("/api/test-issues", requireTester, async (req, res) => {
   try {
     const user = await getCurrentUser(extractBearer(req));
     const issue = await createTestIssue(user, req.body ?? {});

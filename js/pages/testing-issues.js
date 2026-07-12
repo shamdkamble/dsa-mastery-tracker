@@ -48,10 +48,17 @@ function renderFilterChips(active) {
   `).join("");
 }
 
+function testerCanEdit(issue, user) {
+  return !isAdmin()
+    && issue.reporterId === user?.id
+    && (issue.status === "pending" || issue.status === "in_progress");
+}
+
 function renderActions(issue, user) {
   const admin = isAdmin();
-  const isOwner = issue.reporterId === user?.id;
   const actions = [];
+
+  actions.push(`<button type="button" class="btn btn--xs btn--ghost" data-action="issue-view" data-id="${issue.id}">${icon("notes")}<span>View</span></button>`);
 
   if (admin) {
     if (issue.status === "pending") {
@@ -60,21 +67,18 @@ function renderActions(issue, user) {
     if (issue.status === "pending" || issue.status === "in_progress") {
       actions.push(`<button type="button" class="btn btn--xs btn--primary" data-action="issue-fixed" data-id="${issue.id}">Mark Fixed</button>`);
     }
-    actions.push(`<button type="button" class="btn btn--xs btn--ghost" data-action="issue-note" data-id="${issue.id}">Admin Note</button>`);
-  }
-
-  if (!admin || isOwner) {
+    actions.push(`<button type="button" class="btn btn--xs btn--ghost" data-action="issue-note" data-id="${issue.id}">${icon("message")}<span>Respond</span></button>`);
+  } else {
+    if (testerCanEdit(issue, user)) {
+      actions.push(`<button type="button" class="btn btn--xs btn--secondary" data-action="issue-edit" data-id="${issue.id}">${icon("notes")}<span>Edit</span></button>`);
+    }
     if (issue.status === "fixed") {
       actions.push(`<button type="button" class="btn btn--xs btn--primary" data-action="issue-confirm" data-id="${issue.id}">Confirm Resolved</button>`);
       actions.push(`<button type="button" class="btn btn--xs btn--ghost" data-action="issue-reopen" data-id="${issue.id}">Reopen</button>`);
     }
   }
 
-  actions.push(`<button type="button" class="btn btn--xs btn--ghost" data-action="issue-view" data-id="${issue.id}" title="View details">${icon("notes")}</button>`);
-
-  return actions.length
-    ? `<div class="testing-actions">${actions.join("")}</div>`
-    : `<div class="testing-actions"><button type="button" class="btn btn--xs btn--ghost" data-action="issue-view" data-id="${issue.id}">${icon("notes")}</button></div>`;
+  return `<div class="testing-actions">${actions.join("")}</div>`;
 }
 
 function renderIssueRow(issue, user) {
@@ -110,6 +114,7 @@ function renderIssueModal() {
         <form id="testing-issue-form" class="testing-modal__body">
           <input type="hidden" name="mode" value="create" />
           <input type="hidden" name="issueId" value="" />
+          <div id="testing-issue-fields">
           <div class="testing-form-grid">
             <label class="field">
               <span class="field__label">Title <span class="text-danger">*</span></span>
@@ -144,10 +149,11 @@ function renderIssueModal() {
               <textarea class="input testing-textarea" name="actualBehavior" rows="2"></textarea>
             </label>
           </div>
+          </div>
           <div id="testing-modal-details" class="testing-modal-details" hidden></div>
           <label class="field" id="testing-admin-note-field" hidden>
-            <span class="field__label">Admin Notes</span>
-            <textarea class="input testing-textarea" name="adminNotes" rows="2"></textarea>
+            <span class="field__label">Admin Response</span>
+            <textarea class="input testing-textarea" name="adminNotes" rows="3" placeholder="Comment for the tester — status updates, questions, or fix notes"></textarea>
           </label>
         </form>
         <div class="testing-modal__footer">
@@ -177,7 +183,9 @@ function renderPage({ issues, loading, error, filter = "all" }) {
       <div class="testing-page testing-page--modern" data-testing-issues>
         ${testingHero({
           title: "Issue Tracker",
-          description: "Log defects with full context. Admins fix and mark ready — you confirm when it's truly resolved.",
+          description: isAdmin()
+            ? "Review tester reports, respond with comments, and move issues through the fix workflow."
+            : "Report defects with full context. You can edit your report until an admin marks it fixed, then confirm when it's truly resolved.",
           badge: isAdmin() ? "QA Admin" : "QA Tester",
         })}
         ${testingSubnav("issues")}
@@ -189,10 +197,11 @@ function renderPage({ issues, loading, error, filter = "all" }) {
               <button type="button" class="btn btn--danger btn--sm" data-action="clear-all-issues" title="Remove every QA issue from all testers">
                 ${icon("trash")}<span>Clear All Issues</span>
               </button>
-            ` : ""}
-            <button type="button" class="btn btn--primary btn--sm" data-action="open-issue-modal">
-              ${icon("plus")}<span>Report Issue</span>
-            </button>
+            ` : `
+              <button type="button" class="btn btn--primary btn--sm" data-action="open-issue-modal">
+                ${icon("plus")}<span>Report Issue</span>
+              </button>
+            `}
           </div>
         </div>
 
@@ -220,9 +229,13 @@ function renderPage({ issues, loading, error, filter = "all" }) {
             </div>
           ` : EmptyState({
             title: "No issues match this filter",
-            text: "Try another filter or report a new issue.",
+            text: isAdmin()
+              ? "Try another filter or wait for testers to report issues."
+              : "Try another filter or report a new issue.",
             iconName: "search",
-            actions: Button({ label: "Report Issue", variant: "primary", attrs: 'data-action="open-issue-modal" type="button"' }),
+            actions: isAdmin()
+              ? ""
+              : Button({ label: "Report Issue", variant: "primary", attrs: 'data-action="open-issue-modal" type="button"' }),
           })}
         </div>
 
@@ -259,6 +272,7 @@ function openModal(mode = "create", issue = null) {
   const submit = document.getElementById("testing-issue-submit");
   const details = document.getElementById("testing-modal-details");
   const adminNoteField = document.getElementById("testing-admin-note-field");
+  const issueFields = document.getElementById("testing-issue-fields");
 
   if (!modal || !form) return;
 
@@ -284,32 +298,55 @@ function openModal(mode = "create", issue = null) {
     if (form.adminNotes) form.adminNotes.value = issue.adminNotes || "";
   }
 
+  if (issueFields) issueFields.hidden = mode === "view";
+
   if (mode === "view" && issue) {
     title.textContent = `Issue #${issue.issueNumber}`;
     submit.hidden = true;
-    adminNoteField.hidden = !isAdmin();
-    if (isAdmin()) form.adminNotes.disabled = false;
+    adminNoteField.hidden = true;
 
     details.hidden = false;
     details.innerHTML = `
       <div class="testing-detail-grid">
         <div><span class="testing-detail-label">Status</span>${issueStatusBadge(issue.status)}</div>
+        <div><span class="testing-detail-label">Severity</span>${issueSeverityBadge(issue.severity)}</div>
         <div><span class="testing-detail-label">Reporter</span>${escapeHtml(issue.reporterName)}</div>
+        <div><span class="testing-detail-label">Page / Area</span>${escapeHtml(issue.pageArea || "—")}</div>
         <div><span class="testing-detail-label">Fixed by</span>${escapeHtml(issue.fixedByName || "—")}</div>
         <div><span class="testing-detail-label">Fixed at</span>${formatDate(issue.fixedAt)}</div>
         <div><span class="testing-detail-label">Resolved at</span>${formatDate(issue.resolvedAt)}</div>
+        <div><span class="testing-detail-label">Updated</span>${formatDate(issue.updatedAt)}</div>
       </div>
-      ${issue.adminNotes ? `<div class="testing-detail-notes"><span class="testing-detail-label">Admin Notes</span><p>${escapeHtml(issue.adminNotes)}</p></div>` : ""}
+      <div class="testing-detail-notes"><span class="testing-detail-label">Title</span><p>${escapeHtml(issue.title)}</p></div>
+      ${issue.description ? `<div class="testing-detail-notes"><span class="testing-detail-label">Description</span><p>${escapeHtml(issue.description)}</p></div>` : ""}
+      ${issue.stepsToReproduce ? `<div class="testing-detail-notes"><span class="testing-detail-label">Steps to Reproduce</span><p class="testing-detail-pre">${escapeHtml(issue.stepsToReproduce)}</p></div>` : ""}
+      ${issue.expectedBehavior ? `<div class="testing-detail-notes"><span class="testing-detail-label">Expected Behavior</span><p>${escapeHtml(issue.expectedBehavior)}</p></div>` : ""}
+      ${issue.actualBehavior ? `<div class="testing-detail-notes"><span class="testing-detail-label">Actual Behavior</span><p>${escapeHtml(issue.actualBehavior)}</p></div>` : ""}
+      ${issue.adminNotes ? `<div class="testing-detail-notes testing-detail-notes--accent"><span class="testing-detail-label">Admin Response</span><p>${escapeHtml(issue.adminNotes)}</p></div>` : ""}
     `;
-  } else if (mode === "note" && issue) {
-    title.textContent = `Admin Note — #${issue.issueNumber}`;
+  } else if (mode === "edit" && issue) {
+    title.textContent = `Edit Issue #${issue.issueNumber}`;
     submit.hidden = false;
-    submit.textContent = "Save Note";
-    adminNoteField.hidden = false;
+    submit.textContent = "Save Changes";
+    adminNoteField.hidden = true;
     details.hidden = true;
+    if (issueFields) issueFields.hidden = false;
     [...form.elements].forEach((el) => {
-      if (el.name && !["adminNotes", "mode", "issueId"].includes(el.name)) el.disabled = true;
+      if (el.name && el.name !== "mode" && el.name !== "issueId") el.disabled = false;
     });
+  } else if (mode === "note" && issue) {
+    title.textContent = `Respond — #${issue.issueNumber}`;
+    submit.hidden = false;
+    submit.textContent = "Save Response";
+    adminNoteField.hidden = false;
+    details.hidden = false;
+    if (issueFields) issueFields.hidden = true;
+    details.innerHTML = `
+      <div class="testing-detail-notes">
+        <span class="testing-detail-label">Issue</span>
+        <p><strong>#${issue.issueNumber}</strong> — ${escapeHtml(issue.title)}</p>
+      </div>
+    `;
     form.adminNotes.disabled = false;
   } else {
     title.textContent = "Report Issue";
@@ -317,6 +354,7 @@ function openModal(mode = "create", issue = null) {
     submit.textContent = "Submit Issue";
     adminNoteField.hidden = true;
     details.hidden = true;
+    if (issueFields) issueFields.hidden = false;
     [...form.elements].forEach((el) => {
       if (el.name && el.name !== "mode" && el.name !== "issueId") el.disabled = false;
     });
@@ -400,6 +438,12 @@ function bindIssuesPage(container) {
       return;
     }
 
+    const editBtn = e.target.closest("[data-action='issue-edit']");
+    if (editBtn) {
+      openModal("edit", findIssue(editBtn.dataset.id));
+      return;
+    }
+
     const noteBtn = e.target.closest("[data-action='issue-note']");
     if (noteBtn) {
       openModal("note", findIssue(noteBtn.dataset.id));
@@ -458,9 +502,12 @@ function bindIssuesPage(container) {
       if (mode === "create") {
         await apiCreateTestIssue(payload);
         showToast(Toast({ title: "Issue reported", variant: "success" }));
+      } else if (mode === "edit") {
+        await apiUpdateTestIssue(issueId, payload);
+        showToast(Toast({ title: "Issue updated", text: "Your corrections were saved.", variant: "success" }));
       } else if (mode === "note") {
         await apiUpdateTestIssue(issueId, { adminNotes: String(fd.get("adminNotes") || "").trim() });
-        showToast(Toast({ title: "Admin note saved", variant: "success" }));
+        showToast(Toast({ title: "Response saved", variant: "success" }));
       }
 
       closeModal();
