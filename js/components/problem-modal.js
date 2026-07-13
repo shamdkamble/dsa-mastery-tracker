@@ -93,12 +93,11 @@ function renderProblemHero(p = {}) {
             ${hero.topicTags.map((t) => `<span class="badge badge--accent badge--sm">${escapeHtml(t)}</span>`).join("")}
           </div>
         ` : `<div class="problem-hero__tags" id="problem-hero-tags" hidden></div>`}
-        <p class="problem-hero__synced">Synced from LeetCode — title and difficulty are read-only.</p>
       ` : `
         <div class="problem-hero__empty">
           <span class="problem-hero__empty-icon" aria-hidden="true">${icon("problems")}</span>
           <p class="problem-hero__empty-title">Problem details will appear here</p>
-          <p class="problem-hero__empty-text">Fetch a LeetCode URL above to load the title, difficulty, and tags.</p>
+          <p class="problem-hero__empty-text">Add a LeetCode link above.</p>
         </div>
       `}
     </section>
@@ -152,7 +151,7 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
           <span class="problem-form__step" aria-hidden="true">1</span>
           <div class="problem-form__section-copy">
             <h3 class="problem-form__section-title">Import from LeetCode</h3>
-            <p class="problem-form__section-desc">Paste a problem URL — we load the official title, difficulty, and tags.</p>
+            <p class="problem-form__section-desc">Paste a LeetCode problem link.</p>
           </div>
         </header>
         <div class="problem-form__import">
@@ -186,7 +185,6 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
           <span class="problem-form__step" aria-hidden="true">2</span>
           <div class="problem-form__section-copy">
             <h3 class="problem-form__section-title">Classify</h3>
-            <p class="problem-form__section-desc">Pick a pattern — ideal solve time is estimated automatically from difficulty.</p>
           </div>
         </header>
 
@@ -194,12 +192,11 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
           <div class="field problem-form__field">
             <div class="problem-form__field-head">
               <label class="field__label" for="problem-topic">Topic</label>
-              <span class="problem-form__field-meta">Auto-filled · not editable</span>
             </div>
             ${Input({
-              placeholder: "Import a LeetCode URL above to auto-fill",
+              placeholder: "—",
               value: escapeAttr(p.topic || ""),
-              attrs: 'name="topic" id="problem-topic" readonly aria-readonly="true"',
+              attrs: 'name="topic" id="problem-topic" readonly aria-readonly="true" tabindex="-1"',
             })}
           </div>
           <div class="field problem-form__field">
@@ -228,23 +225,20 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
 
         <div class="problem-form__grid problem-form__grid--1">
           ${Field({
-            label: "Ideal solve time",
-            hint: "Minutes · estimated by Groq from difficulty (read-only)",
+            label: "Ideal time",
             children: `
-              <div class="problem-ideal-time">
-                <input
-                  type="text"
-                  class="input"
-                  name="estimatedMinutes"
-                  id="problem-ideal-time"
-                  value="${idealMinutes ? `${idealMinutes} min` : ""}"
-                  data-minutes="${idealMinutes || ""}"
-                  placeholder="Fetch a problem to estimate"
-                  readonly
-                  aria-readonly="true"
-                />
-                <span class="problem-ideal-time__hint" id="ideal-time-hint" aria-live="polite"></span>
-              </div>
+              <input
+                type="text"
+                class="input"
+                name="estimatedMinutes"
+                id="problem-ideal-time"
+                value="${idealMinutes ? `${idealMinutes} min` : ""}"
+                data-minutes="${idealMinutes || ""}"
+                placeholder="—"
+                readonly
+                aria-readonly="true"
+                tabindex="-1"
+              />
             `,
           })}
         </div>
@@ -298,25 +292,28 @@ function setAiStatus(host, id, message, type = "") {
   el.className = `problem-ai-status${type ? ` problem-ai-status--${type}` : ""}`;
 }
 
-function setIdealTimeUi(host, { minutes, hint = "", loading = false } = {}) {
+function setIdealTimeUi(host, { minutes, loading = false } = {}) {
   const input = host.querySelector("#problem-ideal-time");
-  const hintEl = host.querySelector("#ideal-time-hint");
-  if (input) {
-    if (loading) {
-      input.value = "Estimating…";
-      input.dataset.minutes = "";
-    } else if (minutes != null) {
-      input.value = `${minutes} min`;
-      input.dataset.minutes = String(minutes);
-    } else {
-      input.value = "";
-      input.dataset.minutes = "";
-    }
+  if (!input) return;
+
+  if (loading) {
+    input.value = "…";
+    input.dataset.minutes = "";
+    return;
   }
-  if (hintEl) {
-    hintEl.textContent = hint;
-    hintEl.className = `problem-ideal-time__hint${loading ? " problem-ideal-time__hint--loading" : ""}`;
+
+  if (minutes != null) {
+    input.value = `${minutes} min`;
+    input.dataset.minutes = String(minutes);
+    return;
   }
+
+  input.value = "";
+  input.dataset.minutes = "";
+}
+
+function clearImportStatus(host) {
+  setStatus(host, "");
 }
 
 function isEasyDifficulty(difficulty) {
@@ -358,25 +355,19 @@ async function runIdealTimeEstimate(host, meta = {}) {
   const topicTags = meta.topicTags || [];
 
   if (!title || !difficulty) {
-    setIdealTimeUi(host, { minutes: null, hint: "Fetch a LeetCode problem first" });
+    setIdealTimeUi(host, { minutes: null });
     return null;
   }
 
-  setIdealTimeUi(host, { loading: true, hint: "Estimating ideal time with Groq…" });
+  setIdealTimeUi(host, { loading: true });
 
   try {
     const result = await estimateIdealSolveTime({ title, difficulty, topic, topicTags });
-    setIdealTimeUi(host, {
-      minutes: result.idealMinutes,
-      hint: result.rationale || "Based on problem difficulty",
-    });
+    setIdealTimeUi(host, { minutes: result.idealMinutes });
     return result.idealMinutes;
-  } catch (err) {
+  } catch {
     const fallback = difficulty === "Easy" ? 20 : difficulty === "Hard" ? 50 : 35;
-    setIdealTimeUi(host, {
-      minutes: fallback,
-      hint: err?.message || "Using default estimate for this difficulty",
-    });
+    setIdealTimeUi(host, { minutes: fallback });
     return fallback;
   }
 }
@@ -548,7 +539,7 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
 
   if (!force && host._lastFetchedSlug === slug && host._lastLcMeta?.title) {
     await applyMetadata(host, host._lastLcMeta);
-    setStatus(host, `Already loaded "${host._lastLcMeta.title}".`, "success");
+    clearImportStatus(host);
     return;
   }
 
@@ -558,7 +549,7 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
   fetchBtn?.classList.add("is-loading");
   fetchBtn.disabled = true;
   fetchBtn.querySelector("span").textContent = "Fetching…";
-  setStatus(host, "Fetching from LeetCode…", "loading");
+  clearImportStatus(host);
 
   try {
     const meta = await fetchLeetcodeProblem(slug);
@@ -567,11 +558,9 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
     await applyMetadata(host, meta);
 
     if (meta.partial) {
-      setStatus(host, meta.warning || `Loaded "${meta.title}" from URL — fill remaining fields or retry.`, "error");
-    } else if (meta.cached) {
-      setStatus(host, `Loaded "${meta.title}" (cached).`, "success");
+      setStatus(host, meta.warning || "Could not load all details. Try Fetch again.", "error");
     } else {
-      setStatus(host, `Loaded "${meta.title}" — fields auto-filled.`, "success");
+      clearImportStatus(host);
     }
   } catch (err) {
     const offline = parseLeetcodeUrlOffline(value) || {
@@ -583,7 +572,7 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
     host._lastFetchedSlug = slug;
     host._lastLcMeta = offline;
     await applyMetadata(host, offline);
-    setStatus(host, `${err.message || "Could not fetch problem."} Title filled from URL — retry Fetch or edit manually.`, "error");
+    setStatus(host, err?.message || "Could not fetch this problem. Try again.", "error");
   } finally {
     host._fetchInProgress = false;
     fetchBtn?.classList.remove("is-loading");
@@ -695,10 +684,7 @@ export function openProblemModal(problemId = null) {
     };
     showDetectPatternBtn(host, true);
     if (problem.estimatedMinutes) {
-      setIdealTimeUi(host, {
-        minutes: problem.estimatedMinutes,
-        hint: "Previously estimated ideal time",
-      });
+      setIdealTimeUi(host, { minutes: problem.estimatedMinutes });
     }
   }
 
