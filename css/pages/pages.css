@@ -792,6 +792,12 @@
   min-width: 0;
 }
 
+.problems-table-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-3);
+}
+
 .patterns-toolbar {
   display: flex;
   align-items: center;

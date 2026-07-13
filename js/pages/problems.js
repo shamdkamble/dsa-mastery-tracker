@@ -197,10 +197,10 @@ function renderActivePanel(activeProblems, stats) {
         ${EmptyState({
           title: "No active problems",
           text: stats.solvedCount
-            ? "You've solved everything in your list — check the Solved tab or complete more roadmap lessons."
-            : "Complete a roadmap lesson to get recommended practice problems.",
+            ? "You've solved everything in your list — check the Solved tab or add more problems."
+            : "Add a problem manually, or complete a roadmap lesson to get recommended practice problems.",
           iconName: "problems",
-          actions: `<a href="#/roadmap" class="btn btn--primary">Browse Roadmap</a>`,
+          actions: `<button class="btn btn--primary" data-action="add-problem" data-tour="add-problem" type="button">${icon("plus")}<span>Add Problem</span></button>`,
         })}
       </div>
     `;
@@ -230,6 +230,12 @@ function renderActivePanel(activeProblems, stats) {
           <span><strong>${stats.learning}</strong> in progress</span>
           <span><strong>${stats.todo}</strong> todo</span>
         </div>
+      </div>
+
+      <div class="problems-table-actions">
+        <button class="btn btn--primary btn--sm" data-action="add-problem" data-tour="add-problem" type="button">
+          ${icon("plus")}<span>Add Problem</span>
+        </button>
       </div>
 
       <div class="table-wrapper">
@@ -339,9 +345,9 @@ export default {
         description: "Track every problem in your DSA journey — solve actively, review solved work.",
         children: EmptyState({
           title: "No problems yet",
-          text: "Complete a roadmap lesson to get recommended practice problems.",
+          text: "Add a problem manually, or complete a roadmap lesson to get recommended practice problems.",
           iconName: "problems",
-          actions: `<a href="#/roadmap" class="btn btn--primary">Browse Roadmap</a>`,
+          actions: `<button class="btn btn--primary" data-action="add-problem" data-tour="add-problem" type="button">${icon("plus")}<span>Add Problem</span></button>`,
         }),
       });
     }
