@@ -440,6 +440,12 @@ async function handleSubmit(host, { problemId, mode }) {
     closeModal();
     host.innerHTML = "";
 
+    try {
+      sessionStorage.setItem("dsa-problems-tab", "solved");
+    } catch {
+      /* ignore */
+    }
+
     const mins = result?.actualSolveMinutes;
     showToast(Toast({
       title: "Marked done",

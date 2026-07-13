@@ -6,9 +6,10 @@ import {
   sortProblemsForDisplay,
   isProblemOnTodaysMission,
 } from "../storage/db.js";
-import { formatRelativeTime } from "../storage/helpers.js";
+import { formatRelativeTime, formatMinutes } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 import { openProblemModal } from "../components/problem-modal.js";
+import { initSolvedSolutionTriggers } from "../components/solved-solution-modal.js";
 import { getProblemLeetcodeUrl, leetcodeLinkButton } from "../components/leetcode-actions.js";
 import {
   renderSolveTimeCell,
@@ -28,6 +29,20 @@ const STATUS_MAP = {
   struggling: { label: "Struggling", class: "struggling" },
   todo: { label: "To Do", class: "todo" },
 };
+
+const TAB_STORAGE_KEY = "dsa-problems-tab";
+
+function isProblemSolved(p) {
+  return p.status === "mastered";
+}
+
+function sortSolvedProblems(problems) {
+  return [...problems].sort((a, b) => {
+    const tb = new Date(b.solvedAt || b.updatedAt || b.createdAt || 0).getTime();
+    const ta = new Date(a.solvedAt || a.updatedAt || a.createdAt || 0).getTime();
+    return tb - ta;
+  });
+}
 
 function statusPill(status) {
   const s = STATUS_MAP[status] || STATUS_MAP.todo;
@@ -52,7 +67,14 @@ function problemSearchText(p) {
     .toLowerCase();
 }
 
-function problemRow(p, i) {
+function complexitySummary(p) {
+  const time = p.timeComplexity?.trim();
+  const space = p.spaceComplexity?.trim();
+  if (time && space) return `${time} · ${space}`;
+  return time || space || "—";
+}
+
+function activeProblemRow(p, i) {
   const lcUrl = getProblemLeetcodeUrl(p);
   const isRoadmap = p.source === "roadmap";
   const inProgress = isSolveTimerActive(p);
@@ -64,6 +86,7 @@ function problemRow(p, i) {
   return `
     <tr
       data-problem-row
+      data-list="active"
       data-id="${p.id}"
       data-difficulty="${p.difficulty}"
       data-topic="${p.topic?.toLowerCase() || ""}"
@@ -103,19 +126,219 @@ function problemRow(p, i) {
   `;
 }
 
+function solvedProblemRow(p, i) {
+  const solveTime = p.actualSolveMinutes != null
+    ? formatMinutes(p.actualSolveMinutes)
+    : "—";
+
+  return `
+    <tr
+      data-problem-row
+      data-list="solved"
+      data-id="${p.id}"
+      data-difficulty="${p.difficulty}"
+      data-topic="${p.topic?.toLowerCase() || ""}"
+      data-search="${escapeAttr(problemSearchText(p))}"
+    >
+      <td data-label="Problem">
+        <div class="flex items-center gap-2">
+          <span class="text-tertiary font-mono text-xs">${i + 1}</span>
+          <span class="table__cell-primary">${p.title}</span>
+          ${p.leetcodeId ? `<span class="text-xs text-tertiary font-mono">#${p.leetcodeId}</span>` : ""}
+        </div>
+      </td>
+      <td data-label="Topic"><span class="table__cell-secondary">${p.topic || "—"}</span></td>
+      <td data-label="Pattern"><span class="text-tertiary text-xs">${p.pattern || "—"}</span></td>
+      <td data-label="Difficulty">${DifficultyBadge(p.difficulty)}</td>
+      <td data-label="Solve Time"><span class="text-secondary text-xs font-mono">${solveTime}</span></td>
+      <td data-label="Solved"><span class="text-secondary text-xs">${formatRelativeTime(p.solvedAt || p.updatedAt)}</span></td>
+      <td data-label="Complexity"><span class="text-tertiary text-xs font-mono">${complexitySummary(p)}</span></td>
+      <td data-label="Actions">
+        <button class="btn btn--xs btn--secondary" data-action="view-solved-solution" data-id="${p.id}" type="button">
+          ${icon("notes")}<span>View</span>
+        </button>
+      </td>
+    </tr>
+  `;
+}
+
+function renderTabSwitcher(activeCount, solvedCount, currentTab) {
+  return `
+    <div class="problems-tabs" role="tablist" aria-label="Problem lists">
+      <button
+        type="button"
+        class="problems-tabs__btn${currentTab === "active" ? " is-selected" : ""}"
+        data-problems-tab="active"
+        role="tab"
+        aria-selected="${currentTab === "active"}"
+      >
+        Active
+        <span class="problems-tabs__count">${activeCount}</span>
+      </button>
+      <button
+        type="button"
+        class="problems-tabs__btn${currentTab === "solved" ? " is-selected" : ""}"
+        data-problems-tab="solved"
+        role="tab"
+        aria-selected="${currentTab === "solved"}"
+      >
+        Solved
+        <span class="problems-tabs__count">${solvedCount}</span>
+      </button>
+    </div>
+  `;
+}
+
+function renderActivePanel(activeProblems, stats) {
+  if (!activeProblems.length) {
+    return `
+      <div class="problems-panel" data-problems-panel="active">
+        ${EmptyState({
+          title: "No active problems",
+          text: stats.solvedCount
+            ? "You've solved everything in your list — check the Solved tab or add more problems."
+            : "Complete a roadmap lesson to get recommended problems, or add your own.",
+          iconName: "problems",
+          actions: `<button class="btn btn--primary" data-action="add-problem" data-tour="add-problem" type="button">${icon("plus")}<span>Add Problem</span></button>`,
+        })}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="problems-panel" data-problems-panel="active">
+      <div class="problems-toolbar">
+        <div class="problems-toolbar__main">
+          <div class="problems-filters">
+            <button class="chip is-selected" data-filter="all" type="button">All</button>
+            <button class="chip" data-filter="roadmap" type="button">Roadmap</button>
+            <button class="chip" data-filter="Easy" type="button">Easy</button>
+            <button class="chip" data-filter="Medium" type="button">Medium</button>
+            <button class="chip" data-filter="Hard" type="button">Hard</button>
+            <button class="chip" data-filter="todo" type="button">To Do</button>
+            <button class="chip" data-filter="learning" type="button">In Progress</button>
+          </div>
+          ${renderPageSearch({
+            id: "problems-search",
+            placeholder: "Search active problems…",
+            tourAttr: "page-search",
+          })}
+        </div>
+        <div class="problems-summary">
+          <span><strong>${activeProblems.length}</strong> active</span>
+          <span><strong>${stats.learning}</strong> in progress</span>
+          <span><strong>${stats.todo}</strong> todo</span>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="table table--interactive">
+          <thead>
+            <tr>
+              <th>Problem</th><th>Topic</th><th>Pattern</th><th>Difficulty</th>
+              <th>Status</th><th>Solve Time</th><th>Last Review</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${activeProblems.map((p, i) => activeProblemRow(p, i)).join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex items-center justify-between mt-6">
+        <span class="text-sm text-secondary">
+          Showing <span data-problems-visible-count>${activeProblems.length}</span>
+          of ${activeProblems.length} active problem${activeProblems.length !== 1 ? "s" : ""}
+        </span>
+        <button class="btn btn--primary btn--sm" data-action="add-problem" data-tour="add-problem" type="button">
+          ${icon("plus")}<span>Add Problem</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderSolvedPanel(solvedProblems) {
+  if (!solvedProblems.length) {
+    return `
+      <div class="problems-panel" data-problems-panel="solved" hidden>
+        ${EmptyState({
+          title: "No solved problems yet",
+          text: "When you mark a problem Done with your solution, it moves here for revision and performance tracking.",
+          iconName: "check",
+        })}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="problems-panel" data-problems-panel="solved" hidden>
+      <div class="problems-toolbar">
+        <div class="problems-toolbar__main">
+          ${renderPageSearch({
+            id: "solved-problems-search",
+            placeholder: "Search solved problems…",
+          })}
+        </div>
+        <div class="problems-summary">
+          <span><strong>${solvedProblems.length}</strong> solved</span>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="table table--interactive">
+          <thead>
+            <tr>
+              <th>Problem</th><th>Topic</th><th>Pattern</th><th>Difficulty</th>
+              <th>Solve Time</th><th>Solved</th><th>Complexity</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${solvedProblems.map((p, i) => solvedProblemRow(p, i)).join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex items-center justify-between mt-6">
+        <span class="text-sm text-secondary">
+          Showing <span data-solved-visible-count>${solvedProblems.length}</span>
+          of ${solvedProblems.length} solved problem${solvedProblems.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+    </div>
+  `;
+}
+
+function getDefaultTab(solvedCount) {
+  try {
+    const stored = sessionStorage.getItem(TAB_STORAGE_KEY);
+    if (stored === "active" || stored === "solved") return stored;
+  } catch {
+    /* ignore */
+  }
+  return solvedCount > 0 ? "active" : "active";
+}
+
+function partitionProblems(problems) {
+  const active = sortProblemsForDisplay(problems.filter((p) => !isProblemSolved(p)));
+  const solved = sortSolvedProblems(problems.filter(isProblemSolved));
+  return { active, solved };
+}
+
 export default {
   title: "Problems",
   render() {
-    const problems = sortProblemsForDisplay(getProblems());
-    const mastered = problems.filter((p) => p.status === "mastered").length;
-    const learning = problems.filter((p) => p.status === "learning" || p.status === "struggling").length;
-    const todo = problems.filter((p) => p.status === "todo").length;
-    const roadmapCount = problems.filter((p) => p.source === "roadmap").length;
+    const allProblems = getProblems();
+    const { active, solved } = partitionProblems(allProblems);
+    const currentTab = getDefaultTab(solved.length);
+    const learning = active.filter((p) => p.status === "learning" || p.status === "struggling").length;
+    const todo = active.filter((p) => p.status === "todo").length;
+    const stats = { learning, todo, solvedCount: solved.length };
 
-    if (!problems.length) {
+    if (!allProblems.length) {
       return createPage({
         title: "Problems",
-        description: "Track every problem in your DSA journey — filter, sort, and monitor mastery.",
+        description: "Track every problem in your DSA journey — solve actively, review solved work.",
         children: EmptyState({
           title: "No problems yet",
           text: "Complete a roadmap lesson to get recommended problems, or add your own.",
@@ -125,58 +348,25 @@ export default {
       });
     }
 
+    const showActive = currentTab === "active";
+    const activePanel = renderActivePanel(active, stats).replace(
+      'data-problems-panel="active"',
+      `data-problems-panel="active"${showActive ? "" : " hidden"}`,
+    );
+    const solvedPanel = renderSolvedPanel(solved).replace(
+      'data-problems-panel="solved" hidden',
+      `data-problems-panel="solved"${showActive ? " hidden" : ""}`,
+    );
+
     return createPage({
       title: "Problems",
-      description: "Track every problem in your DSA journey — filter, sort, and monitor mastery.",
+      description: "Track every problem in your DSA journey — solve actively, review solved work.",
       children: `
-        <div class="problems-toolbar">
-          <div class="problems-toolbar__main">
-            <div class="problems-filters">
-              <button class="chip is-selected" data-filter="all" type="button">All</button>
-              <button class="chip" data-filter="roadmap" type="button">Roadmap</button>
-              <button class="chip" data-filter="Easy" type="button">Easy</button>
-              <button class="chip" data-filter="Medium" type="button">Medium</button>
-              <button class="chip" data-filter="Hard" type="button">Hard</button>
-              <button class="chip" data-filter="todo" type="button">To Do</button>
-              <button class="chip" data-filter="learning" type="button">In Progress</button>
-            </div>
-            ${renderPageSearch({
-              id: "problems-search",
-              placeholder: "Search problems…",
-              tourAttr: "page-search",
-            })}
-          </div>
-          <div class="problems-summary">
-            <span><strong>${problems.length}</strong> total</span>
-            ${roadmapCount ? `<span><strong>${roadmapCount}</strong> from roadmap</span>` : ""}
-            <span><strong>${mastered}</strong> mastered</span>
-            <span><strong>${learning}</strong> in progress</span>
-            <span><strong>${todo}</strong> todo</span>
-          </div>
-        </div>
+        ${renderTabSwitcher(active.length, solved.length, currentTab)}
 
-        <div class="table-wrapper">
-          <table class="table table--interactive">
-            <thead>
-              <tr>
-                <th>Problem</th><th>Topic</th><th>Pattern</th><th>Difficulty</th>
-                <th>Status</th><th>Solve Time</th><th>Last Review</th><th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${problems.map((p, i) => problemRow(p, i)).join("")}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="flex items-center justify-between mt-6">
-          <span class="text-sm text-secondary">
-            Showing <span data-problems-visible-count>${problems.length}</span>
-            of ${problems.length} problem${problems.length !== 1 ? "s" : ""}
-          </span>
-          <button class="btn btn--primary btn--sm" data-action="add-problem" data-tour="add-problem" type="button">
-            ${icon("plus")}<span>Add Problem</span>
-          </button>
+        <div class="problems-panels" data-problems-panels data-current-tab="${currentTab}">
+          ${activePanel}
+          ${solvedPanel}
         </div>
       `,
     });
@@ -184,22 +374,29 @@ export default {
   onMount(container) {
     bindPageHandlers(container);
     initSolveTimerTicker(container);
-    mountProblemsSearch(container);
+    initSolvedSolutionTriggers(container);
+    mountProblemsPage(container);
 
     if (container.dataset.problemsRowBound) return;
     container.dataset.problemsRowBound = "true";
 
     container.addEventListener("click", (e) => {
+      const tabBtn = e.target.closest("[data-problems-tab]");
+      if (tabBtn) {
+        switchProblemsTab(container, tabBtn.dataset.problemsTab);
+        return;
+      }
+
       const chip = e.target.closest("[data-filter]");
       if (chip) {
         container.querySelectorAll("[data-filter]").forEach((c) => c.classList.remove("is-selected"));
         chip.classList.add("is-selected");
-        applyProblemsFilters(container);
+        applyActiveFilters(container);
         return;
       }
 
       if (e.target.closest("[data-action]")) return;
-      const row = e.target.closest("tr[data-problem-row]");
+      const row = e.target.closest('tr[data-problem-row][data-list="active"]');
       if (!row || row.classList.contains("is-mission-done") || row.hidden) return;
       openProblemModal(row.dataset.id);
     });
@@ -208,6 +405,31 @@ export default {
     stopSolveTimerTicker();
   },
 };
+
+function switchProblemsTab(container, tab) {
+  const panels = container.querySelector("[data-problems-panels]");
+  if (!panels) return;
+
+  panels.dataset.currentTab = tab;
+  try {
+    sessionStorage.setItem(TAB_STORAGE_KEY, tab);
+  } catch {
+    /* ignore */
+  }
+
+  container.querySelectorAll("[data-problems-tab]").forEach((btn) => {
+    const selected = btn.dataset.problemsTab === tab;
+    btn.classList.toggle("is-selected", selected);
+    btn.setAttribute("aria-selected", String(selected));
+  });
+
+  container.querySelectorAll("[data-problems-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.problemsPanel !== tab;
+  });
+
+  if (tab === "active") applyActiveFilters(container);
+  else applySolvedFilters(container);
+}
 
 function getSelectedProblemFilter(container) {
   const chip = container.querySelector("[data-filter].is-selected");
@@ -222,11 +444,14 @@ function problemRowMatchesFilter(row, filter) {
     || row.dataset.status === filter;
 }
 
-function applyProblemsFilters(container) {
+function applyActiveFilters(container) {
+  const panel = container.querySelector('[data-problems-panel="active"]');
+  if (!panel || panel.hidden) return;
+
   const input = container.querySelector("#problems-search");
   const filter = getSelectedProblemFilter(container);
   const q = normalizeSearchQuery(input?.value);
-  const rows = container.querySelectorAll("[data-problem-row]");
+  const rows = panel.querySelectorAll('[data-problem-row][data-list="active"]');
   let visible = 0;
 
   rows.forEach((row) => {
@@ -237,13 +462,39 @@ function applyProblemsFilters(container) {
     if (show) visible += 1;
   });
 
-  const countEl = container.querySelector("[data-problems-visible-count]");
+  const countEl = panel.querySelector("[data-problems-visible-count]");
   if (countEl) countEl.textContent = String(visible);
 }
 
-function mountProblemsSearch(container) {
-  const input = container.querySelector("#problems-search");
-  if (!input) return;
-  bindPageSearchInput(input, () => applyProblemsFilters(container));
-  applyProblemsFilters(container);
+function applySolvedFilters(container) {
+  const panel = container.querySelector('[data-problems-panel="solved"]');
+  if (!panel || panel.hidden) return;
+
+  const input = container.querySelector("#solved-problems-search");
+  const q = normalizeSearchQuery(input?.value);
+  const rows = panel.querySelectorAll('[data-problem-row][data-list="solved"]');
+  let visible = 0;
+
+  rows.forEach((row) => {
+    const searchMatch = !q || (row.dataset.search || "").includes(q);
+    row.hidden = !searchMatch;
+    if (searchMatch) visible += 1;
+  });
+
+  const countEl = panel.querySelector("[data-solved-visible-count]");
+  if (countEl) countEl.textContent = String(visible);
+}
+
+function mountProblemsPage(container) {
+  const activeSearch = container.querySelector("#problems-search");
+  if (activeSearch) {
+    bindPageSearchInput(activeSearch, () => applyActiveFilters(container));
+    applyActiveFilters(container);
+  }
+
+  const solvedSearch = container.querySelector("#solved-problems-search");
+  if (solvedSearch) {
+    bindPageSearchInput(solvedSearch, () => applySolvedFilters(container));
+    applySolvedFilters(container);
+  }
 }
