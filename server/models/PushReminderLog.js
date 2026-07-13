@@ -14,7 +14,7 @@ const pushReminderLogSchema = new mongoose.Schema(
     reminderType: {
       type: String,
       required: true,
-      enum: ["daily-mission", "streak-risk", "review-due", "weekly-summary"],
+      enum: ["daily-mission", "streak-risk", "review-due", "weekly-summary", "daily-wisdom"],
     },
     dateKey: {
       type: String,

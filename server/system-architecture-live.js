@@ -102,8 +102,12 @@ export async function getSystemArchitectureLiveSnapshot() {
     cron: {
       path: "/api/cron/push-reminders",
       scheduleUtc: "30 3 * * *",
-      description: "Hourly batch on Vercel — study reminders + Daily Wisdom per user timezone",
-      jobs: ["Study reminders (mission, reviews, streak, weekly)", "Daily Wisdom delivery"],
+      description: "Daily Vercel cron (~03:30 UTC) — study reminders, Daily Wisdom, account expiry",
+      jobs: [
+        "Study reminders (mission, reviews, streak, weekly)",
+        "Daily Wisdom delivery",
+        "Account expiry notifications",
+      ],
     },
     counts: {
       users: { total: totalUsers, pending: pendingUsers, approved: approvedUsers, suspended: suspendedUsers },

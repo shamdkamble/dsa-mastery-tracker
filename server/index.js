@@ -114,9 +114,9 @@ import {
   getNotificationPreferences,
   upsertNotificationPreferences,
 } from "./notification-preferences-db.js";
-import { runScheduledPushReminders } from "./push-reminders.js";
 import { runDailyWisdomDelivery } from "./learning-wisdom-daily.js";
 import { runAccountExpiryChecks } from "./account-expiry-cron.js";
+import { handleCronPushReminders } from "./cron-push-reminders.js";
 import { deliverUndeliveredAccessPushes } from "./push-access-delivery.js";
 import { listPushDeliveryLogs, getPushDeliveryLogStats } from "./push-delivery-log-db.js";
 import { seedPilotLearningFacts } from "./topic-learning-facts-db.js";
@@ -555,27 +555,7 @@ app.patch("/api/push/preferences", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/cron/push-reminders", async (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.authorization || "";
-
-  if (!secret || auth !== `Bearer ${secret}`) {
-    res.status(401).json({ error: { message: "Unauthorized.", code: "UNAUTHORIZED" } });
-    return;
-  }
-
-  try {
-    const [reminders, dailyWisdom, accountExpiry] = await Promise.all([
-      runScheduledPushReminders(),
-      runDailyWisdomDelivery(),
-      runAccountExpiryChecks(),
-    ]);
-    res.json({ ok: true, reminders, dailyWisdom, accountExpiry });
-  } catch (err) {
-    console.error("[/api/cron/push-reminders]", err);
-    res.status(500).json({ error: { message: "Cron job failed.", code: "SERVER_ERROR" } });
-  }
-});
+app.get("/api/cron/push-reminders", handleCronPushReminders);
 
 app.get("/api/auth/admin/pending", requireAdmin, async (_req, res) => {
   try {
