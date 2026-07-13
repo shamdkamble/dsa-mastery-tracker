@@ -210,10 +210,10 @@ async function resolveReplyToId(threadId, replyToId) {
 
 async function getThreadMessages(threadId) {
   const docs = await MentorMessage.find({ threadId })
-    .sort({ createdAt: 1 })
+    .sort({ createdAt: -1 })
     .limit(MESSAGE_PAGE_SIZE)
     .lean();
-  const messages = docs.map(toMentorMessageDto);
+  const messages = docs.reverse().map(toMentorMessageDto);
   return enrichMessagesWithReplies(messages);
 }
 

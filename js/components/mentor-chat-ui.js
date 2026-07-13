@@ -103,11 +103,14 @@ function messageReceiptSignature(msg, viewerRole) {
 export function chatMessagesChanged(prevMessages = [], nextMessages = [], { viewerRole = "user" } = {}) {
   if (prevMessages.length !== nextMessages.length) return true;
   if (prevMessages.at(-1)?.id !== nextMessages.at(-1)?.id) return true;
+  if (prevMessages[0]?.id !== nextMessages[0]?.id) return true;
 
   for (let i = 0; i < prevMessages.length; i += 1) {
     const prev = prevMessages[i];
     const next = nextMessages[i];
     if (prev.id !== next.id) return true;
+    if (prev.imageUrl !== next.imageUrl) return true;
+    if (prev.body !== next.body) return true;
     if (messageReceiptSignature(prev, viewerRole) !== messageReceiptSignature(next, viewerRole)) {
       return true;
     }
