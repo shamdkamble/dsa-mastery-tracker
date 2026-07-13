@@ -28,6 +28,8 @@ import {
   notifyAccessPatch,
   notifyRolePatch,
 } from "./access-notifications.js";
+import { notifyAdminsRegistrationPending } from "./admin-notifications.js";
+import { maybeNotifyAccountExpired } from "./account-expiry-cron.js";
 
 const scrypt = promisify(crypto.scrypt);
 
@@ -209,6 +211,11 @@ export async function registerUser({ name, email, password }) {
       email,
       passwordHash,
     });
+
+    notifyAdminsRegistrationPending(user).catch((err) => {
+      console.warn("[auth] admin registration notify failed", err?.message);
+    });
+
     return toPublicUser(user);
   } catch (err) {
     if (err.message === "EMAIL_EXISTS") {
@@ -264,6 +271,9 @@ export async function loginUser({ identifier, password }) {
   }
 
   if (!isUserAccessValid(account)) {
+    maybeNotifyAccountExpired(account).catch((err) => {
+      console.warn("[auth] account expiry notify failed", err?.message);
+    });
     throw new AuthError("Your account access has expired. Contact the administrator.", { status: 403, code: "ACCOUNT_EXPIRED" });
   }
 

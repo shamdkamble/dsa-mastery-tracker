@@ -120,6 +120,20 @@ export async function notifyAccountActivated(userId) {
   }, { tag: "account-activated" });
 }
 
+export async function notifyAccountExpired(userId, expiresAt) {
+  const formatted = formatExpiryDate(expiresAt);
+  const detail = formatted
+    ? `Your access expired on ${formatted}. Contact the administrator to renew.`
+    : "Your account access has expired. Contact the administrator to renew.";
+
+  return notifyUser(userId, {
+    title: "Account access expired",
+    text: detail,
+    variant: "danger",
+    href: "#/login",
+  }, { tag: "account-expired" });
+}
+
 /**
  * @param {object} before - user before patch
  * @param {object} after - user after patch

@@ -16,7 +16,7 @@ function toIso(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function normalizeUser(user) {
+export function normalizeUser(user) {
   if (!user) return null;
   const doc = user.toObject ? user.toObject() : user;
   return {
@@ -28,6 +28,7 @@ function normalizeUser(user) {
     status: doc.status || "pending",
     accessLevel: doc.accessLevel || "standard",
     expiresAt: toIso(doc.expiresAt),
+    expiryNotifiedAt: toIso(doc.expiryNotifiedAt),
     createdAt: toIso(doc.createdAt),
     updatedAt: toIso(doc.updatedAt),
   };
@@ -87,6 +88,12 @@ export async function updateUser(id, patch) {
   if (patch.accessLevel !== undefined) updates.accessLevel = patch.accessLevel;
   if (patch.expiresAt !== undefined) {
     updates.expiresAt = patch.expiresAt ? new Date(patch.expiresAt) : null;
+    if (!patch.expiresAt || new Date(patch.expiresAt).getTime() > Date.now()) {
+      updates.expiryNotifiedAt = null;
+    }
+  }
+  if (patch.expiryNotifiedAt !== undefined) {
+    updates.expiryNotifiedAt = patch.expiryNotifiedAt ? new Date(patch.expiryNotifiedAt) : null;
   }
   if (patch.name !== undefined) updates.name = patch.name.trim();
   if (patch.role !== undefined) updates.role = patch.role;

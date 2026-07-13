@@ -50,6 +50,10 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    expiryNotifiedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     collection: "users",
@@ -59,5 +63,6 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ status: 1, createdAt: -1 });
+userSchema.index({ status: 1, expiresAt: 1, expiryNotifiedAt: 1 });
 
 export const User = mongoose.models.User || mongoose.model("User", userSchema);
