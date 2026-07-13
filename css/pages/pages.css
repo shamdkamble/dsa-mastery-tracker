@@ -949,10 +949,29 @@
   margin-bottom: var(--space-5);
 }
 
+.solved-view__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
 .solved-view__section-title {
-  margin: 0 0 var(--space-2);
+  margin: 0;
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
+}
+
+.solved-view__section--readonly {
+  pointer-events: none;
+  user-select: text;
+}
+
+.solved-view__notice {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
 }
 
 .solved-view__code {

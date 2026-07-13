@@ -1,14 +1,16 @@
 /**
- * Read-only view of a solved problem's saved solution, complexity, and suggestions.
+ * Read-only solved solution view — post-submit complexity & suggestions only.
  */
 
 import { icon } from "./icons.js";
 import { Modal, Button, DifficultyBadge } from "./ui/index.js";
 import { openModal, closeModal, initModals } from "./ui/interactions.js";
-import { getProblem } from "../storage/db.js";
+import { getProblem, updateProblem } from "../storage/db.js";
 import { getProblemLeetcodeUrl } from "./leetcode-actions.js";
 import { formatMinutes, formatRelativeTime } from "../storage/helpers.js";
 import { showToast, Toast } from "./ui/index.js";
+import { analyzeComplexity, analyzeSolutionSuggestions } from "../api/problemAiApi.js";
+import { refreshPage } from "../controllers/page-controller.js";
 
 const MODAL_ID = "solved-solution-modal";
 
@@ -19,6 +21,17 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;");
 }
 
+function escapeAttr(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+function hasSolutionCode(problem) {
+  return Boolean(problem?.solution?.trim());
+}
+
 function renderCodeBlock(code) {
   if (!code?.trim()) {
     return `<p class="solved-view__empty">No solution code saved.</p>`;
@@ -26,13 +39,13 @@ function renderCodeBlock(code) {
   return `<pre class="solved-view__code"><code>${escapeHtml(code)}</code></pre>`;
 }
 
-function renderComplexityBlock(problem) {
-  const time = problem.timeComplexity?.trim();
-  const space = problem.spaceComplexity?.trim();
-  const explanation = problem.complexityExplanation?.trim();
+function renderComplexityContent({ timeComplexity = "", spaceComplexity = "", complexityExplanation = "" } = {}) {
+  const time = timeComplexity?.trim();
+  const space = spaceComplexity?.trim();
+  const explanation = complexityExplanation?.trim();
 
   if (!time && !space && !explanation) {
-    return `<p class="solved-view__empty">No complexity analysis saved.</p>`;
+    return `<p class="solved-view__empty">Not analyzed yet.</p>`;
   }
 
   return `
@@ -46,11 +59,15 @@ function renderComplexityBlock(problem) {
   `;
 }
 
-function renderSuggestionsBlock(text) {
+function renderSuggestionsContent(text, { isOptimal = false } = {}) {
   if (!text?.trim()) {
-    return `<p class="solved-view__empty">No suggestions were recorded.</p>`;
+    return `<p class="solved-view__empty">Not generated yet.</p>`;
   }
-  return `<p class="solved-view__suggestions-text">${escapeHtml(text).replace(/\n/g, "<br>")}</p>`;
+  return `
+    <div class="solve-complete__suggestions${isOptimal ? " solve-complete__suggestions--optimal" : ""}">
+      <p class="solved-view__suggestions-text">${escapeHtml(text).replace(/\n/g, "<br>")}</p>
+    </div>
+  `;
 }
 
 function renderBody(problem) {
@@ -61,9 +78,10 @@ function renderBody(problem) {
   const solvedWhen = problem.solvedAt
     ? formatRelativeTime(problem.solvedAt)
     : formatRelativeTime(problem.updatedAt);
+  const canAnalyze = hasSolutionCode(problem);
 
   return `
-    <div class="solved-view">
+    <div class="solved-view" data-solved-view data-problem-id="${escapeAttr(problem.id)}">
       <header class="solved-view__head">
         <div>
           <h3 class="solved-view__title">${escapeHtml(problem.title)}</h3>
@@ -85,26 +103,50 @@ function renderBody(problem) {
       </header>
 
       ${problem.approach?.trim() ? `
-        <section class="solved-view__section">
+        <section class="solved-view__section solved-view__section--readonly">
           <h4 class="solved-view__section-title">My approach</h4>
           <p class="solved-view__approach">${escapeHtml(problem.approach).replace(/\n/g, "<br>")}</p>
         </section>
       ` : ""}
 
-      <section class="solved-view__section">
+      <section class="solved-view__section solved-view__section--readonly">
         <h4 class="solved-view__section-title">Solution code</h4>
         ${renderCodeBlock(problem.solution)}
       </section>
 
-      <section class="solved-view__section">
-        <h4 class="solved-view__section-title">Complexity analysis</h4>
-        ${renderComplexityBlock(problem)}
+      <section class="solved-view__section solved-view__section--actions">
+        <div class="solved-view__section-head">
+          <h4 class="solved-view__section-title">Complexity analysis</h4>
+          ${canAnalyze ? `
+            <button type="button" class="btn btn--ghost btn--xs" id="solved-analyze-btn">
+              ${icon("zap")}<span>Analyze</span>
+            </button>
+          ` : ""}
+        </div>
+        <div id="solved-complexity-host">
+          ${renderComplexityContent(problem)}
+        </div>
+        <p class="problem-ai-status" id="solved-complexity-status" aria-live="polite"></p>
       </section>
 
-      <section class="solved-view__section">
-        <h4 class="solved-view__section-title">Suggestions</h4>
-        ${renderSuggestionsBlock(problem.solutionSuggestions)}
+      <section class="solved-view__section solved-view__section--actions">
+        <div class="solved-view__section-head">
+          <h4 class="solved-view__section-title">Suggestions</h4>
+          ${canAnalyze ? `
+            <button type="button" class="btn btn--ghost btn--xs" id="solved-suggestions-btn">
+              ${icon("zap")}<span>Generate</span>
+            </button>
+          ` : ""}
+        </div>
+        <div id="solved-suggestions-host">
+          ${renderSuggestionsContent(problem.solutionSuggestions)}
+        </div>
+        <p class="problem-ai-status" id="solved-suggestions-status" aria-live="polite"></p>
       </section>
+
+      ${!canAnalyze ? `
+        <p class="solved-view__notice">Add solution code when marking Done to unlock analysis later.</p>
+      ` : ""}
 
       ${lcUrl ? `
         <div class="solved-view__footer-link">
@@ -115,6 +157,113 @@ function renderBody(problem) {
       ` : ""}
     </div>
   `;
+}
+
+function setAiStatus(host, id, message, type = "") {
+  const el = host.querySelector(id);
+  if (!el) return;
+  el.textContent = message;
+  el.className = `problem-ai-status${type ? ` problem-ai-status--${type}` : ""}`;
+}
+
+function patchComplexityHost(host, data) {
+  const complexityHost = host.querySelector("#solved-complexity-host");
+  if (complexityHost) {
+    complexityHost.innerHTML = renderComplexityContent({
+      timeComplexity: data.timeComplexity,
+      spaceComplexity: data.spaceComplexity,
+      complexityExplanation: data.explanation || data.complexityExplanation,
+    });
+  }
+}
+
+function patchSuggestionsHost(host, { combined, isOptimal }) {
+  const suggestionsHost = host.querySelector("#solved-suggestions-host");
+  if (suggestionsHost) {
+    suggestionsHost.innerHTML = renderSuggestionsContent(combined, { isOptimal });
+  }
+}
+
+async function persistAnalysisFields(problemId, patch) {
+  const allowed = {};
+  if (patch.timeComplexity !== undefined) allowed.timeComplexity = patch.timeComplexity;
+  if (patch.spaceComplexity !== undefined) allowed.spaceComplexity = patch.spaceComplexity;
+  if (patch.complexityExplanation !== undefined) allowed.complexityExplanation = patch.complexityExplanation;
+  if (patch.solutionSuggestions !== undefined) allowed.solutionSuggestions = patch.solutionSuggestions;
+  await updateProblem(problemId, allowed, { silent: true });
+}
+
+async function handleAnalyzeComplexity(host, problemId) {
+  const problem = getProblem(problemId);
+  if (!hasSolutionCode(problem)) return;
+
+  const btn = host.querySelector("#solved-analyze-btn");
+  btn?.classList.add("is-loading");
+  if (btn) btn.disabled = true;
+  setAiStatus(host, "#solved-complexity-status", "Analyzing…", "loading");
+
+  try {
+    const result = await analyzeComplexity({
+      code: problem.solution,
+      title: problem.title,
+    });
+
+    await persistAnalysisFields(problemId, {
+      timeComplexity: result.timeComplexity,
+      spaceComplexity: result.spaceComplexity,
+      complexityExplanation: result.explanation || "",
+    });
+
+    patchComplexityHost(host, result);
+    setAiStatus(host, "#solved-complexity-status", "Saved.", "success");
+    refreshPage();
+  } catch (err) {
+    setAiStatus(host, "#solved-complexity-status", err?.message || "Analysis failed.", "error");
+  } finally {
+    btn?.classList.remove("is-loading");
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleGenerateSuggestions(host, problemId) {
+  const problem = getProblem(problemId);
+  if (!hasSolutionCode(problem)) return;
+
+  const btn = host.querySelector("#solved-suggestions-btn");
+  btn?.classList.add("is-loading");
+  if (btn) btn.disabled = true;
+  setAiStatus(host, "#solved-suggestions-status", "Generating…", "loading");
+
+  try {
+    const result = await analyzeSolutionSuggestions({
+      code: problem.solution,
+      title: problem.title,
+      timeComplexity: problem.timeComplexity,
+      spaceComplexity: problem.spaceComplexity,
+    });
+
+    await persistAnalysisFields(problemId, {
+      solutionSuggestions: result.combined || "",
+    });
+
+    patchSuggestionsHost(host, result);
+    setAiStatus(host, "#solved-suggestions-status", "Saved.", "success");
+  } catch (err) {
+    setAiStatus(host, "#solved-suggestions-status", err?.message || "Could not generate suggestions.", "error");
+  } finally {
+    btn?.classList.remove("is-loading");
+    if (btn) btn.disabled = false;
+  }
+}
+
+function bindSolvedViewActions(host, problemId) {
+  host.querySelector("#solved-analyze-btn")?.addEventListener("click", () => {
+    void handleAnalyzeComplexity(host, problemId);
+  });
+
+  host.querySelector("#solved-suggestions-btn")?.addEventListener("click", () => {
+    void handleGenerateSuggestions(host, problemId);
+  });
 }
 
 function ensureHost() {
@@ -145,6 +294,7 @@ export function openSolvedSolutionModal(problemId) {
   });
 
   initModals(host);
+  bindSolvedViewActions(host, problemId);
   openModal(MODAL_ID);
 }
 
