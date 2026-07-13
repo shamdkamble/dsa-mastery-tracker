@@ -165,26 +165,31 @@ function solvedProblemRow(p, i) {
 
 function renderTabSwitcher(activeCount, solvedCount, currentTab) {
   return `
-    <div class="problems-tabs" role="tablist" aria-label="Problem lists">
-      <button
-        type="button"
-        class="problems-tabs__btn${currentTab === "active" ? " is-selected" : ""}"
-        data-problems-tab="active"
-        role="tab"
-        aria-selected="${currentTab === "active"}"
-      >
-        Active
-        <span class="problems-tabs__count">${activeCount}</span>
-      </button>
-      <button
-        type="button"
-        class="problems-tabs__btn${currentTab === "solved" ? " is-selected" : ""}"
-        data-problems-tab="solved"
-        role="tab"
-        aria-selected="${currentTab === "solved"}"
-      >
-        Solved
-        <span class="problems-tabs__count">${solvedCount}</span>
+    <div class="problems-tabs-bar">
+      <div class="problems-tabs" role="tablist" aria-label="Problem lists">
+        <button
+          type="button"
+          class="problems-tabs__btn${currentTab === "active" ? " is-selected" : ""}"
+          data-problems-tab="active"
+          role="tab"
+          aria-selected="${currentTab === "active"}"
+        >
+          Active
+          <span class="problems-tabs__count">${activeCount}</span>
+        </button>
+        <button
+          type="button"
+          class="problems-tabs__btn${currentTab === "solved" ? " is-selected" : ""}"
+          data-problems-tab="solved"
+          role="tab"
+          aria-selected="${currentTab === "solved"}"
+        >
+          Solved
+          <span class="problems-tabs__count">${solvedCount}</span>
+        </button>
+      </div>
+      <button class="btn btn--primary btn--sm" data-action="add-problem" data-tour="add-problem" type="button">
+        ${icon("plus")}<span>Add Problem</span>
       </button>
     </div>
   `;
@@ -230,12 +235,6 @@ function renderActivePanel(activeProblems, stats) {
           <span><strong>${stats.learning}</strong> in progress</span>
           <span><strong>${stats.todo}</strong> todo</span>
         </div>
-      </div>
-
-      <div class="problems-table-actions">
-        <button class="btn btn--primary btn--sm" data-action="add-problem" data-tour="add-problem" type="button">
-          ${icon("plus")}<span>Add Problem</span>
-        </button>
       </div>
 
       <div class="table-wrapper">
