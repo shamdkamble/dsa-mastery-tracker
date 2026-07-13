@@ -794,11 +794,19 @@
 
 .problems-tabs-bar {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
   gap: var(--space-4);
   margin-bottom: var(--space-5);
   flex-wrap: wrap;
+}
+
+.problems-tabs-bar > .btn {
+  height: auto;
+  align-self: stretch;
+  padding-inline: var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
 }
 
 .patterns-toolbar {
@@ -856,6 +864,7 @@
   display: inline-flex;
   gap: var(--space-1);
   margin-bottom: 0;
+  margin-right: var(--space-3);
   padding: var(--space-1);
   border-radius: var(--radius-lg);
   background: var(--color-bg-secondary);
