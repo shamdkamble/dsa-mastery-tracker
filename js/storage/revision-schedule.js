@@ -112,9 +112,5 @@ export function shouldEnqueueRevision(problem, today = todayKey(), yesterday = y
   if (!isRevisionDue(problem, today)) return false;
   if (isOnActiveRevisionMission(problem, today, yesterday)) return false;
 
-  if (problem.inMission && problem.missionDate === today && problem.missionType === "new" && !problem.missionDone) {
-    return false;
-  }
-
   return true;
 }

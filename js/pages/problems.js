@@ -4,14 +4,12 @@ import { DifficultyBadge, EmptyState, Badge } from "../components/ui/index.js";
 import {
   getProblems,
   sortProblemsForDisplay,
-  isProblemOnTodaysMission,
 } from "../storage/db.js";
 import { isProblemMarkedDone } from "../storage/computed.js";
 import { isRevisionDue, getRevisionRoundLabel } from "../storage/revision-schedule.js";
 import { todayKey } from "../storage/helpers.js";
 import { formatRelativeTime, formatMinutes, formatDateLabel } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
-import { openProblemModal } from "../components/problem-modal.js";
 import { initSolvedSolutionTriggers } from "../components/solved-solution-modal.js";
 import { getProblemLeetcodeUrl, leetcodeLinkButton } from "../components/leetcode-actions.js";
 import {
@@ -73,7 +71,6 @@ function activeProblemRow(p, i) {
   const lcUrl = getProblemLeetcodeUrl(p);
   const isRoadmap = p.source === "roadmap";
   const inProgress = isSolveTimerActive(p);
-  const canAddMission = !isProblemOnTodaysMission(p);
 
   return `
     <tr
@@ -85,9 +82,7 @@ function activeProblemRow(p, i) {
       data-status="${p.status}"
       data-source="${p.source || "manual"}"
       data-search="${escapeAttr(problemSearchText(p))}"
-      class="cursor-pointer${inProgress ? " is-solving" : ""}"
-      tabindex="0"
-      role="button"
+      class="${inProgress ? "is-solving" : ""}"
     >
       <td data-label="Problem">
         <div class="flex items-center gap-2">
@@ -108,8 +103,6 @@ function activeProblemRow(p, i) {
         <div class="flex items-center gap-2">
           ${lcUrl ? leetcodeLinkButton(lcUrl, { size: "xs", label: "Solve", problemId: p.id }) : ""}
           ${inProgress ? `<button class="btn btn--xs btn--primary" data-action="mark-solved" data-id="${p.id}" type="button">Done</button>` : ""}
-          ${canAddMission ? `<button class="btn btn--xs btn--ghost" data-action="add-to-mission" data-id="${p.id}" type="button" title="Add to mission">+</button>` : ""}
-          <button class="btn btn--xs btn--ghost" data-action="edit-problem" data-id="${p.id}" type="button" title="Edit">${icon("notes")}</button>
         </div>
       </td>
     </tr>
@@ -204,10 +197,10 @@ function renderActivePanel(activeProblems, stats) {
         ${EmptyState({
           title: "No active problems",
           text: stats.solvedCount
-            ? "You've solved everything in your list — check the Solved tab or add more problems."
-            : "Complete a roadmap lesson to get recommended problems, or add your own.",
+            ? "You've solved everything in your list — check the Solved tab or complete more roadmap lessons."
+            : "Complete a roadmap lesson to get recommended practice problems.",
           iconName: "problems",
-          actions: `<button class="btn btn--primary" data-action="add-problem" data-tour="add-problem" type="button">${icon("plus")}<span>Add Problem</span></button>`,
+          actions: `<a href="#/roadmap" class="btn btn--primary">Browse Roadmap</a>`,
         })}
       </div>
     `;
@@ -258,9 +251,6 @@ function renderActivePanel(activeProblems, stats) {
           Showing <span data-problems-visible-count>${activeProblems.length}</span>
           of ${activeProblems.length} active problem${activeProblems.length !== 1 ? "s" : ""}
         </span>
-        <button class="btn btn--primary btn--sm" data-action="add-problem" data-tour="add-problem" type="button">
-          ${icon("plus")}<span>Add Problem</span>
-        </button>
       </div>
     </div>
   `;
@@ -349,9 +339,9 @@ export default {
         description: "Track every problem in your DSA journey — solve actively, review solved work.",
         children: EmptyState({
           title: "No problems yet",
-          text: "Complete a roadmap lesson to get recommended problems, or add your own.",
+          text: "Complete a roadmap lesson to get recommended practice problems.",
           iconName: "problems",
-          actions: `<button class="btn btn--primary" data-action="add-problem" data-tour="add-problem" type="button">${icon("plus")}<span>Add Problem</span></button>`,
+          actions: `<a href="#/roadmap" class="btn btn--primary">Browse Roadmap</a>`,
         }),
       });
     }
@@ -385,8 +375,8 @@ export default {
     initSolvedSolutionTriggers(container);
     mountProblemsPage(container);
 
-    if (container.dataset.problemsRowBound) return;
-    container.dataset.problemsRowBound = "true";
+    if (container.dataset.problemsTabsBound) return;
+    container.dataset.problemsTabsBound = "true";
 
     container.addEventListener("click", (e) => {
       const tabBtn = e.target.closest("[data-problems-tab]");
@@ -400,13 +390,7 @@ export default {
         container.querySelectorAll("[data-filter]").forEach((c) => c.classList.remove("is-selected"));
         chip.classList.add("is-selected");
         applyActiveFilters(container);
-        return;
       }
-
-      if (e.target.closest("[data-action]")) return;
-      const row = e.target.closest('tr[data-problem-row][data-list="active"]');
-      if (!row || row.hidden) return;
-      openProblemModal(row.dataset.id);
     });
   },
   onUnmount() {

@@ -5,7 +5,6 @@
 import { $, $$ } from "../utils.js";
 import {
   toggleMissionDone,
-  addToMission,
   startProblemSolve,
   clearProblemSolveTimer,
   updateUser,
@@ -116,30 +115,23 @@ export function bindMissionHandlers(root) {
       }
 
       nextCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      const learnBtn = nextCard.querySelector("[data-action='teach-topic']");
+      if (learnBtn) {
+        learnBtn.click();
+        return;
+      }
+
       const solveLink = nextCard.querySelector("[data-action='start-solve']");
       if (solveLink) {
         solveLink.click();
-      } else {
-        showToast(Toast({
-          title: "No LeetCode link",
-          text: "Add a LeetCode URL to this problem before solving.",
-          variant: "warning",
-        }));
+        return;
       }
-      return;
-    }
 
-    const addMissionBtn = e.target.closest("[data-action='add-to-mission']");
-    if (addMissionBtn) {
-      void addToMission(addMissionBtn.dataset.id, addMissionBtn.dataset.type || "new")
-        .then(() => {
-          showToast(Toast({ title: "Added to mission", variant: "success" }));
-          refreshPage();
-        })
-        .catch((err) => {
-          console.error("[mission] add failed", err);
-          showToast(Toast({ title: "Failed", text: err?.message || "Could not add to mission.", variant: "danger" }));
-        });
+      showToast(Toast({
+        title: "No action available",
+        text: "Add a LeetCode URL to this problem before solving.",
+        variant: "warning",
+      }));
       return;
     }
   });

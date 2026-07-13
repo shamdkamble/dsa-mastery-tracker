@@ -23,4 +23,4 @@ export const PATTERN_CATALOG = [
 
 export const DIFFICULTIES = ["Easy", "Medium", "Hard"];
 export const STATUSES = ["todo", "learning", "mastered", "struggling"];
-export const MISSION_TYPES = ["revision", "new", "challenge"];
+export const MISSION_TYPES = ["revision", "learning"];

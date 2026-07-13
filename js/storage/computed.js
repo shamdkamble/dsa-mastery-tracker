@@ -21,6 +21,7 @@ import {
   formatDateLabel,
   daysInMonth,
 } from "./helpers.js";
+import { computeLearningMissionItem } from "./learning-missions.js";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -73,9 +74,9 @@ export function computeStats() {
 
   const markedDone = problems.filter(isProblemMarkedDone);
   const revisionsDue = problems.filter((p) => isRevisionEligible(p) && isRevisionDue(p, today));
-  const todaysMission = getTodaysMissionProblems();
-  const todaysRevisions = todaysMission.filter((p) => p.missionType === "revision").length;
-  const missionDoneToday = todaysMission.filter((p) => p.missionDone).length;
+  const missionItems = computeTodaysMission();
+  const todaysRevisions = missionItems.filter((m) => m.type === "revision").length;
+  const missionDoneToday = missionItems.filter((m) => m.done).length;
 
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
   const weeklySolved = activities.filter(
@@ -119,9 +120,7 @@ export function computeStats() {
 }
 
 function sortMissionProblems(problems) {
-  const today = todayKey();
   const yesterday = yesterdayKey();
-  const typeOrder = { revision: 0, new: 1, challenge: 2 };
 
   return [...problems].sort((a, b) => {
     if (a.missionDone !== b.missionDone) return a.missionDone ? 1 : -1;
@@ -130,15 +129,53 @@ function sortMissionProblems(problems) {
     const bCarry = b.missionDate === yesterday && !b.missionDone;
     if (aCarry !== bCarry) return aCarry ? -1 : 1;
 
-    const aNewToday = a.missionType === "new" && a.missionDate === today && !a.missionDone;
-    const bNewToday = b.missionType === "new" && b.missionDate === today && !b.missionDone;
-    if (aNewToday !== bNewToday) return aNewToday ? -1 : 1;
+    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+  });
+}
 
-    const ta = typeOrder[a.missionType] ?? 1;
-    const tb = typeOrder[b.missionType] ?? 1;
+function mapRevisionMissionItem(p, today, yesterday) {
+  let due = "Scheduled";
+  if (p.missionDate === yesterday && !p.missionDone) {
+    due = "From yesterday";
+  } else if (p.nextReviewAt) {
+    const reviewDay = p.nextReviewAt.slice(0, 10);
+    if (reviewDay < today) due = "Overdue";
+    else if (reviewDay === today) due = "Today";
+  }
+
+  const reviewStage = p.reviewStage ?? 0;
+
+  return {
+    id: p.id,
+    title: p.title,
+    topic: [p.topic, p.pattern].filter(Boolean).join(" · "),
+    difficulty: p.difficulty,
+    type: "revision",
+    due,
+    reviewLabel: getRevisionRoundLabel(reviewStage),
+    reviewStage,
+    done: p.missionDone,
+    carriedOver: p.missionDate === yesterday && !p.missionDone,
+    time: p.actualSolveMinutes ? `${p.actualSolveMinutes}m` : `${p.estimatedMinutes || 30}m`,
+    leetcodeUrl: p.leetcodeUrl || null,
+    leetcodeSlug: p.leetcodeSlug || null,
+    startedAt: p.startedAt || null,
+    actualSolveMinutes: p.actualSolveMinutes ?? null,
+  };
+}
+
+function sortMissionItems(items) {
+  const typeOrder = { learning: 0, revision: 1 };
+
+  return [...items].sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    if (a.carriedOver !== b.carriedOver) return a.carriedOver ? -1 : 1;
+
+    const ta = typeOrder[a.type] ?? 2;
+    const tb = typeOrder[b.type] ?? 2;
     if (ta !== tb) return ta - tb;
 
-    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    return 0;
   });
 }
 
@@ -146,37 +183,13 @@ export function computeTodaysMission() {
   const today = todayKey();
   const yesterday = yesterdayKey();
 
-  return sortMissionProblems(getTodaysMissionProblems()).map((p) => {
-    let due = "Scheduled";
-    if (p.missionDate === yesterday && !p.missionDone) {
-      due = "From yesterday";
-    } else if (p.nextReviewAt) {
-      const reviewDay = p.nextReviewAt.slice(0, 10);
-      if (reviewDay < today) due = "Overdue";
-      else if (reviewDay === today) due = "Today";
-    }
-    if (p.missionType === "challenge") due = "Optional";
+  const revisionItems = sortMissionProblems(getTodaysMissionProblems())
+    .map((p) => mapRevisionMissionItem(p, today, yesterday));
 
-    const reviewStage = p.reviewStage ?? 0;
+  const learningItem = computeLearningMissionItem();
+  const items = learningItem ? [learningItem, ...revisionItems] : revisionItems;
 
-    return {
-      id: p.id,
-      title: p.title,
-      topic: [p.topic, p.pattern].filter(Boolean).join(" · "),
-      difficulty: p.difficulty,
-      type: p.missionType || "new",
-      due,
-      reviewLabel: p.missionType === "revision" ? getRevisionRoundLabel(reviewStage) : null,
-      reviewStage,
-      done: p.missionDone,
-      carriedOver: p.missionDate === yesterday && !p.missionDone,
-      time: p.actualSolveMinutes ? `${p.actualSolveMinutes}m` : `${p.estimatedMinutes || 30}m`,
-      leetcodeUrl: p.leetcodeUrl || null,
-      leetcodeSlug: p.leetcodeSlug || null,
-      startedAt: p.startedAt || null,
-      actualSolveMinutes: p.actualSolveMinutes ?? null,
-    };
-  });
+  return sortMissionItems(items);
 }
 
 export function computeProblemsSolvedOnDate(dateKey) {

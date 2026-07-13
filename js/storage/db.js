@@ -61,6 +61,7 @@ function defaultDB() {
       longestStreak: 0,
       calendarMonth: { year: new Date().getFullYear(), month: new Date().getMonth() },
       readNotificationIds: [],
+      learningMission: { topicId: null, assignedDate: null },
       tour: {
         completed: false,
         dismissed: false,
@@ -101,7 +102,14 @@ function mergeStoredData(parsed) {
         ...parsed.settings?.notifications,
       },
     },
-    meta: { ...base.meta, ...parsed.meta },
+    meta: {
+      ...base.meta,
+      ...parsed.meta,
+      learningMission: {
+        ...base.meta.learningMission,
+        ...parsed.meta?.learningMission,
+      },
+    },
     problems: Array.isArray(parsed.problems) ? parsed.problems : [],
     notes: Array.isArray(parsed.notes) ? parsed.notes : [],
     activities: Array.isArray(parsed.activities) ? parsed.activities : [],
@@ -393,14 +401,12 @@ export function isProblemOnTodaysMission(problem) {
 }
 
 export function sortProblemsForDisplay(problems) {
-  const today = todayKey();
   const yesterday = yesterdayKey();
 
   const priority = (p) => {
     if (isProblemOnTodaysMission(p) && !p.missionDone && p.missionDate === yesterday) return 0;
-    if (isProblemOnTodaysMission(p) && !p.missionDone && p.missionType === "new" && p.missionDate === today) return 1;
-    if (isProblemOnTodaysMission(p) && !p.missionDone) return 2;
-    return 3;
+    if (isProblemOnTodaysMission(p) && !p.missionDone) return 1;
+    return 2;
   };
 
   return [...problems].sort((a, b) => {
@@ -569,6 +575,60 @@ export async function deleteProblem(id) {
 
 /* ── Mission operations ── */
 
+export function getLearningMissionMeta() {
+  const meta = load().meta.learningMission || {};
+  return {
+    topicId: meta.topicId || null,
+    assignedDate: meta.assignedDate || null,
+  };
+}
+
+export function setLearningMissionAssignment(topicId, assignedDate) {
+  const db = load();
+  db.meta.learningMission = { topicId, assignedDate };
+  touch({ silent: true });
+  return db.meta.learningMission;
+}
+
+export function clearLearningMissionAssignment() {
+  const db = load();
+  db.meta.learningMission = { topicId: null, assignedDate: null };
+  touch({ silent: true });
+}
+
+function purgeManualMissions(options = {}) {
+  const db = load();
+  const purged = [];
+
+  for (let i = 0; i < db.problems.length; i += 1) {
+    const p = db.problems[i];
+    if (!p.inMission || p.missionType === "revision") continue;
+
+    const cleared = {
+      ...p,
+      inMission: false,
+      missionDate: null,
+      missionDone: false,
+      missionType: null,
+    };
+    db.problems[i] = cleared;
+    purged.push(cleared);
+  }
+
+  if (purged.length) {
+    touch(options);
+    if (isRemoteMode()) {
+      void Promise.all(
+        purged.map((p) => apiUpdateProblem(p.id, p).catch((err) => {
+          console.warn("[mission] Failed to clear manual mission", p.id, err);
+        })),
+      );
+    }
+  }
+
+  return purged.length;
+}
+
 export function syncDueRevisionsToMission(options = {}) {
   const db = load();
   const today = todayKey();
@@ -611,11 +671,12 @@ export function syncDueRevisionsToMission(options = {}) {
 }
 
 export function getTodaysMissionProblems() {
+  purgeManualMissions({ silent: true });
   syncDueRevisionsToMission({ silent: true });
   const today = todayKey();
   const yesterday = yesterdayKey();
   return load().problems.filter((p) => {
-    if (!p.inMission) return false;
+    if (!p.inMission || p.missionType !== "revision") return false;
     if (p.missionDate === today) return true;
     if (p.missionDate === yesterday && !p.missionDone) return true;
     return false;
