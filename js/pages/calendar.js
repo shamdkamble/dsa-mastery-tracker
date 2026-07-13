@@ -11,32 +11,46 @@ import {
 import { monthLabel, formatDateLabel } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAYS = [
+  { short: "Su", label: "Sunday" },
+  { short: "Mo", label: "Monday" },
+  { short: "Tu", label: "Tuesday" },
+  { short: "We", label: "Wednesday" },
+  { short: "Th", label: "Thursday" },
+  { short: "Fr", label: "Friday" },
+  { short: "Sa", label: "Saturday" },
+];
+
+function activityLevelClass(activity) {
+  if (activity >= 3) return "cal__day--lvl-3";
+  if (activity === 2) return "cal__day--lvl-2";
+  if (activity === 1) return "cal__day--lvl-1";
+  return "cal__day--lvl-0";
+}
 
 function renderCalendarDay(d, selectedDate) {
-  const dots = [];
-  if (d.activity > 0 && !d.isFuture) {
-    for (let i = 0; i < d.activity; i++) {
-      dots.push(`<span class="calendar-day__dot${i > 0 ? ` calendar-day__dot--l${i + 1}` : ""}"></span>`);
-    }
-  }
-  if (d.hasReview && !d.isFuture) {
-    dots.push('<span class="calendar-day__dot calendar-day__dot--review"></span>');
-  }
-
   const isSelected = d.dateKey === selectedDate;
+  const classes = [
+    "cal__day",
+    activityLevelClass(d.activity),
+    d.isToday ? "is-today" : "",
+    d.isWeekend ? "is-weekend" : "",
+    d.isFuture ? "is-future" : "",
+    isSelected ? "is-selected" : "",
+    d.hasReview && !d.isFuture ? "has-review" : "",
+  ].filter(Boolean).join(" ");
 
   return `
     <button
       type="button"
-      class="calendar-day${d.isToday ? " is-today" : ""}${d.isWeekend ? " is-weekend" : ""}${d.isFuture ? " is-future" : ""}${isSelected ? " is-selected" : ""}"
+      class="${classes}"
       data-cal-day="${d.dateKey}"
       aria-label="${d.day}${d.solvedCount ? `, ${d.solvedCount} solved` : ""}${isSelected ? ", selected" : ""}"
       aria-pressed="${isSelected}"
       ${d.isFuture ? "disabled" : ""}
     >
-      <span>${d.day}</span>
-      ${dots.length ? `<div class="calendar-day__dots">${dots.join("")}</div>` : ""}
+      <span class="cal__day-num">${d.day}</span>
+      ${d.solvedCount > 0 && !d.isFuture ? `<span class="cal__day-count">${d.solvedCount}</span>` : ""}
     </button>
   `;
 }
@@ -46,7 +60,7 @@ function renderSolvedPanel(dateKey) {
   const label = formatDateLabel(`${dateKey}T12:00:00.000Z`);
 
   return `
-    <section class="page-section">
+    <section class="page-section calendar-aside__section">
       <div class="page-section__header">
         <h2 class="page-section__title">Solved on ${label}</h2>
         <span class="text-sm text-secondary">${solved.length} problem${solved.length !== 1 ? "s" : ""}</span>
@@ -97,41 +111,51 @@ export default {
         </div>
 
         <div class="calendar-layout">
-          <div>
-            <div class="chart-card">
-              <div class="calendar-header">
-                <h3 class="calendar-header__month">${monthLabel(year, month)}</h3>
-                <div class="cluster">
-                  <button class="btn btn--ghost btn--sm" data-cal-prev type="button" aria-label="Previous month">${icon("chevronLeft")}</button>
-                  <button class="btn btn--secondary btn--sm" data-cal-today type="button">Today</button>
-                  <button class="btn btn--ghost btn--sm calendar-next-btn" data-cal-next type="button" aria-label="Next month">${icon("chevronLeft")}</button>
-                </div>
+          <section class="cal-card" aria-label="Activity calendar">
+            <div class="cal__nav">
+              <div class="cal__nav-info">
+                <span class="cal__eyebrow">Study activity</span>
+                <h3 class="cal__month">${monthLabel(year, month)}</h3>
               </div>
-              <div class="calendar-grid">
-                ${WEEKDAYS.map((d) => `<div class="calendar-grid__head">${d}</div>`).join("")}
-                ${Array(firstDow).fill("<div></div>").join("")}
-                ${days.map((d) => renderCalendarDay(d, selectedDate)).join("")}
-              </div>
-              <div class="heatmap-legend">
-                <span>Less</span>
-                <div class="heatmap-legend__cells">
-                  <div class="heatmap-legend__cell"></div>
-                  <div class="heatmap-legend__cell heatmap-legend__cell--1"></div>
-                  <div class="heatmap-legend__cell heatmap-legend__cell--2"></div>
-                  <div class="heatmap-legend__cell heatmap-legend__cell--3"></div>
-                </div>
-                <span>More</span>
-                <span style="margin-left:1rem">·</span>
-                <span class="calendar-day__dot calendar-day__dot--review" style="display:inline-block"></span>
-                <span>Review due</span>
+              <div class="cal__nav-pills">
+                <button class="cal__nav-btn" data-cal-prev type="button" aria-label="Previous month">${icon("chevronLeft")}</button>
+                <button class="cal__nav-btn cal__nav-btn--today" data-cal-today type="button">Today</button>
+                <button class="cal__nav-btn" data-cal-next type="button" aria-label="Next month">
+                  <span class="cal__nav-btn-flip" aria-hidden="true">${icon("chevronLeft")}</span>
+                </button>
               </div>
             </div>
-          </div>
 
-          <div>
+            <div class="cal__weekdays" aria-hidden="true">
+              ${WEEKDAYS.map((d) => `<span class="cal__weekday" title="${d.label}">${d.short}</span>`).join("")}
+            </div>
+
+            <div class="cal__grid">
+              ${Array(firstDow).fill('<span class="cal__pad" aria-hidden="true"></span>').join("")}
+              ${days.map((d) => renderCalendarDay(d, selectedDate)).join("")}
+            </div>
+
+            <div class="cal__legend">
+              <div class="cal__legend-group">
+                <span class="cal__legend-label">Activity</span>
+                <div class="cal__legend-scale">
+                  <span class="cal__legend-swatch cal__legend-swatch--0"></span>
+                  <span class="cal__legend-swatch cal__legend-swatch--1"></span>
+                  <span class="cal__legend-swatch cal__legend-swatch--2"></span>
+                  <span class="cal__legend-swatch cal__legend-swatch--3"></span>
+                </div>
+              </div>
+              <div class="cal__legend-group">
+                <span class="cal__legend-swatch cal__legend-swatch--review"></span>
+                <span class="cal__legend-label">Review due</span>
+              </div>
+            </div>
+          </section>
+
+          <aside class="calendar-aside">
             ${renderSolvedPanel(selectedDate)}
 
-            <section class="page-section">
+            <section class="page-section calendar-aside__section">
               <div class="page-section__header">
                 <h2 class="page-section__title">Upcoming Reviews</h2>
               </div>
@@ -153,7 +177,7 @@ export default {
                 flat: true,
               })}
             </section>
-          </div>
+          </aside>
         </div>
       `,
     });
