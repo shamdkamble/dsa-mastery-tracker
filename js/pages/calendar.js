@@ -28,6 +28,15 @@ function activityLevelClass(activity) {
   return "cal__day--lvl-0";
 }
 
+function renderActivityDots(activity) {
+  if (!activity) return "";
+  const dots = [];
+  for (let i = 0; i < Math.min(activity, 3); i += 1) {
+    dots.push(`<span class="cal__day-dot${i > 0 ? ` cal__day-dot--l${i + 1}` : ""}"></span>`);
+  }
+  return `<span class="cal__day-dots" aria-hidden="true">${dots.join("")}</span>`;
+}
+
 function renderCalendarDay(d, selectedDate) {
   const isSelected = d.dateKey === selectedDate;
   const classes = [
@@ -50,7 +59,7 @@ function renderCalendarDay(d, selectedDate) {
       ${d.isFuture ? "disabled" : ""}
     >
       <span class="cal__day-num">${d.day}</span>
-      ${d.solvedCount > 0 && !d.isFuture ? `<span class="cal__day-count">${d.solvedCount}</span>` : ""}
+      ${!d.isFuture ? renderActivityDots(d.activity) : ""}
     </button>
   `;
 }

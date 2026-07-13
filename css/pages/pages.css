@@ -1557,12 +1557,26 @@
   line-height: 1;
 }
 
-.cal__day-count {
-  font-size: 9px;
-  font-weight: var(--font-bold);
-  line-height: 1;
-  color: var(--color-success);
-  letter-spacing: 0.02em;
+.cal__day-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 5px;
+}
+
+.cal__day-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-accent);
+}
+
+.cal__day-dot--l2 {
+  background-color: var(--color-accent-hover);
+}
+
+.cal__day-dot--l3 {
+  background-color: var(--color-success);
 }
 
 .cal__day.has-review::after {
