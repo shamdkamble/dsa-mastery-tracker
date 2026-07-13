@@ -1,5 +1,5 @@
 /**
- * Shared problem add/edit/delete modal with LeetCode auto-fill & AI helpers
+ * Add/edit problem modal — LeetCode import, pattern, AI ideal time
  */
 
 import { icon } from "./icons.js";
@@ -11,7 +11,7 @@ import {
   deleteProblem,
   getProblem,
 } from "../storage/db.js";
-import { PATTERN_CATALOG, STATUSES, MISSION_TYPES } from "../storage/patterns-catalog.js";
+import { PATTERN_CATALOG } from "../storage/patterns-catalog.js";
 import {
   fetchLeetcodeProblem,
   parseLeetcodeSlug,
@@ -19,7 +19,7 @@ import {
   buildLeetcodeUrl,
   slugToTitle,
 } from "../services/leetcode.js";
-import { detectPattern, analyzeComplexity, validateSolutionCode } from "../api/problemAiApi.js";
+import { detectPattern, estimateIdealSolveTime } from "../api/problemAiApi.js";
 import { canAccessProblemAi } from "../auth/access.js";
 import { getSessionUser } from "../auth/session.js";
 import { debounce } from "../utils.js";
@@ -27,11 +27,6 @@ import { inferProblemTopic } from "../storage/topic-resolver.js";
 import { refreshPage } from "../controllers/page-controller.js";
 import { renderLockedAiButton } from "./access-ui.js";
 import { openUpgradeModal } from "./upgrade-modal.js";
-import {
-  extractSolutionCodeForAnalysis,
-  isTrivialFakeCode,
-  splitLegacySolutionFields,
-} from "../utils/solution-code.js";
 
 const MODAL_ID = "problem-modal";
 
@@ -113,9 +108,7 @@ function renderProblemHero(p = {}) {
 function updateProblemHero(host, meta = {}) {
   const block = host.querySelector("#problem-hero");
   if (!block) return;
-
-  const hero = heroFromProblem(meta);
-  block.outerHTML = renderProblemHero(hero);
+  block.outerHTML = renderProblemHero(heroFromProblem(meta));
 }
 
 function renderPatternSuggestion() {
@@ -134,110 +127,18 @@ function renderPatternSuggestion() {
   `;
 }
 
-function renderComplexityResult(time = "", space = "", explanation = "") {
-  if (!time && !space) return "";
-  return `
-    <div class="problem-complexity__result" id="complexity-result">
-      <div class="problem-complexity__badges">
-        ${time ? `<span class="badge badge--accent">Time: ${escapeHtml(time)}</span>` : ""}
-        ${space ? `<span class="badge badge--info">Space: ${escapeHtml(space)}</span>` : ""}
-      </div>
-      ${explanation ? `<p class="problem-complexity__explanation">${escapeHtml(explanation)}</p>` : ""}
-    </div>
-  `;
-}
-
-function renderSolutionSection(p = {}, { aiLocked = false } = {}) {
-  const hasContent = Boolean(p.approach?.trim() || p.solution?.trim());
-  const isOpen = hasContent;
-
-  return `
-    <div class="problem-optional-section${isOpen ? " is-open" : ""}" id="solution-section">
-      <button
-        type="button"
-        class="problem-optional-section__toggle"
-        id="solution-toggle-btn"
-        aria-expanded="${isOpen}"
-        aria-controls="solution-panel"
-      >
-        ${icon(isOpen ? "chevronDown" : "plus")}
-        <span>${isOpen ? "Approach & Solution" : "Add Approach & Solution"}</span>
-        <span class="problem-optional-section__toggle-chevron" aria-hidden="true">${icon("chevronDown")}</span>
-      </button>
-      <div class="problem-optional-section__panel" id="solution-panel" ${isOpen ? "" : "hidden"}>
-        ${Field({
-          label: "My approach",
-          hint: "Optional — write your plan, pseudocode, or logic before or while solving. Not used for complexity analysis.",
-          children: `<textarea
-            class="textarea problem-approach-input"
-            name="approach"
-            id="problem-approach"
-            rows="4"
-            placeholder="e.g. Use a hash map to store complements while scanning the array once…"
-          >${escapeHtml(p.approach || "")}</textarea>`,
-        })}
-        ${Field({
-          label: "Solution code",
-          hint: "Optional — paste your final accepted code (any language). Analyze Complexity uses this field only.",
-          children: `<textarea
-            class="textarea problem-code-input"
-            name="solution"
-            id="problem-solution"
-            rows="8"
-            placeholder="class Solution {&#10;public:&#10;    vector&lt;int&gt; twoSum(vector&lt;int&gt;&amp; nums, int target) {&#10;        // ...&#10;    }&#10;};"
-          >${escapeHtml(p.solution || "")}</textarea>`,
-        })}
-        <div class="problem-complexity" id="complexity-section">
-          <div class="problem-complexity__actions">
-            ${aiLocked
-              ? renderLockedAiButton({ id: "analyze-complexity-btn", label: "Analyze Complexity" })
-              : `<button class="btn btn--ghost btn--sm" type="button" id="analyze-complexity-btn" disabled>
-                  ${icon("zap")}
-                  <span>Analyze Complexity</span>
-                </button>`}
-            <span class="problem-complexity__hint" id="complexity-hint">${aiLocked ? "Upgrade to Premium to unlock AI complexity analysis" : "Paste solution code — Groq verifies it before analysis"}</span>
-          </div>
-          <p class="problem-ai-status" id="complexity-ai-status" aria-live="polite"></p>
-          <div id="complexity-result-host">
-            ${renderComplexityResult(p.timeComplexity, p.spaceComplexity)}
-          </div>
-          <div class="problem-complexity__manual ds-grid md:grid-cols-2 gap-3">
-            ${Field({
-              label: "Time complexity",
-              hint: "e.g. O(n), O(n log n)",
-              children: Input({
-                placeholder: "O(n)",
-                value: p.timeComplexity || "",
-                attrs: 'name="timeComplexity" id="time-complexity" autocomplete="off"',
-              }),
-            })}
-            ${Field({
-              label: "Space complexity",
-              hint: "e.g. O(1), O(n)",
-              children: Input({
-                placeholder: "O(1)",
-                value: p.spaceComplexity || "",
-                attrs: 'name="spaceComplexity" id="space-complexity" autocomplete="off"',
-              }),
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
 function renderForm(problem = null, { aiLocked = false } = {}) {
   const p = problem || {};
   const lcUrl = p.leetcodeUrl || (p.leetcodeSlug ? buildLeetcodeUrl(p.leetcodeSlug) : "");
   const showDetect = Boolean(p.title && lcUrl);
+  const idealMinutes = p.estimatedMinutes || "";
 
   return `
     <form id="problem-form" class="problem-form">
       ${aiLocked ? `
         <div class="access-inline-notice problem-form__notice" role="note">
           ${icon("lock")}
-          <span>AI pattern detection &amp; complexity analysis require <strong>Premium</strong>.</span>
+          <span>AI pattern detection requires <strong>Premium</strong>.</span>
           <button type="button" class="access-inline-notice__link" data-action="upgrade-ai">Upgrade</button>
         </div>
       ` : ""}
@@ -284,8 +185,8 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
         <header class="problem-form__section-head">
           <span class="problem-form__step" aria-hidden="true">2</span>
           <div class="problem-form__section-copy">
-            <h3 class="problem-form__section-title">Classify &amp; track</h3>
-            <p class="problem-form__section-desc">Add your pattern, status, and study metadata.</p>
+            <h3 class="problem-form__section-title">Classify</h3>
+            <p class="problem-form__section-desc">Pick a pattern — ideal solve time is estimated automatically from difficulty.</p>
           </div>
         </header>
 
@@ -325,43 +226,28 @@ function renderForm(problem = null, { aiLocked = false } = {}) {
           </div>
         </div>
 
-        <div class="problem-form__grid problem-form__grid--3">
+        <div class="problem-form__grid problem-form__grid--1">
           ${Field({
-            label: "Status",
-            children: `<select class="select" name="status">${selectOptions(STATUSES, p.status || "todo")}</select>`,
-          })}
-          ${Field({
-            label: "Est. time",
-            hint: "Minutes",
-            children: Input({
-              type: "number",
-              value: p.estimatedMinutes || 30,
-              attrs: 'name="estimatedMinutes" id="problem-time" min="5" max="180"',
-            }),
-          })}
-          ${Field({
-            label: "Attempts",
-            children: Input({ type: "number", value: p.attempts || 0, attrs: 'name="attempts" min="0"' }),
+            label: "Ideal solve time",
+            hint: "Minutes · estimated by Groq from difficulty (read-only)",
+            children: `
+              <div class="problem-ideal-time">
+                <input
+                  type="text"
+                  class="input"
+                  name="estimatedMinutes"
+                  id="problem-ideal-time"
+                  value="${idealMinutes ? `${idealMinutes} min` : ""}"
+                  data-minutes="${idealMinutes || ""}"
+                  placeholder="Fetch a problem to estimate"
+                  readonly
+                  aria-readonly="true"
+                />
+                <span class="problem-ideal-time__hint" id="ideal-time-hint" aria-live="polite"></span>
+              </div>
+            `,
           })}
         </div>
-
-        <div class="problem-form__mission">
-          <label class="problem-form__mission-check checkbox">
-            <input type="checkbox" name="inMission" ${p.inMission ? "checked" : ""}>
-            <span>Include in today's mission</span>
-          </label>
-          <div class="problem-form__mission-type field">
-            <label class="field__label" for="problem-mission-type">Mission type</label>
-            <select class="select" name="missionType" id="problem-mission-type">
-              <option value="">None</option>
-              ${selectOptions(MISSION_TYPES, p.missionType || "new")}
-            </select>
-          </div>
-        </div>
-      </section>
-
-      <section class="problem-form__section problem-form__section--solution">
-        ${renderSolutionSection(p, { aiLocked })}
       </section>
     </form>
   `;
@@ -412,6 +298,27 @@ function setAiStatus(host, id, message, type = "") {
   el.className = `problem-ai-status${type ? ` problem-ai-status--${type}` : ""}`;
 }
 
+function setIdealTimeUi(host, { minutes, hint = "", loading = false } = {}) {
+  const input = host.querySelector("#problem-ideal-time");
+  const hintEl = host.querySelector("#ideal-time-hint");
+  if (input) {
+    if (loading) {
+      input.value = "Estimating…";
+      input.dataset.minutes = "";
+    } else if (minutes != null) {
+      input.value = `${minutes} min`;
+      input.dataset.minutes = String(minutes);
+    } else {
+      input.value = "";
+      input.dataset.minutes = "";
+    }
+  }
+  if (hintEl) {
+    hintEl.textContent = hint;
+    hintEl.className = `problem-ideal-time__hint${loading ? " problem-ideal-time__hint--loading" : ""}`;
+  }
+}
+
 function isEasyDifficulty(difficulty) {
   return String(difficulty || "").trim().toLowerCase() === "easy";
 }
@@ -419,7 +326,6 @@ function isEasyDifficulty(difficulty) {
 function applyPatternToSelect(host, pattern) {
   const select = host.querySelector("#problem-pattern");
   if (!select || !pattern) return false;
-
   const option = [...select.options].find((opt) => opt.value === pattern);
   if (option) {
     select.value = pattern;
@@ -443,6 +349,36 @@ function getPatternDetectContext(host) {
     topic: form?.querySelector("#problem-topic")?.value || meta.topic,
     topicTags,
   };
+}
+
+async function runIdealTimeEstimate(host, meta = {}) {
+  const title = meta.title || host.querySelector("#problem-title")?.value?.trim();
+  const difficulty = meta.difficulty || host.querySelector("#problem-difficulty")?.value;
+  const topic = meta.topic || host.querySelector("#problem-topic")?.value;
+  const topicTags = meta.topicTags || [];
+
+  if (!title || !difficulty) {
+    setIdealTimeUi(host, { minutes: null, hint: "Fetch a LeetCode problem first" });
+    return null;
+  }
+
+  setIdealTimeUi(host, { loading: true, hint: "Estimating ideal time with Groq…" });
+
+  try {
+    const result = await estimateIdealSolveTime({ title, difficulty, topic, topicTags });
+    setIdealTimeUi(host, {
+      minutes: result.idealMinutes,
+      hint: result.rationale || "Based on problem difficulty",
+    });
+    return result.idealMinutes;
+  } catch (err) {
+    const fallback = difficulty === "Easy" ? 20 : difficulty === "Hard" ? 50 : 35;
+    setIdealTimeUi(host, {
+      minutes: fallback,
+      hint: err?.message || "Using default estimate for this difficulty",
+    });
+    return fallback;
+  }
 }
 
 async function runPatternDetection(host, { autoApply = false } = {}) {
@@ -527,7 +463,7 @@ async function applyPatternPolicyAfterImport(host, meta) {
   );
 }
 
-function applyMetadata(host, meta) {
+async function applyMetadata(host, meta) {
   const form = host.querySelector("#problem-form");
   if (!form || !meta) return;
 
@@ -545,18 +481,20 @@ function applyMetadata(host, meta) {
   });
   if (topic) setVal("topic", topic);
   const patternSelect = form.querySelector("#problem-pattern");
-  if (patternSelect) patternSelect.value = "";
-  if (meta.estimatedMinutes) setVal("estimatedMinutes", meta.estimatedMinutes);
+  if (patternSelect && !form.querySelector('[name="id"]')?.value) {
+    patternSelect.value = "";
+  }
   if (meta.leetcodeUrl) setVal("leetcodeUrl", meta.leetcodeUrl);
   if (meta.leetcodeSlug) setVal("leetcodeSlug", meta.leetcodeSlug);
   if (meta.leetcodeId) setVal("leetcodeId", meta.leetcodeId);
   if (meta.topicTags) setVal("topicTags", meta.topicTags.join(","));
 
-  host._lastLcMeta = meta;
+  host._lastLcMeta = { ...meta, topic };
   showDetectPatternBtn(host, true);
   hidePatternSuggestion(host);
 
-  void applyPatternPolicyAfterImport(host, meta);
+  await runIdealTimeEstimate(host, { ...meta, topic });
+  void applyPatternPolicyAfterImport(host, { ...meta, topic });
 }
 
 function showDetectPatternBtn(host, show) {
@@ -586,184 +524,10 @@ function showPatternSuggestion(host, { primary, reasoning }) {
   setAiStatus(host, "#pattern-ai-status", "");
 }
 
-function toggleSolutionPanel(host, open) {
-  const section = host.querySelector("#solution-section");
-  const panel = host.querySelector("#solution-panel");
-  const btn = host.querySelector("#solution-toggle-btn");
-  const label = btn?.querySelector("span");
-
-  if (!section || !panel || !btn) return;
-
-  section.classList.toggle("is-open", open);
-  panel.hidden = !open;
-  btn.setAttribute("aria-expanded", String(open));
-
-  if (label) label.textContent = open ? "Approach & Solution" : "Add Approach & Solution";
-
-  if (open) {
-    scheduleSolutionCodeValidation(host);
-    host.querySelector("#problem-approach")?.focus();
-  }
-}
-
-const CODE_VALIDATE_DEBOUNCE_MS = 700;
-
-function setAnalyzeComplexityUi(host, { disabled, hint }) {
-  const btn = host.querySelector("#analyze-complexity-btn");
-  const hintEl = host.querySelector("#complexity-hint");
-  if (btn) btn.disabled = disabled;
-  if (hintEl && hint) hintEl.textContent = hint;
-}
-
-function getExtractedSolutionCode(raw) {
-  const extracted = extractSolutionCodeForAnalysis(raw);
-  return {
-    extracted,
-    code: extracted.code?.trim() || "",
-  };
-}
-
-function scheduleSolutionCodeValidation(host) {
-  if (host._aiLocked) return;
-
-  clearTimeout(host._codeValidateTimer);
-  host._codeValidateTimer = setTimeout(() => {
-    void runSolutionCodeValidation(host);
-  }, CODE_VALIDATE_DEBOUNCE_MS);
-}
-
-async function runSolutionCodeValidation(host) {
-  if (host._aiLocked) return;
-
-  const raw = host.querySelector("#problem-solution")?.value?.trim() || "";
-  const btn = host.querySelector("#analyze-complexity-btn");
-
-  host._codeValidateAbort?.abort();
-  host._codeValidateAbort = new AbortController();
-  const requestId = ++host._codeValidateSeq;
-
-  if (!raw) {
-    host._codeValid = false;
-    host._lastValidatedCode = "";
-    setAnalyzeComplexityUi(host, {
-      disabled: true,
-      hint: "Paste solution code above — approach notes stay separate",
-    });
-    return;
-  }
-
-  const { extracted, code } = getExtractedSolutionCode(raw);
-
-  if (!code) {
-    host._codeValid = false;
-    host._lastValidatedCode = "";
-    setAnalyzeComplexityUi(host, {
-      disabled: true,
-      hint: extracted.reason === "prose"
-        ? "Approach-style text belongs in My approach — paste code here"
-        : "Paste your accepted solution code first",
-    });
-    return;
-  }
-
-  if (isTrivialFakeCode(code)) {
-    host._codeValid = false;
-    host._lastValidatedCode = code;
-    setAnalyzeComplexityUi(host, {
-      disabled: true,
-      hint: "Add real solution code — braces or punctuation alone are not valid",
-    });
-    return;
-  }
-
-  if (host._lastValidatedCode === code && host._codeValid === true) {
-    setAnalyzeComplexityUi(host, {
-      disabled: false,
-      hint: host._codeValidHint || "Valid solution code — ready to analyze",
-    });
-    return;
-  }
-
-  if (host._lastValidatedCode === code && host._codeValid === false) {
-    setAnalyzeComplexityUi(host, {
-      disabled: true,
-      hint: host._codeInvalidHint || "This doesn't look like real solution code",
-    });
-    return;
-  }
-
-  if (btn) btn.disabled = true;
-  setAnalyzeComplexityUi(host, { disabled: true, hint: "Checking code with AI…" });
-
-  try {
-    const result = await validateSolutionCode(
-      { code },
-      { signal: host._codeValidateAbort.signal, timeoutMs: 25_000 },
-    );
-
-    if (requestId !== host._codeValidateSeq) return;
-
-    host._lastValidatedCode = code;
-    host._codeValid = Boolean(result.isValidCode);
-
-    if (result.isValidCode) {
-      const lang = result.language ? `${result.language} ` : "";
-      host._codeValidHint = `Valid ${lang}code — ready to analyze`;
-      setAnalyzeComplexityUi(host, { disabled: false, hint: host._codeValidHint });
-      return;
-    }
-
-    host._codeInvalidHint = result.reason || "This doesn't look like real solution code";
-    setAnalyzeComplexityUi(host, { disabled: true, hint: host._codeInvalidHint });
-  } catch (err) {
-    if (host._codeValidateAbort?.signal.aborted || requestId !== host._codeValidateSeq) return;
-
-    host._codeValid = false;
-    host._lastValidatedCode = code;
-    host._codeInvalidHint = err?.message || "Could not verify code — try again";
-    setAnalyzeComplexityUi(host, { disabled: true, hint: host._codeInvalidHint });
-  } finally {
-    if (requestId === host._codeValidateSeq && btn?.classList.contains("is-loading")) {
-      btn.disabled = !host._codeValid;
-    }
-  }
-}
-
-function applyComplexityResult(host, { timeComplexity, spaceComplexity, explanation }) {
-  const timeInput = host.querySelector("#time-complexity");
-  const spaceInput = host.querySelector("#space-complexity");
-  const hostEl = host.querySelector("#complexity-result-host");
-  const section = host.querySelector("#complexity-section");
-
-  if (timeInput) timeInput.value = timeComplexity;
-  if (spaceInput) spaceInput.value = spaceComplexity;
-  if (hostEl) {
-    hostEl.innerHTML = renderComplexityResult(timeComplexity, spaceComplexity, explanation);
-  }
-  section?.classList.remove("is-manual");
-}
-
-function syncComplexityPreview(host) {
-  const time = host.querySelector("#time-complexity")?.value?.trim() || "";
-  const space = host.querySelector("#space-complexity")?.value?.trim() || "";
-  const hostEl = host.querySelector("#complexity-result-host");
-
-  if (!hostEl) return;
-  hostEl.innerHTML = time || space ? renderComplexityResult(time, space) : "";
-}
-
 function focusManualPattern(host) {
   const select = host.querySelector("#problem-pattern");
   select?.focus();
   select?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-}
-
-function focusManualComplexity(host) {
-  const section = host.querySelector("#complexity-section");
-  section?.classList.add("is-manual");
-  const input = host.querySelector("#time-complexity");
-  input?.focus();
-  input?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
 async function handleLeetcodeFetch(host, { force = false } = {}) {
@@ -783,7 +547,7 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
   }
 
   if (!force && host._lastFetchedSlug === slug && host._lastLcMeta?.title) {
-    applyMetadata(host, host._lastLcMeta);
+    await applyMetadata(host, host._lastLcMeta);
     setStatus(host, `Already loaded "${host._lastLcMeta.title}".`, "success");
     return;
   }
@@ -800,7 +564,7 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
     const meta = await fetchLeetcodeProblem(slug);
     host._lastFetchedSlug = slug;
     host._lastLcMeta = meta;
-    applyMetadata(host, meta);
+    await applyMetadata(host, meta);
 
     if (meta.partial) {
       setStatus(host, meta.warning || `Loaded "${meta.title}" from URL — fill remaining fields or retry.`, "error");
@@ -818,7 +582,7 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
     };
     host._lastFetchedSlug = slug;
     host._lastLcMeta = offline;
-    applyMetadata(host, offline);
+    await applyMetadata(host, offline);
     setStatus(host, `${err.message || "Could not fetch problem."} Title filled from URL — retry Fetch or edit manually.`, "error");
   } finally {
     host._fetchInProgress = false;
@@ -831,68 +595,6 @@ async function handleLeetcodeFetch(host, { force = false } = {}) {
 
 async function handleDetectPattern(host) {
   await runPatternDetection(host, { autoApply: false });
-}
-
-async function handleAnalyzeComplexity(host) {
-  if (host._aiLocked) {
-    openUpgradeModal("ai-features");
-    return;
-  }
-
-  const btn = host.querySelector("#analyze-complexity-btn");
-  const raw = host.querySelector("#problem-solution")?.value?.trim() || "";
-  const title = host.querySelector("#problem-title")?.value?.trim();
-  const { extracted, code } = getExtractedSolutionCode(raw);
-
-  if (!code || isTrivialFakeCode(code)) {
-    setAiStatus(
-      host,
-      "#complexity-ai-status",
-      extracted.reason === "prose"
-        ? "Approach-style text belongs in My approach — paste solution code here for analysis."
-        : "Paste valid solution code first.",
-      "error",
-    );
-    return;
-  }
-
-  if (!host._codeValid || host._lastValidatedCode !== code) {
-    setAiStatus(host, "#complexity-ai-status", "Waiting for code validation…", "loading");
-    await runSolutionCodeValidation(host);
-    if (!host._codeValid || host._lastValidatedCode !== code) {
-      setAiStatus(
-        host,
-        "#complexity-ai-status",
-        host._codeInvalidHint || "Paste valid solution code before analyzing complexity.",
-        "error",
-      );
-      return;
-    }
-  }
-
-  btn?.classList.add("is-loading");
-  btn.disabled = true;
-  setAiStatus(host, "#complexity-ai-status", "Analyzing complexity with AI…", "loading");
-
-  try {
-    const result = await analyzeComplexity({ code, title });
-    applyComplexityResult(host, result);
-    setAiStatus(
-      host,
-      "#complexity-ai-status",
-      extracted.stripped
-        ? "Complexity analyzed from code only — extra notes were ignored."
-        : "Complexity analyzed — will be saved with this problem.",
-      "success",
-    );
-  } catch (err) {
-    const hint = " Enter time and space complexity below.";
-    setAiStatus(host, "#complexity-ai-status", `${err.message || "Analysis failed."}${hint}`, "error");
-    focusManualComplexity(host);
-  } finally {
-    btn?.classList.remove("is-loading");
-    scheduleSolutionCodeValidation(host);
-  }
 }
 
 function bindLeetcodeHandlers(host) {
@@ -938,27 +640,15 @@ function bindAiHandlers(host) {
   });
 
   host.querySelector("#pattern-dismiss-btn")?.addEventListener("click", () => hidePatternSuggestion(host));
-
-  host.querySelector("#solution-toggle-btn")?.addEventListener("click", () => {
-    const panel = host.querySelector("#solution-panel");
-    toggleSolutionPanel(host, panel?.hidden);
-  });
-
-  const solutionInput = host.querySelector("#problem-solution");
-  solutionInput?.addEventListener("input", () => scheduleSolutionCodeValidation(host));
-
-  host.querySelector("#time-complexity")?.addEventListener("input", debounce(() => syncComplexityPreview(host), 200));
-  host.querySelector("#space-complexity")?.addEventListener("input", debounce(() => syncComplexityPreview(host), 200));
-
-  host.querySelector("#analyze-complexity-btn")?.addEventListener("click", () => handleAnalyzeComplexity(host));
 }
 
 function readForm(form) {
   const fd = new FormData(form);
-  const inMission = form.querySelector('[name="inMission"]')?.checked;
   const tagsRaw = fd.get("topicTags") || "";
-  const approach = (fd.get("approach") || "").trim();
-  const solution = (fd.get("solution") || "").trim();
+  const idealInput = form.querySelector("#problem-ideal-time");
+  const estimatedMinutes = Number(idealInput?.dataset.minutes)
+    || Number.parseInt(String(idealInput?.value || "").replace(/\D/g, ""), 10)
+    || 30;
 
   return {
     id: fd.get("id"),
@@ -966,19 +656,11 @@ function readForm(form) {
     topic: fd.get("topic"),
     pattern: fd.get("pattern"),
     difficulty: fd.get("difficulty"),
-    status: fd.get("status"),
-    estimatedMinutes: Number(fd.get("estimatedMinutes")) || 30,
-    attempts: Number(fd.get("attempts")) || 0,
+    estimatedMinutes,
     leetcodeUrl: fd.get("leetcodeUrl") || null,
     leetcodeSlug: fd.get("leetcodeSlug") || parseLeetcodeSlug(fd.get("leetcodeUrl")),
     leetcodeId: fd.get("leetcodeId") || null,
     topicTags: tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [],
-    approach,
-    solution,
-    timeComplexity: (fd.get("timeComplexity") || "").trim(),
-    spaceComplexity: (fd.get("spaceComplexity") || "").trim(),
-    inMission,
-    missionType: inMission ? (fd.get("missionType") || "new") : null,
   };
 }
 
@@ -994,8 +676,7 @@ function ensureModalContainer() {
 
 export function openProblemModal(problemId = null) {
   const host = ensureModalContainer();
-  const rawProblem = problemId ? getProblem(problemId) : null;
-  const problem = rawProblem ? { ...rawProblem, ...splitLegacySolutionFields(rawProblem) } : null;
+  const problem = problemId ? getProblem(problemId) : null;
   host._aiLocked = !canAccessProblemAi(getSessionUser());
   host.innerHTML = getModalHTML(problem);
   initModals(host);
@@ -1013,14 +694,12 @@ export function openProblemModal(problemId = null) {
       leetcodeId: problem.leetcodeId,
     };
     showDetectPatternBtn(host, true);
-  }
-
-  host._codeValidateSeq = 0;
-  host._codeValid = false;
-  host._lastValidatedCode = "";
-
-  if (problem?.solution?.trim()) {
-    scheduleSolutionCodeValidation(host);
+    if (problem.estimatedMinutes) {
+      setIdealTimeUi(host, {
+        minutes: problem.estimatedMinutes,
+        hint: "Previously estimated ideal time",
+      });
+    }
   }
 
   const form = host.querySelector("#problem-form");

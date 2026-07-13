@@ -15,6 +15,7 @@ import {
   detectProblemPattern,
   analyzeSolutionComplexity,
   analyzeSolutionSuggestions,
+  estimateIdealSolveTime,
   validateSolutionCode,
 } from "./problem-ai.js";
 import { fetchLeetcodeProblem, LeetcodeApiError, parseLeetcodeSlug } from "./leetcode.js";
@@ -1311,6 +1312,34 @@ app.post("/api/problem/analyze-complexity", requireAuth, async (req, res) => {
     }
     console.error("[/api/problem/analyze-complexity]", err);
     res.status(500).json({ error: { message: "Complexity analysis failed.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/problem/estimate-ideal-time", requireAuth, async (req, res) => {
+  try {
+    const token = extractBearer(req);
+    const user = await getCurrentUser(token);
+
+    if (!canAccessSolveCompletionAi(user)) {
+      res.status(403).json({
+        error: {
+          message: "Sign in to estimate ideal solve time.",
+          code: "AI_LOCKED",
+        },
+      });
+      return;
+    }
+
+    const { title, difficulty, topic, topicTags } = req.body ?? {};
+    const result = await estimateIdealSolveTime({ title, difficulty, topic, topicTags });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof TeachApiError) {
+      res.status(err.status).json({ error: { message: err.message, code: err.code } });
+      return;
+    }
+    console.error("[/api/problem/estimate-ideal-time]", err);
+    res.status(500).json({ error: { message: "Ideal time estimation failed.", code: "SERVER_ERROR" } });
   }
 });
 

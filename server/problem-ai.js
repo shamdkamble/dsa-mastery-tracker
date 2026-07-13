@@ -46,6 +46,23 @@ IMPORTANT: Reply with a single raw JSON object only. No markdown, no code fences
 
 If invalid, set isValidCode to false and give a short user-facing reason in reason. Leave language null when invalid.`;
 
+const IDEAL_TIME_SYSTEM = `You estimate ideal solve time in minutes for a LeetCode-style DSA problem for a prepared interview candidate.
+
+IMPORTANT: Reply with a single raw JSON object only. No markdown, no code fences, no commentary.
+
+{
+  "idealMinutes": 30,
+  "rationale": "One short sentence"
+}
+
+Guidelines:
+- Easy: typically 12-25 minutes
+- Medium: typically 25-45 minutes
+- Hard: typically 40-75 minutes
+Adjust using title and topic tags. idealMinutes must be an integer from 5 to 120.`;
+
+const DIFFICULTY_TIME_FALLBACK = { Easy: 20, Medium: 35, Hard: 50 };
+
 const SUGGESTIONS_SYSTEM = `You review DSA solution code for a coding interview problem and suggest improvements when the approach is not optimal.
 
 IMPORTANT: Reply with a single raw JSON object only. No markdown, no code fences, no commentary.
@@ -384,6 +401,59 @@ export async function analyzeSolutionComplexity({ code, title }) {
     model,
     usage,
   };
+}
+
+function clampIdealMinutes(value, difficulty) {
+  const n = Number.parseInt(String(value ?? ""), 10);
+  if (Number.isFinite(n) && n >= 5 && n <= 120) return n;
+  const d = String(difficulty || "").trim();
+  const exact = DIFFICULTY_TIME_FALLBACK[d];
+  if (exact) return exact;
+  const lower = d.toLowerCase();
+  if (lower === "easy") return DIFFICULTY_TIME_FALLBACK.Easy;
+  if (lower === "hard") return DIFFICULTY_TIME_FALLBACK.Hard;
+  return DIFFICULTY_TIME_FALLBACK.Medium;
+}
+
+export async function estimateIdealSolveTime({ title, difficulty, topic, topicTags = [] }) {
+  if (!title?.trim()) {
+    throw new TeachApiError("Problem title is required.", { status: 400, code: "INVALID_INPUT" });
+  }
+
+  const tags = Array.isArray(topicTags) ? topicTags.filter(Boolean) : [];
+  const userPrompt = [
+    `Problem: ${title.trim()}`,
+    difficulty && `Difficulty: ${difficulty}`,
+    topic && `Topic: ${topic}`,
+    tags.length && `Tags: ${tags.join(", ")}`,
+    "",
+    "Estimate ideal solve time in minutes.",
+  ].filter(Boolean).join("\n");
+
+  try {
+    const { parsed: data, model, usage } = await generateAndParseJson({
+      systemPrompt: IDEAL_TIME_SYSTEM,
+      userPrompt,
+      provider: "groq-primary",
+      options: { json: true, temperature: 0.2, maxTokens: 256, timeoutMs: 20_000 },
+    });
+
+    const idealMinutes = clampIdealMinutes(data?.idealMinutes, difficulty);
+    return {
+      idealMinutes,
+      rationale: typeof data?.rationale === "string" ? data.rationale.trim() : "",
+      model,
+      usage,
+    };
+  } catch {
+    return {
+      idealMinutes: clampIdealMinutes(null, difficulty),
+      rationale: "",
+      model: null,
+      usage: null,
+      fallback: true,
+    };
+  }
 }
 
 export async function analyzeSolutionSuggestions({

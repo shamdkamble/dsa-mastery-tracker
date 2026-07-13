@@ -120,3 +120,10 @@ export function validateSolutionCode(input, options = {}) {
 export function analyzeSolutionSuggestions(input) {
   return postProblemAi("/api/problem/analyze-suggestions", input, { timeoutMs: 45_000 });
 }
+
+/**
+ * @param {{ title: string, difficulty?: string, topic?: string, topicTags?: string[] }} input
+ */
+export function estimateIdealSolveTime(input) {
+  return postProblemAi("/api/problem/estimate-ideal-time", input, { timeoutMs: 25_000 });
+}
