@@ -1,11 +1,17 @@
 /**
- * Shared handler for the daily production cron job
+ * Shared handler for the production cron job (hourly on Vercel Pro)
  */
 
 import { verifyCronRequest, getCronScheduleMeta } from "./cron-auth.js";
 import { runScheduledPushReminders } from "./push-reminders.js";
 import { runDailyWisdomDelivery } from "./learning-wisdom-daily.js";
 import { runAccountExpiryChecks } from "./account-expiry-cron.js";
+
+function headerValue(req, name) {
+  const raw = req.headers[name];
+  if (Array.isArray(raw)) return raw[0] || "";
+  return String(raw || "");
+}
 
 /**
  * @param {import("express").Request} req
@@ -23,17 +29,23 @@ export async function handleCronPushReminders(req, res) {
   }
 
   const startedAt = new Date().toISOString();
+  const vercelSchedule = headerValue(req, "x-vercel-cron-schedule");
+  const utcHour = new Date().getUTCHours();
+  const runAccountExpiry = utcHour === 0;
+
   console.info("[/api/cron/push-reminders] start", {
     startedAt,
     via: auth.via,
-    schedule: req.headers["x-vercel-cron-schedule"] || getCronScheduleMeta().scheduleUtc,
+    schedule: vercelSchedule || getCronScheduleMeta().scheduleUtc,
+    utcHour,
+    runAccountExpiry,
   });
 
   try {
     const [reminders, dailyWisdom, accountExpiry] = await Promise.all([
       runScheduledPushReminders(),
       runDailyWisdomDelivery(),
-      runAccountExpiryChecks(),
+      runAccountExpiry ? runAccountExpiryChecks() : Promise.resolve({ skipped: true, reason: "off_peak_hour" }),
     ]);
 
     const payload = {
@@ -49,6 +61,7 @@ export async function handleCronPushReminders(req, res) {
 
     console.info("[/api/cron/push-reminders] done", {
       remindersSent: reminders?.sent ?? 0,
+      reminderTypes: reminders?.types ?? [],
       wisdomSent: dailyWisdom?.sent ?? 0,
       expiryNotified: accountExpiry?.notified ?? 0,
     });

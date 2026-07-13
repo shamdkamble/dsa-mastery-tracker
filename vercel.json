@@ -9,6 +9,10 @@
     "api/index.js": {
       "maxDuration": 300,
       "memory": 1024
+    },
+    "api/cron/push-reminders.js": {
+      "maxDuration": 300,
+      "memory": 1024
     }
   },
   "headers": [
@@ -35,7 +39,7 @@
   "crons": [
     {
       "path": "/api/cron/push-reminders",
-      "schedule": "30 3 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

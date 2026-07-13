@@ -1,5 +1,5 @@
 /**
- * Scheduled study push reminders (cron-driven)
+ * Scheduled study push reminders (cron-driven, staggered local hours)
  */
 
 import { connectDB } from "./db/mongodb.js";
@@ -10,53 +10,17 @@ import { listNotificationPreferencesForUsers } from "./notification-preferences-
 import { listDistinctUserIdsWithPushSubscriptions } from "./push-subscriptions-db.js";
 import { sendPushToUser } from "./push-service.js";
 import { computeStudySnapshot } from "./study-metrics.js";
+import { getZonedParts, isDueInLocalHour } from "./cron-timezone.js";
 
-const REMINDER_SCHEDULE = {
-  "daily-mission": { hour: 9, minute: 0 },
-  "review-due": { hour: 9, minute: 0 },
-  "streak-risk": { hour: 20, minute: 0 },
-  "weekly-summary": { hour: 18, minute: 0, weekday: 0 },
+/** User-local delivery hours — spread through the day to avoid notification spam. */
+export const REMINDER_SCHEDULE = {
+  "daily-mission": { hour: 9, label: "09:00" },
+  "review-due": { hour: 14, label: "14:00" },
+  "streak-risk": { hour: 20, label: "20:00" },
+  "weekly-summary": { hour: 18, weekday: 0, label: "Sunday 18:00" },
 };
 
-function getZonedParts(date, timeZone) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "numeric",
-    minute: "numeric",
-    weekday: "short",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour12: false,
-  });
-
-  const parts = formatter.formatToParts(date);
-  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
-
-  const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-
-  return {
-    hour: Number.parseInt(map.hour, 10),
-    minute: Number.parseInt(map.minute, 10),
-    weekday: weekdayMap[map.weekday] ?? 0,
-    dateKey: `${map.year}-${map.month}-${map.day}`,
-  };
-}
-
-function isDueNow(type, zoned) {
-  const schedule = REMINDER_SCHEDULE[type];
-  if (!schedule) return false;
-  if (schedule.weekday !== undefined && zoned.weekday !== schedule.weekday) return false;
-  return zoned.hour === schedule.hour && zoned.minute === schedule.minute;
-}
-
-/** Hobby Vercel cron runs once per day — match types without exact hour/minute. */
-function isDueDailyBatch(type, zoned) {
-  const schedule = REMINDER_SCHEDULE[type];
-  if (!schedule) return false;
-  if (schedule.weekday !== undefined && zoned.weekday !== schedule.weekday) return false;
-  return true;
-}
+const ALL_REMINDER_TYPES = Object.keys(REMINDER_SCHEDULE);
 
 async function wasReminderSent(userId, reminderType, dateKey) {
   await connectDB();
@@ -129,12 +93,26 @@ function buildWeeklySummaryMessage(snapshot) {
   };
 }
 
+function isTypeDue(type, zoned) {
+  if (process.env.CRON_BATCH_MODE === "daily") {
+    const schedule = REMINDER_SCHEDULE[type];
+    if (!schedule) return false;
+    if (schedule.weekday !== undefined && zoned.weekday !== schedule.weekday) return false;
+    return true;
+  }
+
+  return isDueInLocalHour(REMINDER_SCHEDULE[type], zoned);
+}
+
 /**
- * Run due reminders (Vercel cron — once daily on Hobby, ~9:00 Asia/Kolkata).
+ * Run due reminders. With hourly Vercel cron, only the matching local hour fires per type.
+ * @param {{ allowedTypes?: string[] }} options
  */
-export async function runScheduledPushReminders() {
-  const isDailyBatch = process.env.VERCEL !== "1" || process.env.CRON_BATCH_MODE !== "hourly";
-  const isTypeDue = isDailyBatch ? isDueDailyBatch : isDueNow;
+export async function runScheduledPushReminders({ allowedTypes = null } = {}) {
+  const typeFilter = Array.isArray(allowedTypes) && allowedTypes.length
+    ? new Set(allowedTypes)
+    : new Set(ALL_REMINDER_TYPES);
+
   const subscribedUserIds = await listDistinctUserIdsWithPushSubscriptions();
   if (!subscribedUserIds.length) {
     return { sent: 0, checked: 0, types: [] };
@@ -160,10 +138,18 @@ export async function runScheduledPushReminders() {
 
     const dueTypes = [];
 
-    if (prefs.dailyReminder && isTypeDue("daily-mission", zoned)) dueTypes.push("daily-mission");
-    if (prefs.reviewDue && isTypeDue("review-due", zoned)) dueTypes.push("review-due");
-    if (prefs.streakAlert && isTypeDue("streak-risk", zoned)) dueTypes.push("streak-risk");
-    if (prefs.weeklySummary && isTypeDue("weekly-summary", zoned)) dueTypes.push("weekly-summary");
+    if (typeFilter.has("daily-mission") && prefs.dailyReminder && isTypeDue("daily-mission", zoned)) {
+      dueTypes.push("daily-mission");
+    }
+    if (typeFilter.has("review-due") && prefs.reviewDue && isTypeDue("review-due", zoned)) {
+      dueTypes.push("review-due");
+    }
+    if (typeFilter.has("streak-risk") && prefs.streakAlert && isTypeDue("streak-risk", zoned)) {
+      dueTypes.push("streak-risk");
+    }
+    if (typeFilter.has("weekly-summary") && prefs.weeklySummary && isTypeDue("weekly-summary", zoned)) {
+      dueTypes.push("weekly-summary");
+    }
 
     if (!dueTypes.length) continue;
 

@@ -101,8 +101,8 @@ export async function getSystemArchitectureLiveSnapshot() {
     },
     cron: {
       path: "/api/cron/push-reminders",
-      scheduleUtc: "30 3 * * *",
-      description: "Daily Vercel cron (~03:30 UTC) — study reminders, Daily Wisdom, account expiry",
+      scheduleUtc: "0 * * * *",
+      description: "Hourly Vercel cron — staggered study reminders, Daily Wisdom, account expiry",
       jobs: [
         "Study reminders (mission, reviews, streak, weekly)",
         "Daily Wisdom delivery",

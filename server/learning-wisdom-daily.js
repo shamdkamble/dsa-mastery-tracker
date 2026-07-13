@@ -8,37 +8,10 @@ import { PushReminderLog } from "./models/PushReminderLog.js";
 import { listNotificationPreferencesForUsers } from "./notification-preferences-db.js";
 import { listDistinctUserIdsWithPushSubscriptions } from "./push-subscriptions-db.js";
 import { deliverLearningFactToUser } from "./learning-fact-delivery.js";
+import { getZonedParts, isDueInLocalHour } from "./cron-timezone.js";
 
-const DAILY_WISDOM_HOUR = 9;
-const DAILY_WISDOM_MINUTE = 0;
-
-function getZonedParts(date, timeZone) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "numeric",
-    minute: "numeric",
-    weekday: "short",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour12: false,
-  });
-
-  const parts = formatter.formatToParts(date);
-  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
-
-  return {
-    hour: Number.parseInt(map.hour, 10),
-    minute: Number.parseInt(map.minute, 10),
-    dateKey: `${map.year}-${map.month}-${map.day}`,
-  };
-}
-
-function isDailyWisdomDue(zoned) {
-  const isDailyBatch = process.env.VERCEL !== "1" || process.env.CRON_BATCH_MODE !== "hourly";
-  if (isDailyBatch) return true;
-  return zoned.hour === DAILY_WISDOM_HOUR && zoned.minute === DAILY_WISDOM_MINUTE;
-}
+/** Morning insight — before mission reminder. */
+export const DAILY_WISDOM_SCHEDULE = { hour: 7, label: "07:00" };
 
 async function wasDailyWisdomSent(userId, dateKey) {
   await connectDB();
@@ -63,12 +36,14 @@ async function markDailyWisdomSent(userId, dateKey) {
   }
 }
 
+function isDailyWisdomDue(zoned) {
+  if (process.env.CRON_BATCH_MODE === "daily") return true;
+  return isDueInLocalHour(DAILY_WISDOM_SCHEDULE, zoned);
+}
+
 /**
  * Deliver one personalized Daily Wisdom push per eligible user per day.
  * @param {{ force?: boolean, skipTimezone?: boolean, userId?: string }} options
- *   force — bypass daily dedup (admin testing)
- *   skipTimezone — deliver immediately regardless of local hour
- *   userId — limit to one user
  */
 export async function runDailyWisdomDelivery({ force = false, skipTimezone = false, userId = null } = {}) {
   const subscribedUserIds = await listDistinctUserIdsWithPushSubscriptions();
