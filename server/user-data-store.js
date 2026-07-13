@@ -20,7 +20,8 @@ export class UserDataError extends Error {
 const PROBLEM_FIELDS = [
   "title", "topic", "pattern", "difficulty", "status", "attempts", "estimatedMinutes",
   "leetcodeUrl", "leetcodeSlug", "leetcodeId", "topicTags", "approach", "solution",
-  "timeComplexity", "spaceComplexity", "missionType", "inMission", "missionDone",
+  "timeComplexity", "spaceComplexity", "complexityExplanation", "solutionSuggestions",
+  "missionType", "inMission", "missionDone",
   "missionDate", "nextReviewAt", "lastReviewAt", "reviewStage", "solvedAt", "startedAt", "actualSolveMinutes",
   "source", "roadmapTopicId", "createdAt", "updatedAt",
 ];

@@ -641,7 +641,42 @@ export async function removeFromMission(id) {
   });
 }
 
-export async function toggleMissionDone(id) {
+export async function completeMissionWithSolution(id, solutionData = {}) {
+  const problem = getProblem(id);
+  if (!problem || problem.missionDone) return problem;
+
+  const completedAt = new Date().toISOString();
+  const updates = {
+    missionDone: true,
+    lastReviewAt: completedAt,
+    attempts: (problem.attempts || 0) + 1,
+    ...buildSolutionCompletionFields(solutionData, problem),
+  };
+
+  if (problem.startedAt) {
+    updates.actualSolveMinutes = computeActualSolveMinutes(problem);
+    updates.startedAt = null;
+  }
+
+  if (problem.missionType === "revision") {
+    Object.assign(updates, buildRevisionCompleteSchedule(problem, completedAt));
+  } else {
+    Object.assign(updates, buildInitialSolveSchedule(problem, completedAt));
+    if (problem.status === "todo") updates.status = "learning";
+  }
+
+  const activity = logActivity({
+    action: problem.missionType === "revision" ? "Reviewed" : "Solved",
+    problemId: id,
+    problemTitle: problem.title,
+    topic: problem.topic,
+  });
+  const result = await updateProblem(id, updates, { silent: true });
+  if (isRemoteMode()) await syncActivityRemote(activity);
+  return result;
+}
+
+export async function toggleMissionDone(id, solutionData = null) {
   const problem = getProblem(id);
   if (!problem) return null;
 
@@ -649,6 +684,10 @@ export async function toggleMissionDone(id) {
   const updates = { missionDone };
 
   if (missionDone) {
+    if (solutionData) {
+      return completeMissionWithSolution(id, solutionData);
+    }
+
     const completedAt = new Date().toISOString();
     updates.lastReviewAt = completedAt;
     updates.attempts = (problem.attempts || 0) + 1;
@@ -708,7 +747,18 @@ function computeActualSolveMinutes(problem) {
   return Math.max(1, Math.round(elapsed / 60000));
 }
 
-export async function markProblemSolved(id) {
+function buildSolutionCompletionFields(solutionData = {}, problem = {}) {
+  return {
+    approach: (solutionData.approach ?? problem.approach ?? "").trim(),
+    solution: (solutionData.solution ?? problem.solution ?? "").trim(),
+    timeComplexity: (solutionData.timeComplexity ?? problem.timeComplexity ?? "").trim(),
+    spaceComplexity: (solutionData.spaceComplexity ?? problem.spaceComplexity ?? "").trim(),
+    complexityExplanation: (solutionData.complexityExplanation ?? problem.complexityExplanation ?? "").trim(),
+    solutionSuggestions: (solutionData.solutionSuggestions ?? problem.solutionSuggestions ?? "").trim(),
+  };
+}
+
+export async function markProblemSolved(id, solutionData = null) {
   const problem = getProblem(id);
   if (!problem) return null;
 
@@ -721,6 +771,7 @@ export async function markProblemSolved(id) {
     startedAt: null,
     actualSolveMinutes,
     ...buildInitialSolveSchedule(problem, completedAt),
+    ...(solutionData ? buildSolutionCompletionFields(solutionData, problem) : {}),
   };
 
   if (!problem.pattern?.trim()) {

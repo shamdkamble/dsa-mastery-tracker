@@ -113,3 +113,10 @@ export function validateSolutionCode(input, options = {}) {
     signal: options.signal,
   });
 }
+
+/**
+ * @param {{ code: string, title?: string, timeComplexity?: string, spaceComplexity?: string }} input
+ */
+export function analyzeSolutionSuggestions(input) {
+  return postProblemAi("/api/problem/analyze-suggestions", input, { timeoutMs: 45_000 });
+}

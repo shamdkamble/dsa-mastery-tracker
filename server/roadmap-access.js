@@ -79,3 +79,8 @@ export function canAccessTeachTopicById(user, topicId) {
 export function canAccessProblemAi(user) {
   return hasPremiumAccess(user);
 }
+
+/** Solve-completion flow: code validation, complexity, suggestions (any signed-in user). */
+export function canAccessSolveCompletionAi(user) {
+  return Boolean(user?.id);
+}

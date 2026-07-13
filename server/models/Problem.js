@@ -23,6 +23,8 @@ const problemSchema = new mongoose.Schema(
     solution: { type: String, default: "" },
     timeComplexity: { type: String, default: "" },
     spaceComplexity: { type: String, default: "" },
+    complexityExplanation: { type: String, default: "" },
+    solutionSuggestions: { type: String, default: "" },
     missionType: { type: String, default: null },
     inMission: { type: Boolean, default: false },
     missionDone: { type: Boolean, default: false },

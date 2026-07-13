@@ -14,6 +14,7 @@ import { getSystemArchitectureLiveSnapshot } from "./system-architecture-live.js
 import {
   detectProblemPattern,
   analyzeSolutionComplexity,
+  analyzeSolutionSuggestions,
   validateSolutionCode,
 } from "./problem-ai.js";
 import { fetchLeetcodeProblem, LeetcodeApiError, parseLeetcodeSlug } from "./leetcode.js";
@@ -52,7 +53,12 @@ import {
   sendAdminMessageToStudent,
   getAdminInboxStats,
 } from "./mentor-chat-store.js";
-import { canAccessProblemAi, canAccessTeachTopic, canAccessTeachTopicById } from "./roadmap-access.js";
+import {
+  canAccessProblemAi,
+  canAccessSolveCompletionAi,
+  canAccessTeachTopic,
+  canAccessTeachTopicById,
+} from "./roadmap-access.js";
 import { sendAdminManualNotifications } from "./admin-manual-notifications.js";
 import {
   TopicVideoError,
@@ -1257,10 +1263,10 @@ app.post("/api/problem/validate-solution-code", requireAuth, async (req, res) =>
     const token = extractBearer(req);
     const user = await getCurrentUser(token);
 
-    if (!canAccessProblemAi(user)) {
+    if (!canAccessProblemAi(user) && !canAccessSolveCompletionAi(user)) {
       res.status(403).json({
         error: {
-          message: "Upgrade to Premium to unlock AI complexity analysis.",
+          message: "Sign in to validate solution code.",
           code: "AI_LOCKED",
         },
       });
@@ -1285,10 +1291,10 @@ app.post("/api/problem/analyze-complexity", requireAuth, async (req, res) => {
     const token = extractBearer(req);
     const user = await getCurrentUser(token);
 
-    if (!canAccessProblemAi(user)) {
+    if (!canAccessProblemAi(user) && !canAccessSolveCompletionAi(user)) {
       res.status(403).json({
         error: {
-          message: "Upgrade to Premium to unlock AI complexity analysis.",
+          message: "Sign in to analyze solution complexity.",
           code: "AI_LOCKED",
         },
       });
@@ -1305,6 +1311,34 @@ app.post("/api/problem/analyze-complexity", requireAuth, async (req, res) => {
     }
     console.error("[/api/problem/analyze-complexity]", err);
     res.status(500).json({ error: { message: "Complexity analysis failed.", code: "SERVER_ERROR" } });
+  }
+});
+
+app.post("/api/problem/analyze-suggestions", requireAuth, async (req, res) => {
+  try {
+    const token = extractBearer(req);
+    const user = await getCurrentUser(token);
+
+    if (!canAccessSolveCompletionAi(user)) {
+      res.status(403).json({
+        error: {
+          message: "Sign in to get solution suggestions.",
+          code: "AI_LOCKED",
+        },
+      });
+      return;
+    }
+
+    const { code, title, timeComplexity, spaceComplexity } = req.body ?? {};
+    const result = await analyzeSolutionSuggestions({ code, title, timeComplexity, spaceComplexity });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof TeachApiError) {
+      res.status(err.status).json({ error: { message: err.message, code: err.code } });
+      return;
+    }
+    console.error("[/api/problem/analyze-suggestions]", err);
+    res.status(500).json({ error: { message: "Suggestion analysis failed.", code: "SERVER_ERROR" } });
   }
 });
 

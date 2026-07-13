@@ -6,7 +6,6 @@ import { $, $$ } from "../utils.js";
 import {
   toggleMissionDone,
   addToMission,
-  markProblemSolved,
   startProblemSolve,
   clearProblemSolveTimer,
   updateUser,
@@ -23,10 +22,11 @@ import {
   SETTINGS_SECTION_IDS as SETTINGS_SECTIONS,
 } from "../router.js";
 import { openProblemModal } from "../components/problem-modal.js";
+import { openSolutionCompleteModal } from "../components/solution-complete-modal.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getTheme, setTheme, toggleTheme } from "../theme.js";
 import { getState, setState } from "../state.js";
-import { getUser } from "../storage/db.js";
+import { getUser, getProblem } from "../storage/db.js";
 import { getInitials } from "../storage/helpers.js";
 import { renderProfileAvatar } from "../utils/profile-avatar.js";
 import { compressImageFile } from "../utils/image-compress.js";
@@ -56,18 +56,15 @@ export function bindMissionHandlers(root) {
   root.addEventListener("click", (e) => {
     const doneBtn = e.target.closest("[data-action='toggle-mission']");
     if (doneBtn) {
-      void toggleMissionDone(doneBtn.dataset.id)
-        .then((problem) => {
-          if (problem?.missionDone) {
-            const mins = problem.actualSolveMinutes;
-            showToast(Toast({
-              title: "Marked done",
-              text: mins ? `Recorded ${mins} minute${mins !== 1 ? "s" : ""}.` : undefined,
-              variant: "success",
-            }));
-          }
-          refreshPage();
-        })
+      const problemId = doneBtn.dataset.id;
+      const problem = getProblem(problemId);
+      if (problem && !problem.missionDone) {
+        openSolutionCompleteModal(problemId, { mode: "mission" });
+        return;
+      }
+
+      void toggleMissionDone(problemId)
+        .then(() => refreshPage())
         .catch((err) => {
           console.error("[mission] toggle failed", err);
           showToast(Toast({ title: "Update failed", text: err?.message || "Could not update mission.", variant: "danger" }));
@@ -77,20 +74,7 @@ export function bindMissionHandlers(root) {
 
     const solveBtn = e.target.closest("[data-action='mark-solved']");
     if (solveBtn) {
-      void markProblemSolved(solveBtn.dataset.id)
-        .then((problem) => {
-          const mins = problem?.actualSolveMinutes;
-          showToast(Toast({
-            title: "Marked done",
-            text: mins ? `Recorded ${mins} minute${mins !== 1 ? "s" : ""}.` : undefined,
-            variant: "success",
-          }));
-          refreshPage();
-        })
-        .catch((err) => {
-          console.error("[mission] solve failed", err);
-          showToast(Toast({ title: "Update failed", text: err?.message || "Could not mark solved.", variant: "danger" }));
-        });
+      openSolutionCompleteModal(solveBtn.dataset.id, { mode: "solved" });
       return;
     }
 

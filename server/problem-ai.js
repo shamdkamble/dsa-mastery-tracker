@@ -46,6 +46,17 @@ IMPORTANT: Reply with a single raw JSON object only. No markdown, no code fences
 
 If invalid, set isValidCode to false and give a short user-facing reason in reason. Leave language null when invalid.`;
 
+const SUGGESTIONS_SYSTEM = `You review DSA solution code for a coding interview problem and suggest improvements when the approach is not optimal.
+
+IMPORTANT: Reply with a single raw JSON object only. No markdown, no code fences, no commentary.
+
+{
+  "isOptimal": true,
+  "summary": "One concise sentence",
+  "suggestions": "Bullet-style improvement notes as plain text (use newlines). Empty string if already optimal.",
+  "betterApproach": "Short note on a better pattern or technique, or empty if optimal"
+}`;
+
 const COMPLEXITY_SYSTEM = `You analyze solution code and report time and space complexity in Big-O notation.
 
 IMPORTANT: Reply with a single raw JSON object only. No markdown, no code fences, no commentary.
@@ -352,6 +363,7 @@ export async function analyzeSolutionComplexity({ code, title }) {
   const { parsed: data, model, usage } = await generateAndParseJson({
     systemPrompt: COMPLEXITY_SYSTEM,
     userPrompt,
+    provider: "groq-primary",
     options: { json: true, temperature: 0.1, maxTokens: 512, timeoutMs: 45_000 },
   });
 
@@ -369,6 +381,73 @@ export async function analyzeSolutionComplexity({ code, title }) {
     timeComplexity,
     spaceComplexity,
     explanation: typeof data.explanation === "string" ? data.explanation.trim() : "",
+    model,
+    usage,
+  };
+}
+
+export async function analyzeSolutionSuggestions({
+  code,
+  title,
+  timeComplexity,
+  spaceComplexity,
+}) {
+  if (!code?.trim()) {
+    throw new TeachApiError("Solution code is required.", { status: 400, code: "INVALID_INPUT" });
+  }
+
+  const extracted = extractSolutionCodeForAnalysis(code);
+  if (!extracted.code || !looksLikeSolutionCode(extracted.code)) {
+    throw new TeachApiError(
+      "Paste valid solution code before requesting suggestions.",
+      { status: 400, code: "INVALID_INPUT" },
+    );
+  }
+
+  const analyzable = extracted.code.trim();
+  const validation = await validateSolutionCode({ code: analyzable });
+  if (!validation.isValidCode) {
+    throw new TeachApiError(
+      validation.reason || "Paste valid solution code first.",
+      { status: 400, code: "INVALID_CODE" },
+    );
+  }
+
+  const userPrompt = [
+    title && `Problem: ${title.trim()}`,
+    timeComplexity && `Reported time complexity: ${timeComplexity}`,
+    spaceComplexity && `Reported space complexity: ${spaceComplexity}`,
+    "",
+    "Review this solution for optimality:",
+    "```",
+    analyzable,
+    "```",
+  ].filter(Boolean).join("\n");
+
+  const { parsed: data, model, usage } = await generateAndParseJson({
+    systemPrompt: SUGGESTIONS_SYSTEM,
+    userPrompt,
+    provider: "groq-primary",
+    options: { json: true, temperature: 0.2, maxTokens: 768, timeoutMs: 45_000 },
+  });
+
+  const isOptimal = data?.isOptimal === true;
+  const summary = typeof data?.summary === "string" ? data.summary.trim() : "";
+  const suggestions = typeof data?.suggestions === "string" ? data.suggestions.trim() : "";
+  const betterApproach = typeof data?.betterApproach === "string" ? data.betterApproach.trim() : "";
+
+  const combined = [
+    summary,
+    !isOptimal && suggestions ? suggestions : "",
+    !isOptimal && betterApproach ? `Better approach: ${betterApproach}` : "",
+  ].filter(Boolean).join("\n\n");
+
+  return {
+    isOptimal,
+    summary,
+    suggestions,
+    betterApproach,
+    combined: combined || (isOptimal ? "Your solution looks optimal for this problem." : ""),
     model,
     usage,
   };
