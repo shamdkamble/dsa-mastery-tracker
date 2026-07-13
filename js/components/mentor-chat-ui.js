@@ -315,6 +315,150 @@ export function renderChatMessages(messages, { viewerRole = "user" } = {}) {
   return messages.map((msg) => renderChatMessage(msg, { viewerRole })).join("");
 }
 
+export function renderChatLoadOlder({ loading = false, hasMore = false } = {}) {
+  if (!hasMore) return "";
+  return `
+    <div class="mentor-chat__load-older" data-chat-load-older>
+      ${loading
+        ? `<span class="mentor-chat__load-older-spinner" aria-hidden="true"></span><span>Loading older messages…</span>`
+        : `<span>Scroll up for older messages</span>`}
+    </div>
+  `;
+}
+
+export function renderChatFeedContent(messages, {
+  viewerRole = "user",
+  hasMoreOlder = false,
+  loadingOlder = false,
+} = {}) {
+  const loadOlder = renderChatLoadOlder({ hasMore: hasMoreOlder, loading: loadingOlder });
+  const body = messages?.length
+    ? renderChatMessages(messages, { viewerRole })
+    : renderChatEmptyState();
+  return `${loadOlder}${body}`;
+}
+
+export function updateChatLoadOlder(container, { hasMore = false, loading = false } = {}) {
+  const feed = container?.querySelector("[data-mentor-chat-feed]");
+  if (!feed) return;
+
+  const existing = feed.querySelector("[data-chat-load-older]");
+  if (!hasMore) {
+    existing?.remove();
+    return;
+  }
+
+  const html = renderChatLoadOlder({ hasMore, loading });
+  if (existing) {
+    existing.outerHTML = html;
+  } else {
+    feed.insertAdjacentHTML("afterbegin", html);
+  }
+}
+
+export function prependChatMessages(container, messages, { viewerRole = "user" } = {}) {
+  const feed = container?.querySelector("[data-mentor-chat-feed]");
+  if (!feed || !messages?.length) return;
+
+  const scrollHeightBefore = feed.scrollHeight;
+  const scrollTopBefore = feed.scrollTop;
+  const loadOlderEl = feed.querySelector("[data-chat-load-older]");
+  const html = messages.map((msg) => renderChatMessage(msg, { viewerRole })).join("");
+
+  if (loadOlderEl) {
+    loadOlderEl.insertAdjacentHTML("afterend", html);
+  } else {
+    feed.insertAdjacentHTML("afterbegin", html);
+  }
+
+  feed.scrollTop = scrollTopBefore + (feed.scrollHeight - scrollHeightBefore);
+}
+
+export function appendNewChatMessages(container, messages, {
+  viewerRole = "user",
+  autoScrollIfNearBottom = true,
+} = {}) {
+  const feed = container?.querySelector("[data-mentor-chat-feed]");
+  if (!feed || !messages?.length) return false;
+
+  const wasNearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+
+  feed.querySelector(".mentor-chat__empty")?.remove();
+
+  let appended = false;
+  for (const msg of messages) {
+    if (!msg?.id || feed.querySelector(`[data-message-id="${msg.id}"]`)) continue;
+    feed.insertAdjacentHTML("beforeend", renderChatMessage(msg, { viewerRole }));
+    appended = true;
+  }
+
+  if (appended && autoScrollIfNearBottom && wasNearBottom) {
+    scrollChatToBottom(container);
+  }
+
+  return appended;
+}
+
+export function patchMessageReceipts(container, messages, { viewerRole = "user" } = {}) {
+  const feed = container?.querySelector("[data-mentor-chat-feed]");
+  if (!feed || !messages?.length) return;
+
+  for (const msg of messages) {
+    const el = feed.querySelector(`[data-message-id="${msg.id}"]`);
+    if (!el) continue;
+
+    const footer = el.querySelector(".mentor-chat__footer");
+    if (!footer) continue;
+
+    const receiptHtml = renderMessageReceipt(msg, { viewerRole });
+    const existingReceipt = footer.querySelector(".mentor-chat__receipt");
+
+    if (existingReceipt) {
+      if (receiptHtml) existingReceipt.outerHTML = receiptHtml;
+      else existingReceipt.remove();
+    } else if (receiptHtml) {
+      footer.insertAdjacentHTML("beforeend", receiptHtml);
+    }
+  }
+}
+
+export function bindChatScrollLoad(container, { onLoadOlder, getHasMore } = {}) {
+  if (!container || container.dataset.chatScrollLoadBound) return;
+  container.dataset.chatScrollLoadBound = "true";
+
+  const feed = container.querySelector("[data-mentor-chat-feed]");
+  if (!feed || !onLoadOlder) return;
+
+  let loadingOlder = false;
+
+  const maybeLoadOlder = () => {
+    if (loadingOlder || !getHasMore?.()) return;
+    if (feed.scrollTop > 48) return;
+
+    loadingOlder = true;
+    updateChatLoadOlder(container, { hasMore: true, loading: true });
+
+    Promise.resolve(onLoadOlder())
+      .finally(() => {
+        loadingOlder = false;
+        updateChatLoadOlder(container, { hasMore: getHasMore?.(), loading: false });
+      });
+  };
+
+  feed.addEventListener("scroll", maybeLoadOlder, { passive: true });
+  container._mentorChatScrollLoadHandler = maybeLoadOlder;
+}
+
+export function unbindChatScrollLoad(container) {
+  if (!container) return;
+  const feed = container.querySelector("[data-mentor-chat-feed]");
+  if (feed && container._mentorChatScrollLoadHandler) {
+    feed.removeEventListener("scroll", container._mentorChatScrollLoadHandler);
+  }
+  delete container._mentorChatScrollLoadHandler;
+  delete container.dataset.chatScrollLoadBound;
+}
+
 export function patchChatFeed(container, messages, { viewerRole = "user" } = {}) {
   const feed = container?.querySelector("[data-mentor-chat-feed]");
   if (!feed) return;

@@ -54,12 +54,23 @@ async function request(path, options = {}) {
   return data;
 }
 
-function threadQuery({ markRead = false } = {}) {
-  return markRead ? "?markRead=1" : "";
+function threadQuery({
+  markRead = false,
+  limit,
+  before,
+  after,
+} = {}) {
+  const params = new URLSearchParams();
+  if (markRead) params.set("markRead", "1");
+  if (limit != null) params.set("limit", String(limit));
+  if (before) params.set("before", before);
+  if (after) params.set("after", after);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
 }
 
-export function fetchStudentThread({ markRead = false } = {}) {
-  return request(`/api/mentor-chat/thread${threadQuery({ markRead })}`);
+export function fetchStudentThread(options = {}) {
+  return request(`/api/mentor-chat/thread${threadQuery(options)}`);
 }
 
 function buildMessagePayload(payload, replyToId) {
@@ -86,12 +97,12 @@ export function fetchAdminInbox() {
   return request("/api/auth/admin/mentor-chat/threads");
 }
 
-export function fetchAdminThread(threadId, { markRead = false } = {}) {
-  return request(`/api/auth/admin/mentor-chat/threads/${encodeURIComponent(threadId)}${threadQuery({ markRead })}`);
+export function fetchAdminThread(threadId, options = {}) {
+  return request(`/api/auth/admin/mentor-chat/threads/${encodeURIComponent(threadId)}${threadQuery(options)}`);
 }
 
-export function fetchAdminStudentThread(studentId, { markRead = false } = {}) {
-  return request(`/api/auth/admin/mentor-chat/students/${encodeURIComponent(studentId)}${threadQuery({ markRead })}`);
+export function fetchAdminStudentThread(studentId, options = {}) {
+  return request(`/api/auth/admin/mentor-chat/students/${encodeURIComponent(studentId)}${threadQuery(options)}`);
 }
 
 export function sendAdminChatMessage(threadId, payload, replyToId) {

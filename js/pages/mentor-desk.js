@@ -1,7 +1,7 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
 import {
-  renderChatMessages,
+  renderChatFeedContent,
   renderChatComposer,
   scrollChatToBottom,
   escapeHtml,
@@ -14,7 +14,12 @@ import {
   unbindChatSwipeReply,
   clearReplyTarget,
   updateReplyBar,
-  chatMessagesChanged,
+  bindChatScrollLoad,
+  unbindChatScrollLoad,
+  prependChatMessages,
+  appendNewChatMessages,
+  patchMessageReceipts,
+  updateChatLoadOlder,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getSessionUser } from "../auth/session.js";
@@ -23,6 +28,15 @@ import {
   buildOptimisticChatImageMessage,
   compressAndUploadChatImage,
 } from "../services/chat-media.js";
+import {
+  CHAT_INITIAL_LIMIT,
+  CHAT_PAGE_LIMIT,
+  getNewestMessageId,
+  getOldestMessageId,
+  mergeIncomingMessages,
+  prependOlderMessages,
+  applyReceiptPatches,
+} from "../services/chat-feed.js";
 
 const POLL_MS = 5000;
 
@@ -36,7 +50,7 @@ function stopPolling() {
   }
 }
 
-function renderDesk({ messages, loading, error, sending }) {
+function renderDesk({ messages, loading, error, sending, hasMoreOlder, loadingOlder }) {
   const user = getSessionUser();
 
   return createPage({
@@ -69,7 +83,11 @@ function renderDesk({ messages, loading, error, sending }) {
             <div class="mentor-chat__feed" data-mentor-chat-feed>
               ${loading
                 ? `<div class="mentor-chat__loading">Loading conversation…</div>`
-                : renderChatMessages(messages, { viewerRole: user?.role || "user" })}
+                : renderChatFeedContent(messages, {
+                  viewerRole: user?.role || "user",
+                  hasMoreOlder,
+                  loadingOlder,
+                })}
             </div>
 
             ${renderChatComposer({ placeholder: "Ask your mentor anything…", disabled: loading || sending })}
@@ -80,8 +98,22 @@ function renderDesk({ messages, loading, error, sending }) {
   });
 }
 
-async function loadThread({ markRead = true } = {}) {
-  return fetchStudentThread({ markRead });
+async function loadInitialThread() {
+  return fetchStudentThread({ markRead: true, limit: CHAT_INITIAL_LIMIT });
+}
+
+async function pollThread(state) {
+  const after = getNewestMessageId(state.messages);
+  if (!after) {
+    return fetchStudentThread({ markRead: true, limit: CHAT_INITIAL_LIMIT });
+  }
+  return fetchStudentThread({ markRead: true, after });
+}
+
+async function loadOlderMessages(state) {
+  const before = getOldestMessageId(state.messages);
+  if (!before || !state.hasMoreOlder || state.loadingOlder) return null;
+  return fetchStudentThread({ before, limit: CHAT_PAGE_LIMIT });
 }
 
 function buildOptimisticMessage(body, { replyToId, replyTarget } = {}) {
@@ -107,8 +139,37 @@ function buildOptimisticMessage(body, { replyToId, replyTarget } = {}) {
 }
 
 function bindDesk(container, state) {
+  unbindChatScrollLoad(container);
+
   bindChatSwipeReply(container, {
     getMessages: () => state.messages,
+  });
+
+  bindChatScrollLoad(container, {
+    getHasMore: () => state.hasMoreOlder && !state.loadingOlder,
+    onLoadOlder: async () => {
+      if (!state.hasMoreOlder || state.loadingOlder) return;
+
+      state.loadingOlder = true;
+      try {
+        const data = await loadOlderMessages(state);
+        if (!data?.messages?.length) {
+          state.hasMoreOlder = Boolean(data?.hasMoreOlder);
+          updateChatLoadOlder(container, { hasMore: state.hasMoreOlder, loading: false });
+          return;
+        }
+
+        const viewerRole = getSessionUser()?.role || "user";
+        state.messages = prependOlderMessages(state.messages, data.messages);
+        state.hasMoreOlder = Boolean(data.hasMoreOlder);
+        prependChatMessages(container, data.messages, { viewerRole });
+        updateChatLoadOlder(container, { hasMore: state.hasMoreOlder, loading: false });
+      } catch {
+        updateChatLoadOlder(container, { hasMore: state.hasMoreOlder, loading: false });
+      } finally {
+        state.loadingOlder = false;
+      }
+    },
   });
 
   bindChatComposer(container, {
@@ -178,38 +239,66 @@ function refreshUI(container, state) {
   scrollChatToBottom(host);
 }
 
+function applyPollPayload(container, state, payload) {
+  const viewerRole = getSessionUser()?.role || "user";
+  const incoming = payload.messages || [];
+  const receiptPatches = payload.receiptPatches || [];
+
+  if (!state.threadId && payload.thread?.id) state.threadId = payload.thread.id;
+
+  if (incoming.length) {
+    state.messages = mergeIncomingMessages(state.messages, incoming);
+    appendNewChatMessages(container, incoming, { viewerRole });
+  }
+
+  if (receiptPatches.length) {
+    state.messages = applyReceiptPatches(state.messages, receiptPatches);
+    const patchedMessages = receiptPatches
+      .map((patch) => state.messages.find((msg) => msg.id === patch.id))
+      .filter(Boolean);
+    patchMessageReceipts(container, patchedMessages, { viewerRole });
+  }
+}
+
 export default {
   title: "Mentor Desk",
   render() {
-    return renderDesk({ messages: [], loading: true, error: null, sending: false });
+    return renderDesk({
+      messages: [],
+      loading: true,
+      error: null,
+      sending: false,
+      hasMoreOlder: false,
+      loadingOlder: false,
+    });
   },
   onMount(container) {
     deskContainer = container;
-    const state = { messages: [], threadId: null, loading: true, error: null, sending: false };
+    const state = {
+      messages: [],
+      threadId: null,
+      loading: true,
+      error: null,
+      sending: false,
+      hasMoreOlder: false,
+      loadingOlder: false,
+    };
 
-    void loadThread()
+    void loadInitialThread()
       .then((data) => {
         state.messages = data.messages || [];
         state.threadId = data.thread?.id || null;
+        state.hasMoreOlder = Boolean(data.hasMoreOlder);
         state.loading = false;
         refreshUI(container, state);
 
         stopPolling();
         pollTimer = setInterval(() => {
-          void loadThread({ markRead: true })
+          if (state.messages.some((msg) => msg.pending)) return;
+
+          void pollThread(state)
             .then((payload) => {
-              if (state.messages.some((msg) => msg.pending)) return;
-              const viewerRole = getSessionUser()?.role || "user";
-              const msgs = payload.messages || [];
-              if (!state.threadId && payload.thread?.id) state.threadId = payload.thread.id;
-              if (!chatMessagesChanged(state.messages, msgs, { viewerRole })) return;
-              state.messages = msgs;
-              const feed = container.querySelector("[data-mentor-chat-feed]");
-              if (feed) {
-                feed.innerHTML = renderChatMessages(msgs, { viewerRole });
-                updateReplyBar(container);
-                scrollChatToBottom(container);
-              }
+              applyPollPayload(container, state, payload);
             })
             .catch(() => {});
         }, POLL_MS);
@@ -226,6 +315,7 @@ export default {
     stopPolling();
     unbindChatComposer(deskContainer);
     unbindChatSwipeReply(deskContainer);
+    unbindChatScrollLoad(deskContainer);
     clearReplyTarget(deskContainer);
     deskContainer = null;
   },

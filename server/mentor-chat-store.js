@@ -13,7 +13,9 @@ import { isAllowedChatImageUrl } from "./r2-storage.js";
 
 const ADMIN_INBOX_USER_ID = "admin";
 const MAX_MESSAGE_LENGTH = 4000;
-const MESSAGE_PAGE_SIZE = 200;
+export const CHAT_INITIAL_LIMIT = 15;
+export const CHAT_PAGE_LIMIT = 15;
+export const CHAT_MAX_LIMIT = 50;
 
 export class MentorChatError extends Error {
   constructor(message, { status = 400, code = "CHAT_ERROR" } = {}) {
@@ -208,13 +210,92 @@ async function resolveReplyToId(threadId, replyToId) {
   return id;
 }
 
-async function getThreadMessages(threadId) {
+function clampPageLimit(limit, fallback = CHAT_INITIAL_LIMIT) {
+  const n = Number.parseInt(String(limit ?? ""), 10);
+  if (!Number.isFinite(n) || n < 1) return fallback;
+  return Math.min(n, CHAT_MAX_LIMIT);
+}
+
+async function getThreadMessagesPage(threadId, { limit = CHAT_INITIAL_LIMIT, before, after } = {}) {
+  if (!threadId) {
+    return { messages: [], hasMoreOlder: false };
+  }
+
+  const pageLimit = clampPageLimit(limit, CHAT_INITIAL_LIMIT);
+
+  if (after) {
+    const cursor = await MentorMessage.findOne({ id: after, threadId }).lean();
+    if (!cursor) return { messages: [], hasMoreOlder: false };
+
+    const docs = await MentorMessage.find({
+      threadId,
+      createdAt: { $gt: cursor.createdAt },
+    })
+      .sort({ createdAt: 1 })
+      .limit(CHAT_MAX_LIMIT)
+      .lean();
+
+    const messages = docs.map(toMentorMessageDto);
+    return {
+      messages: await enrichMessagesWithReplies(messages),
+      hasMoreOlder: false,
+    };
+  }
+
+  if (before) {
+    const cursor = await MentorMessage.findOne({ id: before, threadId }).lean();
+    if (!cursor) return { messages: [], hasMoreOlder: false };
+
+    const docs = await MentorMessage.find({
+      threadId,
+      createdAt: { $lt: cursor.createdAt },
+    })
+      .sort({ createdAt: -1 })
+      .limit(pageLimit + 1)
+      .lean();
+
+    const hasMoreOlder = docs.length > pageLimit;
+    const slice = hasMoreOlder ? docs.slice(0, pageLimit) : docs;
+    const messages = slice.reverse().map(toMentorMessageDto);
+    return {
+      messages: await enrichMessagesWithReplies(messages),
+      hasMoreOlder,
+    };
+  }
+
   const docs = await MentorMessage.find({ threadId })
     .sort({ createdAt: -1 })
-    .limit(MESSAGE_PAGE_SIZE)
+    .limit(pageLimit + 1)
     .lean();
-  const messages = docs.reverse().map(toMentorMessageDto);
-  return enrichMessagesWithReplies(messages);
+
+  const hasMoreOlder = docs.length > pageLimit;
+  const slice = hasMoreOlder ? docs.slice(0, pageLimit) : docs;
+  const messages = slice.reverse().map(toMentorMessageDto);
+  return {
+    messages: await enrichMessagesWithReplies(messages),
+    hasMoreOlder,
+  };
+}
+
+async function getOutgoingReceiptPatches(threadId, viewerRole) {
+  if (!threadId) return [];
+
+  const outgoingRoles = viewerRole === "admin" ? ["admin"] : ["user", "tester"];
+  const docs = await MentorMessage.find({
+    threadId,
+    senderRole: { $in: outgoingRoles },
+    $or: [{ deliveredAt: { $ne: null } }, { readAt: { $ne: null } }],
+  })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .select("id deliveredAt readAt")
+    .lean();
+
+  return docs.map((doc) => ({
+    id: doc.id,
+    deliveredAt: doc.deliveredAt || null,
+    readAt: doc.readAt || null,
+  }));
 }
 
 function otherPartySenderRoles(viewerRole) {
@@ -241,10 +322,19 @@ async function applyMessageReceipts(threadId, viewerRole, { markRead = false } =
   }
 }
 
-export async function getStudentThreadView(student, { markRead = false } = {}) {
+export async function getStudentThreadView(student, {
+  markRead = false,
+  limit,
+  before,
+  after,
+} = {}) {
   const thread = await getOrCreateStudentThread(student);
-  await applyMessageReceipts(thread.id, "student", { markRead });
-  const messages = await getThreadMessages(thread.id);
+  if (thread.id) {
+    await applyMessageReceipts(thread.id, "student", { markRead });
+  }
+
+  const { messages, hasMoreOlder } = await getThreadMessagesPage(thread.id, { limit, before, after });
+  const receiptPatches = after ? await getOutgoingReceiptPatches(thread.id, "student") : [];
 
   if (thread.unreadByStudent > 0) {
     await MentorThread.updateOne({ id: thread.id }, {
@@ -253,7 +343,7 @@ export async function getStudentThreadView(student, { markRead = false } = {}) {
     thread.unreadByStudent = 0;
   }
 
-  return { thread, messages };
+  return { thread, messages, hasMoreOlder, receiptPatches };
 }
 
 export async function sendStudentMessage(student, payload, replyToId) {
@@ -340,7 +430,12 @@ export async function listAdminThreads() {
   return sortAdminThreads(merged);
 }
 
-export async function getAdminStudentThreadView(studentId, { markRead = false } = {}) {
+export async function getAdminStudentThreadView(studentId, {
+  markRead = false,
+  limit,
+  before,
+  after,
+} = {}) {
   await connectDB();
   const user = await User.findOne({ id: studentId }).lean();
   if (!user) {
@@ -352,7 +447,7 @@ export async function getAdminStudentThreadView(studentId, { markRead = false } 
 
   const threadDoc = await MentorThread.findOne({ studentId }).lean();
   if (!threadDoc) {
-    return { thread: buildStubThread(user), messages: [] };
+    return { thread: buildStubThread(user), messages: [], hasMoreOlder: false, receiptPatches: [] };
   }
 
   const thread = {
@@ -361,7 +456,8 @@ export async function getAdminStudentThreadView(studentId, { markRead = false } 
     studentEmail: user.email || threadDoc.studentEmail,
   };
   await applyMessageReceipts(thread.id, "admin", { markRead });
-  const messages = await getThreadMessages(thread.id);
+  const { messages, hasMoreOlder } = await getThreadMessagesPage(thread.id, { limit, before, after });
+  const receiptPatches = after ? await getOutgoingReceiptPatches(thread.id, "admin") : [];
 
   if (thread.unreadByAdmin > 0) {
     await MentorThread.updateOne({ id: thread.id }, {
@@ -370,10 +466,15 @@ export async function getAdminStudentThreadView(studentId, { markRead = false } 
     thread.unreadByAdmin = 0;
   }
 
-  return { thread, messages };
+  return { thread, messages, hasMoreOlder, receiptPatches };
 }
 
-export async function getAdminThreadView(threadId, { markRead = false } = {}) {
+export async function getAdminThreadView(threadId, {
+  markRead = false,
+  limit,
+  before,
+  after,
+} = {}) {
   await connectDB();
   const thread = await MentorThread.findOne({ id: threadId }).lean();
   if (!thread) {
@@ -381,7 +482,8 @@ export async function getAdminThreadView(threadId, { markRead = false } = {}) {
   }
 
   await applyMessageReceipts(threadId, "admin", { markRead });
-  const messages = await getThreadMessages(threadId);
+  const { messages, hasMoreOlder } = await getThreadMessagesPage(threadId, { limit, before, after });
+  const receiptPatches = after ? await getOutgoingReceiptPatches(threadId, "admin") : [];
   const dto = toMentorThreadDto(thread);
 
   if (dto.unreadByAdmin > 0) {
@@ -391,7 +493,7 @@ export async function getAdminThreadView(threadId, { markRead = false } = {}) {
     dto.unreadByAdmin = 0;
   }
 
-  return { thread: dto, messages };
+  return { thread: dto, messages, hasMoreOlder, receiptPatches };
 }
 
 export async function sendAdminMessageToStudent(admin, studentId, payload, replyToId) {

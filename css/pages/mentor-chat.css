@@ -198,6 +198,31 @@
   user-select: none;
 }
 
+.mentor-chat__load-older {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+.mentor-chat__load-older-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--chat-accent) 24%, transparent);
+  border-top-color: var(--chat-accent);
+  border-radius: 50%;
+  animation: mentor-chat-spin 0.7s linear infinite;
+}
+
+@keyframes mentor-chat-spin {
+  to { transform: rotate(360deg); }
+}
+
 .mentor-chat__loading,
 .mentor-chat__empty {
   margin: auto;

@@ -2,7 +2,7 @@ import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
 import { adminSubnav, adminHero, adminStatCard } from "../components/admin-shell.js";
 import {
-  renderChatMessages,
+  renderChatFeedContent,
   renderChatComposer,
   scrollChatToBottom,
   escapeHtml,
@@ -16,7 +16,12 @@ import {
   unbindChatSwipeReply,
   clearReplyTarget,
   updateReplyBar,
-  chatMessagesChanged,
+  bindChatScrollLoad,
+  unbindChatScrollLoad,
+  prependChatMessages,
+  appendNewChatMessages,
+  patchMessageReceipts,
+  updateChatLoadOlder,
 } from "../components/mentor-chat-ui.js";
 import { showToast, Toast } from "../components/ui/index.js";
 import { getSessionUser } from "../auth/session.js";
@@ -31,6 +36,15 @@ import {
   buildOptimisticChatImageMessage,
   compressAndUploadChatImage,
 } from "../services/chat-media.js";
+import {
+  CHAT_INITIAL_LIMIT,
+  CHAT_PAGE_LIMIT,
+  getNewestMessageId,
+  getOldestMessageId,
+  mergeIncomingMessages,
+  prependOlderMessages,
+  applyReceiptPatches,
+} from "../services/chat-feed.js";
 
 const POLL_MS = 5000;
 
@@ -84,6 +98,8 @@ function renderInbox({
   activeThread,
   loading,
   error,
+  hasMoreOlder,
+  loadingOlder,
 }) {
   const threadList = threads?.length
     ? threads.map((t) => renderThreadItem(t, activeThread)).join("")
@@ -99,7 +115,11 @@ function renderInbox({
         </div>
       </div>
       <div class="mentor-chat__feed" data-mentor-chat-feed>
-        ${renderChatMessages(messages, { viewerRole: "admin" })}
+        ${renderChatFeedContent(messages, {
+          viewerRole: "admin",
+          hasMoreOlder,
+          loadingOlder,
+        })}
       </div>
       ${renderChatComposer({ placeholder: `Message ${activeThread.studentName}…` })}
     `
@@ -155,8 +175,44 @@ async function loadInbox() {
   return fetchAdminInbox();
 }
 
-async function loadThread(threadId, { markRead = true } = {}) {
-  return fetchAdminThread(threadId, { markRead });
+async function loadThread(threadId, options = {}) {
+  return fetchAdminThread(threadId, options);
+}
+
+async function loadInitialThread(threadId) {
+  return loadThread(threadId, { markRead: true, limit: CHAT_INITIAL_LIMIT });
+}
+
+async function loadInitialStudentThread(studentId) {
+  return fetchAdminStudentThread(studentId, { markRead: true, limit: CHAT_INITIAL_LIMIT });
+}
+
+async function pollActiveThread(state) {
+  const after = getNewestMessageId(state.messages);
+  if (activeThreadId) {
+    return loadThread(activeThreadId, after
+      ? { markRead: true, after }
+      : { markRead: true, limit: CHAT_INITIAL_LIMIT });
+  }
+  if (activeStudentId) {
+    return fetchAdminStudentThread(activeStudentId, after
+      ? { markRead: true, after }
+      : { markRead: true, limit: CHAT_INITIAL_LIMIT });
+  }
+  return null;
+}
+
+async function loadOlderActiveMessages(state) {
+  const before = getOldestMessageId(state.messages);
+  if (!before || !state.hasMoreOlder) return null;
+
+  if (activeThreadId) {
+    return loadThread(activeThreadId, { before, limit: CHAT_PAGE_LIMIT });
+  }
+  if (activeStudentId) {
+    return fetchAdminStudentThread(activeStudentId, { before, limit: CHAT_PAGE_LIMIT });
+  }
+  return null;
 }
 
 function previewText(body) {
@@ -242,12 +298,30 @@ function patchThreadList(container, state) {
     : `<div class="mentor-inbox__empty-list">No students registered yet.</div>`;
 }
 
-function patchMessages(container, state) {
-  const feed = container.querySelector("[data-mentor-chat-feed]");
-  if (!feed) return;
-  feed.innerHTML = renderChatMessages(state.messages, { viewerRole: "admin" });
-  updateReplyBar(container);
-  scrollChatToBottom(container);
+function applyPollPayload(container, state, payload) {
+  if (!payload) return;
+
+  const incoming = payload.messages || [];
+  const receiptPatches = payload.receiptPatches || [];
+
+  if (payload.thread) {
+    state.activeThread = payload.thread;
+    if (payload.thread.id) activeThreadId = payload.thread.id;
+    activeStudentId = payload.thread.studentId || activeStudentId;
+  }
+
+  if (incoming.length) {
+    state.messages = mergeIncomingMessages(state.messages, incoming);
+    appendNewChatMessages(container, incoming, { viewerRole: "admin" });
+  }
+
+  if (receiptPatches.length) {
+    state.messages = applyReceiptPatches(state.messages, receiptPatches);
+    const patchedMessages = receiptPatches
+      .map((patch) => state.messages.find((msg) => msg.id === patch.id))
+      .filter(Boolean);
+    patchMessageReceipts(container, patchedMessages, { viewerRole: "admin" });
+  }
 }
 
 function bindInbox(container, state) {
@@ -268,8 +342,36 @@ function bindInbox(container, state) {
     });
   }
 
+  unbindChatScrollLoad(container);
+
   bindChatSwipeReply(container, {
     getMessages: () => state.messages,
+  });
+
+  bindChatScrollLoad(container, {
+    getHasMore: () => state.hasMoreOlder && !state.loadingOlder,
+    onLoadOlder: async () => {
+      if (!state.hasMoreOlder || state.loadingOlder) return;
+
+      state.loadingOlder = true;
+      try {
+        const data = await loadOlderActiveMessages(state);
+        if (!data?.messages?.length) {
+          state.hasMoreOlder = Boolean(data?.hasMoreOlder);
+          updateChatLoadOlder(container, { hasMore: state.hasMoreOlder, loading: false });
+          return;
+        }
+
+        state.messages = prependOlderMessages(state.messages, data.messages);
+        state.hasMoreOlder = Boolean(data.hasMoreOlder);
+        prependChatMessages(container, data.messages, { viewerRole: "admin" });
+        updateChatLoadOlder(container, { hasMore: state.hasMoreOlder, loading: false });
+      } catch {
+        updateChatLoadOlder(container, { hasMore: state.hasMoreOlder, loading: false });
+      } finally {
+        state.loadingOlder = false;
+      }
+    },
   });
 
   bindChatComposer(container, {
@@ -358,9 +460,11 @@ async function selectThread(container, state, threadId) {
   activeThreadId = threadId;
   activeStudentId = null;
   try {
-    const data = await loadThread(threadId);
+    const data = await loadInitialThread(threadId);
     state.activeThread = data.thread;
     state.messages = data.messages || [];
+    state.hasMoreOlder = Boolean(data.hasMoreOlder);
+    state.loadingOlder = false;
     activeStudentId = data.thread?.studentId || null;
     const inbox = await loadInbox();
     state.threads = inbox.threads || [];
@@ -376,9 +480,11 @@ async function selectStudent(container, state, studentId) {
   activeThreadId = null;
   activeStudentId = studentId;
   try {
-    const data = await fetchAdminStudentThread(studentId, { markRead: true });
+    const data = await loadInitialStudentThread(studentId);
     state.activeThread = data.thread;
     state.messages = data.messages || [];
+    state.hasMoreOlder = Boolean(data.hasMoreOlder);
+    state.loadingOlder = false;
     if (data.thread?.id) activeThreadId = data.thread.id;
     const inbox = await loadInbox();
     state.threads = inbox.threads || [];
@@ -389,28 +495,12 @@ async function selectStudent(container, state, studentId) {
   }
 }
 
-async function syncInboxData(state, { skipMessages = false } = {}) {
+async function syncInboxData(state) {
   const inbox = await loadInbox();
   state.threads = inbox.threads || [];
   state.stats = inbox.stats || {};
   state.loading = false;
   state.error = null;
-
-  if (skipMessages) return;
-
-  const hasOpenConversation = Boolean(activeThreadId || activeStudentId);
-
-  if (activeThreadId) {
-    const data = await loadThread(activeThreadId, { markRead: hasOpenConversation });
-    state.activeThread = data.thread;
-    state.messages = data.messages || [];
-    activeStudentId = data.thread?.studentId || null;
-  } else if (activeStudentId) {
-    const data = await fetchAdminStudentThread(activeStudentId, { markRead: hasOpenConversation });
-    state.activeThread = data.thread;
-    state.messages = data.messages || [];
-    if (data.thread?.id) activeThreadId = data.thread.id;
-  }
 }
 
 async function refreshInbox(container, state) {
@@ -425,16 +515,15 @@ async function refreshInbox(container, state) {
 
 async function pollInbox(container, state) {
   try {
-    const hasPending = state.messages.some((msg) => msg.pending);
-    const prevMessages = state.messages;
-    await syncInboxData(state, { skipMessages: hasPending });
+    await syncInboxData(state);
     patchThreadList(container, state);
     patchInboxStats(container, state.stats);
-    if (!state.messages.some((msg) => msg.pending)
-      && (activeThreadId || activeStudentId)
-      && chatMessagesChanged(prevMessages, state.messages, { viewerRole: "admin" })) {
-      patchMessages(container, state);
-    }
+
+    if (state.messages.some((msg) => msg.pending)) return;
+    if (!activeThreadId && !activeStudentId) return;
+
+    const payload = await pollActiveThread(state);
+    applyPollPayload(container, state, payload);
   } catch {
     /* ignore background poll errors */
   }
@@ -462,6 +551,8 @@ export default {
       activeThread: null,
       loading: true,
       error: null,
+      hasMoreOlder: false,
+      loadingOlder: false,
     };
 
     void refreshInbox(container, state);
@@ -475,6 +566,7 @@ export default {
     stopPolling();
     unbindChatComposer(inboxContainer);
     unbindChatSwipeReply(inboxContainer);
+    unbindChatScrollLoad(inboxContainer);
     clearReplyTarget(inboxContainer);
     inboxContainer = null;
     activeThreadId = null;
