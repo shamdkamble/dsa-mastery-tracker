@@ -6,7 +6,10 @@ import {
   sortProblemsForDisplay,
   isProblemOnTodaysMission,
 } from "../storage/db.js";
-import { formatRelativeTime, formatMinutes } from "../storage/helpers.js";
+import { isProblemMarkedDone } from "../storage/computed.js";
+import { isRevisionDue, getRevisionRoundLabel } from "../storage/revision-schedule.js";
+import { todayKey } from "../storage/helpers.js";
+import { formatRelativeTime, formatMinutes, formatDateLabel } from "../storage/helpers.js";
 import { bindPageHandlers } from "../controllers/page-controller.js";
 import { openProblemModal } from "../components/problem-modal.js";
 import { initSolvedSolutionTriggers } from "../components/solved-solution-modal.js";
@@ -32,10 +35,6 @@ const STATUS_MAP = {
 
 const TAB_STORAGE_KEY = "dsa-problems-tab";
 
-function isProblemSolved(p) {
-  return p.status === "mastered";
-}
-
 function sortSolvedProblems(problems) {
   return [...problems].sort((a, b) => {
     const tb = new Date(b.solvedAt || b.updatedAt || b.createdAt || 0).getTime();
@@ -47,10 +46,6 @@ function sortSolvedProblems(problems) {
 function statusPill(status) {
   const s = STATUS_MAP[status] || STATUS_MAP.todo;
   return `<span class="status-pill status-pill--${s.class}">${s.label}</span>`;
-}
-
-function isMissionItemDone(p) {
-  return Boolean(p.missionDone && isProblemOnTodaysMission(p));
 }
 
 function escapeAttr(value) {
@@ -78,10 +73,7 @@ function activeProblemRow(p, i) {
   const lcUrl = getProblemLeetcodeUrl(p);
   const isRoadmap = p.source === "roadmap";
   const inProgress = isSolveTimerActive(p);
-  const missionDone = isMissionItemDone(p);
   const canAddMission = !isProblemOnTodaysMission(p);
-  const showSolve = lcUrl && !missionDone;
-  const showDone = inProgress && !missionDone;
 
   return `
     <tr
@@ -93,8 +85,9 @@ function activeProblemRow(p, i) {
       data-status="${p.status}"
       data-source="${p.source || "manual"}"
       data-search="${escapeAttr(problemSearchText(p))}"
-      class="${missionDone ? "" : "cursor-pointer"}${inProgress ? " is-solving" : ""}${missionDone ? " is-mission-done" : ""}"
-      ${missionDone ? "" : 'tabindex="0" role="button"'}
+      class="cursor-pointer${inProgress ? " is-solving" : ""}"
+      tabindex="0"
+      role="button"
     >
       <td data-label="Problem">
         <div class="flex items-center gap-2">
@@ -103,27 +96,41 @@ function activeProblemRow(p, i) {
           ${p.leetcodeId ? `<span class="text-xs text-tertiary font-mono">#${p.leetcodeId}</span>` : ""}
           ${isRoadmap ? Badge({ label: "Roadmap", variant: "accent", size: "sm" }) : ""}
           ${inProgress ? Badge({ label: "Timer running", variant: "warning", size: "sm" }) : ""}
-          ${missionDone ? Badge({ label: "Mission done", variant: "success", size: "sm" }) : ""}
         </div>
       </td>
       <td data-label="Topic"><span class="table__cell-secondary">${p.topic || "—"}</span></td>
       <td data-label="Pattern"><span class="text-tertiary text-xs">${p.pattern || "—"}</span></td>
       <td data-label="Difficulty">${DifficultyBadge(p.difficulty)}</td>
       <td data-label="Status">${statusPill(p.status)}</td>
-      <td data-label="Solve Time">${renderSolveTimeCell(p, { locked: missionDone })}</td>
+      <td data-label="Solve Time">${renderSolveTimeCell(p)}</td>
       <td data-label="Last Review"><span class="text-secondary text-xs">${formatRelativeTime(p.lastReviewAt)}</span></td>
       <td data-label="Actions">
         <div class="flex items-center gap-2">
-          ${showSolve ? leetcodeLinkButton(lcUrl, { size: "xs", label: "Solve", problemId: p.id }) : ""}
-          ${showDone ? `<button class="btn btn--xs btn--primary" data-action="mark-solved" data-id="${p.id}" type="button">Done</button>` : ""}
+          ${lcUrl ? leetcodeLinkButton(lcUrl, { size: "xs", label: "Solve", problemId: p.id }) : ""}
+          ${inProgress ? `<button class="btn btn--xs btn--primary" data-action="mark-solved" data-id="${p.id}" type="button">Done</button>` : ""}
           ${canAddMission ? `<button class="btn btn--xs btn--ghost" data-action="add-to-mission" data-id="${p.id}" type="button" title="Add to mission">+</button>` : ""}
-          ${!missionDone
-            ? `<button class="btn btn--xs btn--ghost" data-action="edit-problem" data-id="${p.id}" type="button" title="Edit">${icon("notes")}</button>`
-            : ""}
+          <button class="btn btn--xs btn--ghost" data-action="edit-problem" data-id="${p.id}" type="button" title="Edit">${icon("notes")}</button>
         </div>
       </td>
     </tr>
   `;
+}
+
+function revisionStatusLabel(p) {
+  const today = todayKey();
+  if (isRevisionDue(p, today)) {
+    return Badge({ label: "Revision due", variant: "warning", size: "sm" });
+  }
+  if (p.nextReviewAt) {
+    const dueDate = p.nextReviewAt.slice(0, 10);
+    if (dueDate > today) {
+      return `<span class="text-xs text-tertiary">Next: ${formatDateLabel(p.nextReviewAt)}</span>`;
+    }
+  }
+  if ((p.reviewStage ?? 0) > 0) {
+    return `<span class="text-xs text-tertiary">${getRevisionRoundLabel(p.reviewStage)}</span>`;
+  }
+  return `<span class="text-xs text-tertiary">—</span>`;
 }
 
 function solvedProblemRow(p, i) {
@@ -153,6 +160,7 @@ function solvedProblemRow(p, i) {
       <td data-label="Solve Time"><span class="text-secondary text-xs font-mono">${solveTime}</span></td>
       <td data-label="Solved"><span class="text-secondary text-xs">${formatRelativeTime(p.solvedAt || p.updatedAt)}</span></td>
       <td data-label="Complexity"><span class="text-tertiary text-xs font-mono">${complexitySummary(p)}</span></td>
+      <td data-label="Revision">${revisionStatusLabel(p)}</td>
       <td data-label="Actions">
         <button class="btn btn--xs btn--secondary" data-action="view-solved-solution" data-id="${p.id}" type="button">
           ${icon("notes")}<span>View</span>
@@ -290,7 +298,7 @@ function renderSolvedPanel(solvedProblems) {
           <thead>
             <tr>
               <th>Problem</th><th>Topic</th><th>Pattern</th><th>Difficulty</th>
-              <th>Solve Time</th><th>Solved</th><th>Complexity</th><th>Actions</th>
+              <th>Solve Time</th><th>Solved</th><th>Complexity</th><th>Revision</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -320,8 +328,8 @@ function getDefaultTab(solvedCount) {
 }
 
 function partitionProblems(problems) {
-  const active = sortProblemsForDisplay(problems.filter((p) => !isProblemSolved(p)));
-  const solved = sortSolvedProblems(problems.filter(isProblemSolved));
+  const active = sortProblemsForDisplay(problems.filter((p) => !isProblemMarkedDone(p)));
+  const solved = sortSolvedProblems(problems.filter(isProblemMarkedDone));
   return { active, solved };
 }
 
@@ -397,7 +405,7 @@ export default {
 
       if (e.target.closest("[data-action]")) return;
       const row = e.target.closest('tr[data-problem-row][data-list="active"]');
-      if (!row || row.classList.contains("is-mission-done") || row.hidden) return;
+      if (!row || row.hidden) return;
       openProblemModal(row.dataset.id);
     });
   },

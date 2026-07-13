@@ -662,7 +662,7 @@ export async function completeMissionWithSolution(id, solutionData = {}) {
     Object.assign(updates, buildRevisionCompleteSchedule(problem, completedAt));
   } else {
     Object.assign(updates, buildInitialSolveSchedule(problem, completedAt));
-    if (problem.status === "todo") updates.status = "learning";
+    updates.status = "mastered";
   }
 
   const activity = logActivity({
@@ -700,7 +700,7 @@ export async function toggleMissionDone(id, solutionData = null) {
       Object.assign(updates, buildRevisionCompleteSchedule(problem, completedAt));
     } else {
       Object.assign(updates, buildInitialSolveSchedule(problem, completedAt));
-      if (problem.status === "todo") updates.status = "learning";
+      updates.status = "mastered";
     }
 
     const activity = logActivity({
