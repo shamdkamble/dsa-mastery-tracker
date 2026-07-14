@@ -32,6 +32,27 @@ function isMobileDevice() {
   return window.matchMedia("(max-width: 768px)").matches && navigator.maxTouchPoints > 0;
 }
 
+/** Keep installed mobile PWAs in portrait (manifest + runtime lock). */
+function lockPortraitOrientation() {
+  if (!isMobileDevice()) return;
+
+  const applyLock = async () => {
+    try {
+      if (screen.orientation?.lock) {
+        await screen.orientation.lock("portrait-primary");
+      }
+    } catch {
+      /* Requires installed PWA on some platforms; manifest handles the rest. */
+    }
+  };
+
+  void applyLock();
+
+  window.addEventListener("orientationchange", () => {
+    void applyLock();
+  }, { passive: true });
+}
+
 function wasDismissedRecently() {
   try {
     if (isMobileDevice() && sessionStorage.getItem(DISMISS_SESSION_KEY) === "1") {
@@ -221,7 +242,10 @@ export function isPwaInstallPromptVisible() {
 export function initPWA() {
   void ensureAppServiceWorker();
 
-  if (isStandalone()) return;
+  if (isStandalone()) {
+    lockPortraitOrientation();
+    return;
+  }
 
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
