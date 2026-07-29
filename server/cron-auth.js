@@ -36,9 +36,47 @@ export function verifyCronRequest(req) {
 }
 
 export function getCronScheduleMeta() {
+  const dailyBatch = process.env.CRON_BATCH_MODE === "daily";
+
+  if (dailyBatch) {
+    return {
+      scheduleUtc: "0 3 * * *",
+      scheduleLabel:
+        "Once daily ~03:00 UTC (Hobby plan). Batch mode sends all eligible daily pushes in one run.",
+      planNote:
+        "Vercel Hobby allows one cron run per day. Upgrade to Pro for hourly local-hour stagger.",
+      localExamples: {
+        ist: {
+          batchWindow: "08:30–09:29 IST (UTC 03:00–03:59)",
+          "daily-wisdom": "included in daily batch",
+          "daily-mission": "included in daily batch",
+          "review-due": "included in daily batch",
+          "weekly-summary": "Sunday batch only",
+          "streak-risk": "included in daily batch",
+          "account-expiry": "included in daily batch",
+        },
+      },
+      jobs: [
+        "Daily Wisdom (batch)",
+        "Today's mission (batch)",
+        "Reviews due (batch)",
+        "Weekly summary (Sunday, batch)",
+        "Streak at risk (batch)",
+        "Account expiry (batch)",
+      ],
+      userReminderTargets: {
+        "daily-wisdom": "daily batch",
+        "daily-mission": "daily batch",
+        "review-due": "daily batch",
+        "weekly-summary": "Sunday batch",
+        "streak-risk": "daily batch",
+      },
+    };
+  }
+
   return {
     scheduleUtc: "0 * * * *",
-    scheduleLabel: "Hourly at :00 UTC — each user gets notifications in their own local hour",
+    scheduleLabel: "Hourly at :00 UTC — each user gets notifications in their own local hour (Pro)",
     localExamples: {
       ist: {
         "daily-wisdom": "07:00 IST",

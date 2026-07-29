@@ -1,5 +1,6 @@
 /**
- * Dedicated Vercel serverless entry for the daily cron (avoids rewrite ambiguity).
+ * Dedicated Vercel serverless entry for push / wisdom / expiry cron
+ * (Hobby: once daily via vercel.json; set CRON_BATCH_MODE=daily).
  */
 
 import "../../server/env.js";

@@ -1,5 +1,7 @@
 /**
- * Shared handler for the production cron job (hourly on Vercel Pro)
+ * Shared handler for the production cron job.
+ * Hobby: once daily (vercel.json `0 3 * * *` + CRON_BATCH_MODE=daily).
+ * Pro: can switch back to hourly + CRON_BATCH_MODE unset for local-hour stagger.
  */
 
 import { verifyCronRequest, getCronScheduleMeta } from "./cron-auth.js";
@@ -11,6 +13,10 @@ function headerValue(req, name) {
   const raw = req.headers[name];
   if (Array.isArray(raw)) return raw[0] || "";
   return String(raw || "");
+}
+
+function isDailyBatchMode() {
+  return process.env.CRON_BATCH_MODE === "daily";
 }
 
 /**
@@ -31,12 +37,14 @@ export async function handleCronPushReminders(req, res) {
   const startedAt = new Date().toISOString();
   const vercelSchedule = headerValue(req, "x-vercel-cron-schedule");
   const utcHour = new Date().getUTCHours();
-  const runAccountExpiry = utcHour === 0;
+  // Daily Hobby cron: always run expiry. Hourly Pro: only at UTC midnight hour.
+  const runAccountExpiry = isDailyBatchMode() || utcHour === 0;
 
   console.info("[/api/cron/push-reminders] start", {
     startedAt,
     via: auth.via,
     schedule: vercelSchedule || getCronScheduleMeta().scheduleUtc,
+    batchMode: isDailyBatchMode() ? "daily" : "hourly",
     utcHour,
     runAccountExpiry,
   });
