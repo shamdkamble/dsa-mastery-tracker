@@ -1,0 +1,2 @@
+:HL["/engineer-os/_next/static/chunks/3fr3n3vz1k_5x.css","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"(app)","param":null,"prefetchHints":0,"slots":{"children":{"name":"textbook","param":null,"prefetchHints":0,"slots":{"children":{"name":"slug","param":{"type":"d","key":"problem-solving-framework","siblings":null},"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}}}}}},"staleTime":300,"buildId":"3nkmYtwehlYsQ-ZFLxvMO"}

@@ -1518,6 +1518,24 @@ app.post("/api/teach", requireAuth, async (req, res) => {
 });
 
 if (!IS_VERCEL) {
+  // EngineerOS static embed (built via npm run build:engineer-os)
+  // Separate Next.js service under apps/engineer-os → served at /engineer-os
+  const engineerOsOut = path.join(ROOT, "apps", "engineer-os", "out");
+  app.use(
+    "/engineer-os",
+    express.static(engineerOsOut, {
+      index: "index.html",
+      fallthrough: true,
+      redirect: false,
+    }),
+  );
+  app.get(/^\/engineer-os(?:\/.*)?$/, (req, res, next) => {
+    const indexHtml = path.join(engineerOsOut, "index.html");
+    res.sendFile(indexHtml, (err) => {
+      if (err) next();
+    });
+  });
+
   app.use(express.static(ROOT));
 
   app.use((_req, res) => {

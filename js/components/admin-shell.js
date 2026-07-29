@@ -4,23 +4,39 @@
 
 import { icon } from "./icons.js";
 
+import { getEngineerOsUrl } from "../config.js";
+
 export const ADMIN_NAV = [
   { id: "users", path: "admin", label: "Users", icon: "user" },
   { id: "topic-videos", path: "admin-topic-videos", label: "Topic Videos", icon: "video" },
   { id: "push-logs", path: "admin-push-logs", label: "Push Log", icon: "bell" },
   { id: "notifications", path: "admin-notifications", label: "System Architecture", icon: "layers" },
   { id: "mentor-inbox", path: "admin-mentor-inbox", label: "Mentor Inbox", icon: "message" },
+  {
+    id: "engineer-os",
+    path: "engineer-os",
+    label: "EngineerOS",
+    icon: "rocket",
+    external: true,
+    href: null, // resolved at render
+  },
 ];
 
 export function adminSubnav(active) {
   return `
     <nav class="admin-subnav" aria-label="Admin sections">
-      ${ADMIN_NAV.map((item) => `
-        <a href="#/${item.path}" class="admin-subnav__link${active === item.id ? " is-active" : ""}">
+      ${ADMIN_NAV.map((item) => {
+        const href = item.external ? (item.href || getEngineerOsUrl()) : `#/${item.path}`;
+        const externalAttrs = item.external
+          ? ` data-external-href="${href}" rel="noopener"`
+          : "";
+        return `
+        <a href="${href}" class="admin-subnav__link${active === item.id ? " is-active" : ""}"${externalAttrs}>
           <span class="admin-subnav__icon" aria-hidden="true">${icon(item.icon)}</span>
           <span>${item.label}</span>
         </a>
-      `).join("")}
+      `;
+      }).join("")}
     </nav>
   `;
 }
@@ -58,7 +74,29 @@ export function adminStatCard({ iconName, value, label, variant = "accent" }) {
   `;
 }
 
-export function adminQuickCard({ path, iconName, title, text, accent = "accent" }) {
+export function adminQuickCard({
+  path,
+  iconName,
+  title,
+  text,
+  accent = "accent",
+  externalHref = null,
+}) {
+  if (externalHref) {
+    return `
+    <a href="${externalHref}" class="card admin-quick-card admin-quick-card--${accent}" data-external-href="${externalHref}">
+      <div class="card__body admin-quick-card__body">
+        <div class="admin-quick-card__icon" aria-hidden="true">${icon(iconName)}</div>
+        <div class="admin-quick-card__text">
+          <div class="admin-quick-card__title">${title}</div>
+          <p class="admin-quick-card__desc">${text}</p>
+        </div>
+        <span class="admin-quick-card__arrow" aria-hidden="true">${icon("externalLink")}</span>
+      </div>
+    </a>
+  `;
+  }
+
   return `
     <a href="#/${path}" class="card admin-quick-card admin-quick-card--${accent}" data-route="${path}">
       <div class="card__body admin-quick-card__body">

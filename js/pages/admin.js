@@ -1,6 +1,7 @@
 import { createPage } from "../components/page-shell.js";
 import { icon } from "../components/icons.js";
 import { adminSubnav, adminHero, adminStatCard, adminQuickCard } from "../components/admin-shell.js";
+import { getEngineerOsUrl } from "../config.js";
 import { Badge, Button, EmptyState, Alert, SkeletonTable, Toast } from "../components/ui/index.js";
 import { initDropdowns, showToast } from "../components/ui/interactions.js";
 import {
@@ -311,6 +312,14 @@ export default {
               title: "System Architecture",
               text: "Expandable map of every platform domain with live diagrams and metrics.",
               accent: "violet",
+            })}
+            ${adminQuickCard({
+              path: "engineer-os",
+              iconName: "rocket",
+              title: "EngineerOS Learning",
+              text: "Premium Week-1 textbook OS for Google-level prep. Admin-only separate service.",
+              accent: "accent",
+              externalHref: getEngineerOsUrl(),
             })}
           </div>
 

@@ -6,11 +6,16 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js",
+    "dev:engineer-os": "npm --prefix apps/engineer-os run dev",
+    "build:engineer-os": "node scripts/build-engineer-os.mjs",
+    "start:engineer-os": "npm --prefix apps/engineer-os run start",
+    "install:engineer-os": "npm --prefix apps/engineer-os install",
+    "predeploy": "npm run build:engineer-os",
     "generate-vapid-keys": "node scripts/generate-vapid-keys.js",
     "clear-test-issues": "node --env-file=.env scripts/clear-test-issues.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.758.0",
+    "@aws-sdk/client-s3": "^3.1085.0",
     "express": "^4.21.2",
     "mongoose": "^8.9.5",
     "web-push": "^3.6.7"

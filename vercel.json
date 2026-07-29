@@ -28,12 +28,33 @@
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
+    },
+    {
+      "source": "/engineer-os/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" },
+        { "key": "Service-Worker-Allowed", "value": "/engineer-os/" }
+      ]
+    },
+    {
+      "source": "/engineer-os/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
     }
   ],
   "rewrites": [
     {
       "source": "/api/(.*)",
       "destination": "/api"
+    },
+    {
+      "source": "/engineer-os",
+      "destination": "/engineer-os/index.html"
+    },
+    {
+      "source": "/engineer-os/",
+      "destination": "/engineer-os/index.html"
     }
   ],
   "crons": [

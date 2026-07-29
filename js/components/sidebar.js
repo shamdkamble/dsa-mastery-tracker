@@ -10,6 +10,7 @@ import { getProblems } from "../storage/db.js";
 import { computeTodaysMission } from "../storage/computed.js";
 import { isAdmin, isTesterOrAdmin, getSessionUser } from "../auth/session.js";
 import { BRAND } from "../constants/branding.js";
+import { getEngineerOsUrl } from "../config.js";
 
 function escapeAttr(str) {
   return String(str ?? "")
@@ -67,12 +68,38 @@ function getNavSections() {
         { path: "admin-push-logs", label: "Push Delivery Log", icon: "bell" },
         { path: "admin-notifications", label: "System Architecture", icon: "layers" },
         { path: "admin-mentor-inbox", label: "Mentor Inbox", icon: "message" },
+        {
+          path: "engineer-os",
+          label: "EngineerOS Learning",
+          icon: "rocket",
+          external: true,
+          href: getEngineerOsUrl(),
+          badge: "Admin",
+        },
       ],
     }] : []),
   ];
 }
 
 function renderNavLink(item, currentRoute) {
+  if (item.external && item.href) {
+    return `
+    <a
+      href="${escapeAttr(item.href)}"
+      class="sidebar__link"
+      data-external-href="${escapeAttr(item.href)}"
+      data-tooltip="${escapeAttr(item.label)}"
+      target="_self"
+      rel="noopener"
+    >
+      <span class="sidebar__link-icon" aria-hidden="true">${icon(item.icon)}</span>
+      <span class="sidebar__link-text">${item.label}</span>
+      ${item.badge ? `<span class="sidebar__link-badge">${item.badge}</span>` : ""}
+      <span class="sidebar__link-icon sidebar__link-external" aria-hidden="true">${icon("externalLink")}</span>
+    </a>
+  `;
+  }
+
   const isActive = currentRoute === item.path;
   return `
     <a
@@ -155,6 +182,17 @@ export function initSidebar(container) {
     if (collapseBtn) {
       const { sidebarCollapsed } = getState();
       setState({ sidebarCollapsed: !sidebarCollapsed });
+      return;
+    }
+
+    const external = e.target.closest("[data-external-href]");
+    if (external?.dataset.externalHref) {
+      // Full navigation to EngineerOS (separate service)
+      e.preventDefault();
+      if (window.innerWidth <= 768) {
+        setState({ sidebarOpen: false });
+      }
+      window.location.assign(external.dataset.externalHref);
       return;
     }
 

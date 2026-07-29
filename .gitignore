@@ -29,8 +29,19 @@ dist/
 build/
 coverage/
 
+# EngineerOS (Next.js app under apps/engineer-os)
+apps/engineer-os/node_modules/
+apps/engineer-os/.next/
+apps/engineer-os/out/
+apps/engineer-os/tsconfig.tsbuildinfo
+
+# EngineerOS Next build caches only (published static site IS committed for Vercel)
+# Run: npm run build:engineer-os  then commit engineer-os/
+
 # Optional local config overrides
 js/config.local.js
 
 # Legacy user JSON (migrated to MongoDB on first connect)
 data/users.json
+apps/engineer-os/.env.local
+apps/engineer-os/.env*.local
