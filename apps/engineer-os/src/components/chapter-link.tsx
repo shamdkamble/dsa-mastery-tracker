@@ -1,11 +1,12 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { withBasePath } from "@/lib/base-path";
 
 /**
- * Chapter navigation via a real anchor href.
- * Full navigation is intentional so chapter opens reliably
- * even when client-side soft routing has issues.
+ * Chapter navigation for static export under /engineer-os.
+ * Uses a real <a href> with basePath so Vercel never 404s on bare /textbook/*.
+ * (next/link soft nav can still fail on pure static hosts; full navigation is reliable.)
  */
 export function ChapterLink({
   slug,
@@ -16,7 +17,7 @@ export function ChapterLink({
   className?: string;
   children: React.ReactNode;
 }) {
-  const href = `/textbook/${encodeURIComponent(slug)}`;
+  const href = withBasePath(`/textbook/${encodeURIComponent(slug)}/`);
 
   return (
     <a href={href} className={cn("cursor-pointer no-underline", className)}>

@@ -41,7 +41,7 @@ export default async function ChapterPage({
   return (
     <div className="space-y-8">
       <Link
-        href="/textbook"
+        href="/textbook/"
         className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm text-zinc-300 hover:bg-white/5 hover:text-white"
       >
         ← All chapters

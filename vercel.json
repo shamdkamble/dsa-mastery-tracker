@@ -44,6 +44,7 @@
       ]
     }
   ],
+  "trailingSlash": true,
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -56,6 +57,34 @@
     {
       "source": "/engineer-os/",
       "destination": "/engineer-os/index.html"
+    },
+    {
+      "source": "/textbook",
+      "destination": "/engineer-os/textbook/index.html"
+    },
+    {
+      "source": "/textbook/",
+      "destination": "/engineer-os/textbook/index.html"
+    },
+    {
+      "source": "/textbook/:path*",
+      "destination": "/engineer-os/textbook/:path*"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/engineer-os/dashboard/index.html"
+    },
+    {
+      "source": "/dashboard/",
+      "destination": "/engineer-os/dashboard/index.html"
+    },
+    {
+      "source": "/mission",
+      "destination": "/engineer-os/mission/index.html"
+    },
+    {
+      "source": "/mission/",
+      "destination": "/engineer-os/mission/index.html"
     }
   ],
   "crons": [

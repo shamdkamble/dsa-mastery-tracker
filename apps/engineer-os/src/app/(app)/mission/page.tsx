@@ -21,12 +21,11 @@ import {
   Check,
   ArrowRight,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { withBasePath } from "@/lib/base-path";
 
 export default function MissionPage() {
   const { progress, toggleChecklist, completeDailyMission, startMission, completeWeek1 } =
     useProgress();
-  const router = useRouter();
   const day = progress.currentDay;
   const mission = getMissionForDay(day) ?? WEEK1_MISSIONS[0];
   const chapters = mission.chapterIds
@@ -44,7 +43,7 @@ export default function MissionPage() {
         progress.chaptersCompleted.length >= WEEK1_CHAPTERS.length ||
         progress.dailyMissionsCompleted.includes(7);
       if (allChapters || allDone) completeWeek1();
-      router.push("/debrief");
+      window.location.assign(withBasePath("/debrief/"));
     }
   }
 
@@ -151,8 +150,10 @@ export default function MissionPage() {
           size="lg"
           type="button"
           onClick={() =>
-            router.push(
-              chapters[0] ? `/textbook/${chapters[0]!.slug}` : "/textbook"
+            window.location.assign(
+              withBasePath(
+                chapters[0] ? `/textbook/${chapters[0]!.slug}/` : "/textbook/"
+              )
             )
           }
         >

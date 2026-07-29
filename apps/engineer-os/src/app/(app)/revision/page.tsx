@@ -66,7 +66,9 @@ export default function RevisionPage() {
               <div className="flex gap-2">
                 {ch && (
                   <Button asChild size="sm" variant="secondary">
-                    <Link href={`/textbook/${ch.slug}`}>Open chapter</Link>
+                    <Link href={`/textbook/${ch.slug}/`} prefetch={false}>
+                      Open chapter
+                    </Link>
                   </Button>
                 )}
                 <Button size="sm" onClick={() => markRevisionDone(r.id)}>
