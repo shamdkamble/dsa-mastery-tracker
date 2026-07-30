@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -15,10 +16,17 @@ import {
   type ProgressState,
   type RevisionItem,
 } from "./types";
+import {
+  fetchRemoteProgress,
+  pickRicherProgress,
+  resetRemoteProgress,
+  saveRemoteProgress,
+} from "./progress-api";
 
 const STORAGE_KEY = "engineeros-progress-v1";
+const SAVE_DEBOUNCE_MS = 800;
 
-function loadProgress(): ProgressState {
+function loadLocalProgress(): ProgressState {
   if (typeof window === "undefined") return DEFAULT_PROGRESS;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -29,9 +37,13 @@ function loadProgress(): ProgressState {
   }
 }
 
-function saveProgress(state: ProgressState) {
+function saveLocalProgress(state: ProgressState) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore quota */
+  }
 }
 
 function todayISO() {
@@ -47,6 +59,7 @@ function daysBetween(a: string, b: string) {
 interface ProgressContextValue {
   progress: ProgressState;
   ready: boolean;
+  syncStatus: "idle" | "syncing" | "synced" | "error" | "offline";
   startMission: () => void;
   toggleChecklist: (id: string) => void;
   completeChapter: (chapterId: string, title: string) => void;
@@ -65,6 +78,7 @@ interface ProgressContextValue {
   updateSettings: (settings: Partial<ProgressState["settings"]>) => void;
   resetProgress: () => void;
   recalculateMissionProgress: (totalChapters: number) => void;
+  forceSync: () => Promise<void>;
 }
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
@@ -74,24 +88,103 @@ const REVISION_INTERVALS = [1, 3, 7, 14, 30];
 export function ProgressProvider({ children }: { children: React.ReactNode }) {
   const [progress, setProgress] = useState<ProgressState>(DEFAULT_PROGRESS);
   const [ready, setReady] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<
+    "idle" | "syncing" | "synced" | "error" | "offline"
+  >("idle");
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+  const skipNextRemoteSave = useRef(true);
 
+  // Initial load: MongoDB is source of truth; merge local if richer (one-time migrate)
   useEffect(() => {
-    const loaded = loadProgress();
-    // Update streak on load
-    const today = todayISO();
-    if (loaded.lastStudyDate) {
-      const gap = daysBetween(loaded.lastStudyDate, today);
-      if (gap > 1) {
-        loaded.streak = 0;
+    let cancelled = false;
+
+    async function hydrate() {
+      const local = loadLocalProgress();
+      const today = todayISO();
+      if (local.lastStudyDate) {
+        const gap = daysBetween(local.lastStudyDate, today);
+        if (gap > 1) local.streak = 0;
       }
+
+      setSyncStatus("syncing");
+      const remote = await fetchRemoteProgress();
+
+      if (cancelled) return;
+
+      let next = local;
+      if (remote) {
+        const remoteEmpty =
+          !remote.started &&
+          remote.chaptersCompleted.length === 0 &&
+          remote.dailyMissionsCompleted.length === 0;
+        const localHasData =
+          local.started ||
+          local.chaptersCompleted.length > 0 ||
+          local.dailyMissionsCompleted.length > 0;
+
+        if (remoteEmpty && localHasData) {
+          // Migrate browser progress into Mongo once
+          next = local;
+          await saveRemoteProgress(local);
+        } else {
+          next = pickRicherProgress(remote, local);
+          // If local was richer, push merge to server
+          if (next === local && localHasData) {
+            await saveRemoteProgress(local);
+          }
+        }
+        setSyncStatus("synced");
+      } else {
+        next = local;
+        setSyncStatus(navigator.onLine ? "error" : "offline");
+      }
+
+      if (next.lastStudyDate) {
+        const gap = daysBetween(next.lastStudyDate, today);
+        if (gap > 1) next = { ...next, streak: 0 };
+      }
+
+      setProgress(next);
+      saveLocalProgress(next);
+      setReady(true);
+      // Allow remote saves after hydrate settles
+      setTimeout(() => {
+        skipNextRemoteSave.current = false;
+      }, 50);
     }
-    setProgress(loaded);
-    setReady(true);
+
+    hydrate();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  // Persist: local always + debounced Mongo
   useEffect(() => {
-    if (ready) saveProgress(progress);
+    if (!ready) return;
+    saveLocalProgress(progress);
+
+    if (skipNextRemoteSave.current) return;
+
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      setSyncStatus("syncing");
+      const result = await saveRemoteProgress(progressRef.current);
+      setSyncStatus(result.ok ? "synced" : navigator.onLine ? "error" : "offline");
+    }, SAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
   }, [progress, ready]);
+
+  const forceSync = useCallback(async () => {
+    setSyncStatus("syncing");
+    const result = await saveRemoteProgress(progressRef.current);
+    setSyncStatus(result.ok ? "synced" : "error");
+  }, []);
 
   const update = useCallback((fn: (p: ProgressState) => ProgressState) => {
     setProgress((prev) => fn(prev));
@@ -354,7 +447,8 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
 
   const resetProgress = useCallback(() => {
     setProgress(DEFAULT_PROGRESS);
-    localStorage.removeItem(STORAGE_KEY);
+    saveLocalProgress(DEFAULT_PROGRESS);
+    void resetRemoteProgress();
   }, []);
 
   const recalculateMissionProgress = useCallback(
@@ -374,6 +468,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     () => ({
       progress,
       ready,
+      syncStatus,
       startMission,
       toggleChecklist,
       completeChapter,
@@ -392,10 +487,12 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       updateSettings,
       resetProgress,
       recalculateMissionProgress,
+      forceSync,
     }),
     [
       progress,
       ready,
+      syncStatus,
       startMission,
       toggleChecklist,
       completeChapter,
@@ -414,6 +511,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       updateSettings,
       resetProgress,
       recalculateMissionProgress,
+      forceSync,
     ]
   );
 

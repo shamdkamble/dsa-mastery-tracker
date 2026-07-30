@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 export default function SettingsPage() {
-  const { progress, updateSettings, resetProgress } = useProgress();
+  const { progress, updateSettings, resetProgress, syncStatus, forceSync } =
+    useProgress();
 
   return (
     <div className="space-y-6">
@@ -16,7 +17,9 @@ export default function SettingsPage() {
           Settings
         </p>
         <h1 className="mt-1 text-3xl font-bold text-white">Preferences</h1>
-        <p className="mt-1 text-zinc-400">Local-only · no accounts · no ads · no noise</p>
+        <p className="mt-1 text-zinc-400">
+          Cloud progress via DSA Mantra MongoDB · admin learning OS
+        </p>
       </div>
 
       <Card>
@@ -36,6 +39,33 @@ export default function SettingsPage() {
               {c}
             </Badge>
           ))}
+        </div>
+      </Card>
+
+      <Card>
+        <CardTitle>Cloud sync</CardTitle>
+        <CardDescription className="mt-1">
+          Progress is stored in the same MongoDB as DSA Mantra (collection{" "}
+          <code className="text-indigo-300">engineer_os_progress</code>).
+        </CardDescription>
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-zinc-400">
+            Status:{" "}
+            <strong className="text-white">
+              {syncStatus === "synced"
+                ? "Synced"
+                : syncStatus === "syncing"
+                  ? "Syncing…"
+                  : syncStatus === "offline"
+                    ? "Offline (local cache)"
+                    : syncStatus === "error"
+                      ? "Sync error"
+                      : "Idle"}
+            </strong>
+          </span>
+          <Button type="button" size="sm" variant="secondary" onClick={() => void forceSync()}>
+            Sync now
+          </Button>
         </div>
       </Card>
 
@@ -73,7 +103,7 @@ export default function SettingsPage() {
       <Card className="border-rose-500/20">
         <CardTitle className="text-rose-200">Danger zone</CardTitle>
         <CardDescription className="mt-1">
-          Reset all local progress, journal, mistakes, and quizzes. Cannot be undone.
+          Reset cloud + local EngineerOS progress (journal, mistakes, quizzes). Cannot be undone.
         </CardDescription>
         <Button
           className="mt-4"

@@ -89,6 +89,12 @@ import {
   acknowledgeLocalRestore,
 } from "./user-data-store.js";
 import {
+  EngineerOsProgressError,
+  getEngineerOsProgress,
+  upsertEngineerOsProgress,
+  resetEngineerOsProgress,
+} from "./engineer-os-progress-store.js";
+import {
   connectDB,
   formatMongoError,
   getLastMongoError,
@@ -883,6 +889,57 @@ app.get("/api/user-data", requireAuth, async (req, res) => {
     if (handleAuthError(res, err)) return;
     console.error("[/api/user-data]", err);
     res.status(500).json({ error: { message: "Failed to load user data.", code: "SERVER_ERROR" } });
+  }
+});
+
+/** EngineerOS progress — same MongoDB, collection engineer_os_progress */
+function handleEngineerOsProgressError(res, err) {
+  if (err instanceof EngineerOsProgressError) {
+    res.status(err.status).json({ error: { message: err.message, code: err.code } });
+    return true;
+  }
+  return false;
+}
+
+app.get("/api/engineer-os/progress", requireAuth, async (req, res) => {
+  try {
+    const data = await getEngineerOsProgress(req.auth.sub);
+    res.json({ progress: data });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleEngineerOsProgressError(res, err)) return;
+    console.error("[/api/engineer-os/progress GET]", err);
+    res.status(500).json({
+      error: { message: "Failed to load EngineerOS progress.", code: "SERVER_ERROR" },
+    });
+  }
+});
+
+app.put("/api/engineer-os/progress", requireAuth, async (req, res) => {
+  try {
+    const data = await upsertEngineerOsProgress(req.auth.sub, req.body ?? {});
+    res.json({ progress: data, ok: true });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleEngineerOsProgressError(res, err)) return;
+    console.error("[/api/engineer-os/progress PUT]", err);
+    res.status(500).json({
+      error: { message: "Failed to save EngineerOS progress.", code: "SERVER_ERROR" },
+    });
+  }
+});
+
+app.delete("/api/engineer-os/progress", requireAuth, async (req, res) => {
+  try {
+    const data = await resetEngineerOsProgress(req.auth.sub);
+    res.json({ progress: data, ok: true });
+  } catch (err) {
+    if (handleAuthError(res, err)) return;
+    if (handleEngineerOsProgressError(res, err)) return;
+    console.error("[/api/engineer-os/progress DELETE]", err);
+    res.status(500).json({
+      error: { message: "Failed to reset EngineerOS progress.", code: "SERVER_ERROR" },
+    });
   }
 });
 

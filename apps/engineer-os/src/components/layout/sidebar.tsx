@@ -214,7 +214,7 @@ export function Sidebar({
         </a>
         {!collapsed && (
           <div className="px-1 text-[10px] text-zinc-600">
-            Offline PWA · Admin learning OS
+            Progress in MongoDB · same as DSA Mantra
           </div>
         )}
       </div>
